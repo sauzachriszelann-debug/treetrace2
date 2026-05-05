@@ -3,8 +3,12 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-const String kBaseUrl = 'http://10.0.2.2:8000/api'; // Android emulator → localhost
+
+// OLD: const String kBaseUrl = 'http://10.0.2.2:8000/api';
 // For real device on same WiFi: 'http://192.168.x.x:8000/api'
+// NEW:
+const String kBaseUrl = 'https://treetrace-backend.onrender.com/api';
+
 
 class ApiService {
   static final ApiService _instance = ApiService._internal();
