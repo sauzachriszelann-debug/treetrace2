@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from app.db.database import engine, Base
+from app.core.config import settings
 from app.api.routes import auth, trees, health_logs, users, storage, public, identify
 
 # Import all models
@@ -17,6 +19,27 @@ app = FastAPI(
     redirect_slashes=False,
 )
 
+
+def sync_postgres_sequences():
+    if not settings.SQLALCHEMY_DATABASE_URL.startswith("postgresql"):
+        return
+
+    tables = ("users", "trees", "health_logs")
+    with engine.begin() as conn:
+        for table in tables:
+            conn.execute(
+                text(
+                    f"""
+                    SELECT setval(
+                        pg_get_serial_sequence('{table}', 'id'),
+                        COALESCE((SELECT MAX(id) FROM {table}), 1),
+                        (SELECT COUNT(*) > 0 FROM {table})
+                    )
+                    """
+                )
+            )
+
+
 # Move database creation to a startup event so it doesn't freeze the server
 @app.on_event("startup")
 def startup_event():
@@ -24,6 +47,7 @@ def startup_event():
     try:
         # This will create tables if they don't exist
         Base.metadata.create_all(bind=engine)
+        sync_postgres_sequences()
         print("✅ Database connection successful and tables synchronized!")
     except Exception as e:
         print("❌ DATABASE CONNECTION ERROR:")

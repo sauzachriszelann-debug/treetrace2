@@ -7,7 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 // OLD: const String kBaseUrl = 'http://10.0.2.2:8000/api';
 // For real device on same WiFi: 'http://192.168.x.x:8000/api'
 // NEW:
-const String kBaseUrl = 'https://treetrace-backend.onrender.com/api';
+const String kBaseUrl = 'https://treetrace-1o7l.onrender.com/api';
 
 
 class ApiService {
