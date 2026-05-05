@@ -1,0 +1,105 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    :root {
+        --background: 40 20% 97%;
+        --foreground: 150 15% 12%;
+        --card: 0 0% 100%;
+        --card-foreground: 150 15% 12%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 150 15% 12%;
+        --primary: 145 45% 28%;
+        --primary-foreground: 0 0% 98%;
+        --secondary: 80 20% 92%;
+        --secondary-foreground: 145 30% 20%;
+        --muted: 40 15% 93%;
+        --muted-foreground: 150 10% 45%;
+        --accent: 75 35% 88%;
+        --accent-foreground: 145 30% 18%;
+        --destructive: 0 72% 51%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 80 15% 87%;
+        --input: 80 15% 87%;
+        --ring: 145 45% 28%;
+        --chart-1: 145 45% 32%;
+        --chart-2: 75 50% 45%;
+        --chart-3: 35 70% 55%;
+        --chart-4: 200 55% 45%;
+        --chart-5: 0 65% 50%;
+        --radius: 0.75rem;
+        --sidebar-background: 145 30% 14%;
+        --sidebar-foreground: 80 20% 90%;
+        --sidebar-primary: 75 55% 75%;
+        --sidebar-primary-foreground: 145 40% 10%;
+        --sidebar-accent: 145 25% 22%;
+        --sidebar-accent-foreground: 80 20% 90%;
+        --sidebar-border: 145 20% 20%;
+        --sidebar-ring: 75 55% 65%;
+        --font-fraunces: 'Fraunces', serif;
+        --font-inter: 'Inter', sans-serif;
+    }
+
+    .dark {
+        --background: 150 20% 6%;
+        --foreground: 80 20% 92%;
+        --card: 150 18% 9%;
+        --card-foreground: 80 20% 92%;
+        --popover: 150 18% 9%;
+        --popover-foreground: 80 20% 92%;
+        --primary: 145 50% 42%;
+        --primary-foreground: 150 30% 8%;
+        --secondary: 145 20% 16%;
+        --secondary-foreground: 80 20% 85%;
+        --muted: 145 18% 14%;
+        --muted-foreground: 80 12% 55%;
+        --accent: 145 22% 20%;
+        --accent-foreground: 80 20% 88%;
+        --destructive: 0 62% 40%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 145 18% 18%;
+        --input: 145 18% 18%;
+        --ring: 145 50% 42%;
+        --sidebar-background: 150 25% 5%;
+        --sidebar-foreground: 80 20% 88%;
+        --sidebar-primary: 145 50% 42%;
+        --sidebar-primary-foreground: 150 30% 8%;
+        --sidebar-accent: 145 20% 12%;
+        --sidebar-accent-foreground: 80 20% 88%;
+        --sidebar-border: 145 18% 14%;
+        --sidebar-ring: 145 50% 42%;
+    }
+}
+
+@layer base {
+    * {
+        @apply border-border outline-ring/50;
+    }
+
+    body {
+        @apply bg-background text-foreground font-inter;
+    }
+
+    h1,
+    h2,
+    h3 {
+        @apply font-fraunces;
+    }
+}
+
+.font-fraunces {
+    font-family: var(--font-fraunces);
+}
+
+.font-inter {
+    font-family: var(--font-inter);
+}
+
+/* Leaflet map styles fix */
+.leaflet-container {
+    z-index: 1;
+    border-radius: var(--radius);
+}

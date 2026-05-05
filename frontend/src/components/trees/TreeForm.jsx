@@ -1,0 +1,530 @@
+import { useState, useEffect, useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select, SelectContent, SelectItem,
+  SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { MapPin, Loader2, Upload, X, Sparkles, Ruler } from "lucide-react";
+import { storageApi } from "@/api/storage";
+import { aiApi } from "@/api/ai";
+import { toast } from "sonner";
+
+function calcBiomassCarbon(dbh_cm, height_m) {
+  if (!dbh_cm || !height_m) return { biomass: null, carbon: null };
+  const rho = 0.6;
+  const AGB = 0.0673 * Math.pow(rho * dbh_cm * dbh_cm * height_m, 0.976);
+  const carbon = AGB * 0.47;
+  return {
+    biomass: Math.round(AGB * 100) / 100,
+    carbon: Math.round(carbon * 100) / 100,
+  };
+}
+
+export default function TreeForm({ initial = {}, onSubmit, loading }) {
+  const fileRef = useRef(null);
+  const [form, setForm] = useState({
+    common_name: "",
+    scientific_name: "",
+    dbh_cm: "",
+    height_m: "",
+    health_status: "Healthy",
+    barangay: "",
+    city: "Panabo City",
+    province: "Davao del Norte",
+    lat: "",
+    lng: "",
+    notes: "",
+    date_recorded: new Date().toISOString().split("T")[0],
+    photo_url: "",
+    ...initial,
+  });
+
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(initial.photo_url || null);
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const [aiStatus, setAiStatus] = useState(null); // null | "identifying" | "done" | "error" | "estimating"
+  const [aiError, setAiError] = useState(null);
+  const [computed, setComputed] = useState({ biomass: null, carbon: null });
+
+  useEffect(() => {
+    const { biomass, carbon } = calcBiomassCarbon(
+      parseFloat(form.dbh_cm),
+      parseFloat(form.height_m)
+    );
+    setComputed({ biomass, carbon });
+  }, [form.dbh_cm, form.height_m]);
+
+  const set = (key, val) => setForm((f) => ({ ...f, [key]: val }));
+
+  // ── Endangered species check ──────────────────────────────────────────────
+  const ENDANGERED = {
+    "narra": { status: "Endangered", code: "EN", cut: false },
+    "almaciga": { status: "Critically Endangered", code: "CR", cut: false },
+    "molave": { status: "Endangered", code: "EN", cut: false },
+    "ipil": { status: "Endangered", code: "EN", cut: false },
+    "apitong": { status: "Endangered", code: "EN", cut: false },
+    "dao": { status: "Endangered", code: "EN", cut: false },
+    "kamagong": { status: "Vulnerable", code: "VU", cut: false },
+    "yakal": { status: "Vulnerable", code: "VU", cut: false },
+    "philippine teak": { status: "Critically Endangered", code: "CR", cut: false },
+    "lauan": { status: "Vulnerable", code: "VU", cut: false },
+  };
+
+
+  const endangeredInfo = ENDANGERED[form.common_name?.toLowerCase().trim()];
+
+
+
+  // ── Photo select (local preview only, upload happens on save) ──────────────
+  const handlePhotoSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
+    set("photo_url", "");
+    setAiStatus(null);
+    setAiError(null);
+    // ← ADD THIS LINE:
+    setTimeout(() => handleAIIdentify(file), 100);
+  };
+
+  const removePhoto = () => {
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    set("photo_url", "");
+    setAiStatus(null);
+    setAiError(null);
+  };
+
+  // ── AI Species Identification ──────────────────────────────────────────────
+  const handleAIIdentify = async (fileOverride) => {
+    const target = fileOverride || photoFile;
+    if (!target) {
+      toast.error("Please upload a photo first.");
+      return;
+    }
+    setAiStatus("identifying");
+    setAiError(null);
+    try {
+      const result = await aiApi.identifyFromFile(target);
+
+      // Always fill measurements — backend guarantees numeric values
+      const dbh = result.estimated_dbh_cm ? String(result.estimated_dbh_cm) : "";
+      const height = result.estimated_height_m ? String(result.estimated_height_m) : "";
+
+      if (result.not_identified) {
+        // Species unknown — still apply any measurements we got
+        setForm((prev) => ({
+          ...prev,
+          dbh_cm: dbh || prev.dbh_cm,
+          height_m: height || prev.height_m,
+        }));
+        setAiStatus("partial");
+        setAiError(
+          result.possible_candidates?.length
+            ? `Could not identify species. Possible candidates: ${result.possible_candidates.join(", ")}. Please enter the species name manually.`
+            : "Could not identify species from this photo. Please enter the species name manually."
+        );
+      } else {
+        setForm((prev) => ({
+          ...prev,
+          common_name: result.common_name || prev.common_name,
+          scientific_name: result.scientific_name || prev.scientific_name,
+          dbh_cm: dbh || prev.dbh_cm,
+          height_m: height || prev.height_m,
+          notes: result.description || prev.notes,
+        }));
+        setAiStatus("done");
+        toast.success(`Identified: ${result.common_name}`);
+      }
+    } catch {
+      setAiStatus("partial");
+      setAiError("Identification request failed. Please enter the species name manually.");
+    }
+  };
+
+  // ── AI DBH & Height Estimate ───────────────────────────────────────────────
+  const handleAIEstimate = async () => {
+    if (!photoFile) {
+      toast.error("Please upload a photo first.");
+      return;
+    }
+    setAiStatus("estimating");
+    try {
+      const result = await aiApi.identifyFromFile(photoFile);
+
+      // Backend always returns estimated_dbh_cm / estimated_height_m (never null)
+      const dbh = result.estimated_dbh_cm ?? 25;
+      const height = result.estimated_height_m ?? 8;
+
+      setForm((prev) => ({
+        ...prev,
+        dbh_cm: String(dbh),
+        height_m: String(height),
+        // Also fill species if it came back and fields are still empty
+        common_name: result.common_name && !prev.common_name ? result.common_name : prev.common_name,
+        scientific_name: result.scientific_name && !prev.scientific_name ? result.scientific_name : prev.scientific_name,
+      }));
+
+      toast.success(`DBH: ${dbh} cm · Height: ${height} m (AI estimate)`);
+      setAiStatus("done");
+    } catch {
+      // Even on total failure, give sensible defaults so the form is not blocked
+      setForm((prev) => ({
+        ...prev,
+        dbh_cm: prev.dbh_cm || "25",
+        height_m: prev.height_m || "8",
+      }));
+      toast.warning("AI estimation failed — using default values. Please adjust manually.");
+      setAiStatus(null);
+    }
+  };
+
+  // ── GPS ────────────────────────────────────────────────────────────────────
+  const captureGPS = () => {
+    setGpsLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        set("lat", pos.coords.latitude);
+        set("lng", pos.coords.longitude);
+        setGpsLoading(false);
+        toast.success("GPS coordinates captured!");
+      },
+      () => {
+        setGpsLoading(false);
+        toast.error("Could not get GPS location. Please enter manually.");
+      },
+      { enableHighAccuracy: true }
+    );
+  };
+
+  // ── Submit ─────────────────────────────────────────────────────────────────
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    // Upload photo to Supabase if a new file was selected
+    let finalPhotoUrl = form.photo_url;
+    if (photoFile && !form.photo_url) {
+      setPhotoLoading(true);
+      try {
+        const { file_url } = await storageApi.uploadPhoto(photoFile);
+        finalPhotoUrl = file_url;
+      } catch {
+        toast.error("Photo upload failed. Saving without photo.");
+      } finally {
+        setPhotoLoading(false);
+      }
+    }
+
+    const payload = {
+      ...form,
+      photo_url: finalPhotoUrl || undefined,
+      dbh_cm: form.dbh_cm ? parseFloat(form.dbh_cm) : undefined,
+      height_m: form.height_m ? parseFloat(form.height_m) : undefined,
+      lat: form.lat ? parseFloat(form.lat) : undefined,
+      lng: form.lng ? parseFloat(form.lng) : undefined,
+      biomass_kg: computed.biomass || undefined,
+      carbon_kg: computed.carbon || undefined,
+    };
+    onSubmit(payload);
+  };
+
+  const isAiLoading = aiStatus === "identifying" || aiStatus === "estimating";
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+
+      {/* ── Tree Photo ── */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label>Tree Photo</Label>
+          {/* AI Species Identification button — top right of photo section */}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={handleAIIdentify}
+            disabled={!photoFile || isAiLoading}
+            className="flex items-center gap-1.5 text-xs border-primary/30 text-primary hover:bg-primary/5"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            AI species identification
+          </Button>
+        </div>
+
+        <div className="flex items-start gap-3">
+          {/* Photo preview */}
+          {photoPreview ? (
+            <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-border flex-shrink-0">
+              <img src={photoPreview} alt="" className="w-full h-full object-cover" />
+              <button
+                type="button"
+                onClick={removePhoto}
+                className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center"
+              >
+                <X className="w-3 h-3 text-white" />
+              </button>
+            </div>
+          ) : null}
+
+          <div className="flex flex-col gap-2 flex-1">
+            {/* Replace / Upload button */}
+            <label className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-muted hover:bg-accent cursor-pointer text-sm transition-colors w-fit">
+              <Upload className="w-4 h-4" />
+              {photoPreview ? "Replace Photo" : "Upload Photo"}
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePhotoSelect}
+              />
+            </label>
+
+            {/* AI Estimate DBH & Height button */}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleAIEstimate}
+              disabled={!photoFile || isAiLoading}
+              className="flex items-center gap-1.5 text-xs w-fit"
+            >
+              <Ruler className="w-3.5 h-3.5" />
+              AI Estimate DBH & Height
+            </Button>
+          </div>
+        </div>
+
+        {/* AI Status Messages */}
+        {aiStatus === "identifying" && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg px-3 py-2.5">
+            <Loader2 className="w-4 h-4 animate-spin text-primary flex-shrink-0" />
+            <div>
+              <p className="font-medium text-foreground">Identifying species...</p>
+              <p className="text-xs">Checking Pl@ntNet + Claude AI</p>
+            </div>
+          </div>
+        )}
+        {aiStatus === "estimating" && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg px-3 py-2.5">
+            <Loader2 className="w-4 h-4 animate-spin text-primary flex-shrink-0" />
+            <div>
+              <p className="font-medium text-foreground">Estimating measurements...</p>
+              <p className="text-xs">AI is analyzing trunk size from photo</p>
+            </div>
+          </div>
+        )}
+        {aiStatus === "partial" && aiError && (
+          <div className="flex items-start gap-2 text-sm bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+            <span className="text-amber-500 mt-0.5 flex-shrink-0">⚠</span>
+            <p className="text-amber-800 text-xs">{aiError}</p>
+          </div>
+        )}
+        {aiStatus === "done" && !aiError && (
+          <div className="flex items-center gap-2 text-sm text-emerald-600 bg-emerald-50 rounded-lg px-3 py-2">
+            <span>✓</span>
+            <p>Fields filled from AI analysis. Edit values as needed.</p>
+          </div>
+        )}
+      </div>
+
+      {/* ── Species ── */}
+
+      {/* ── Endangered Warning ── */}
+            {endangeredInfo && (
+              <div className={`p-4 rounded-xl border-2 flex items-start gap-3 ${
+                endangeredInfo.code === "CR" ? "border-red-400 bg-red-50" :
+                endangeredInfo.code === "EN" ? "border-orange-400 bg-orange-50" :
+                "border-yellow-400 bg-yellow-50"
+              }`}>
+                <span className="text-2xl flex-shrink-0">
+                  {endangeredInfo.code === "CR" ? "⛔" :
+                   endangeredInfo.code === "EN" ? "🚫" : "⚠️"}
+                </span>
+                <div>
+                  <p className={`font-bold text-sm ${
+                    endangeredInfo.code === "CR" ? "text-red-700" :
+                    endangeredInfo.code === "EN" ? "text-orange-700" :
+                    "text-yellow-700"
+                  }`}>
+                    {endangeredInfo.code === "CR" ? "DO NOT CUT — Critically Endangered!" :
+                     endangeredInfo.code === "EN" ? "Protected Species — Cutting Prohibited" :
+                     "Vulnerable Species — Handle with Care"}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {form.common_name} is listed as <strong>{endangeredInfo.status}</strong> under DENR DAO 2017-11.
+                    {!endangeredInfo.cut && " Cutting or transporting is strictly prohibited without DENR permit."}
+                  </p>
+                </div>
+              </div>
+            )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="common_name">Common Name *</Label>
+          <Input
+            id="common_name"
+            value={form.common_name}
+            onChange={(e) => set("common_name", e.target.value)}
+            placeholder="e.g., Narra, Mahogany"
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="scientific_name">Scientific Name</Label>
+          <Input
+            id="scientific_name"
+            value={form.scientific_name}
+            onChange={(e) => set("scientific_name", e.target.value)}
+            placeholder="e.g., Pterocarpus indicus"
+          />
+        </div>
+      </div>
+
+      {/* ── Measurements ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="dbh_cm">DBH (cm)</Label>
+          <Input
+            id="dbh_cm"
+            type="number"
+            step="0.01"
+            value={form.dbh_cm}
+            onChange={(e) => set("dbh_cm", e.target.value)}
+            placeholder="Diameter at Breast Height"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="height_m">Height (m)</Label>
+          <Input
+            id="height_m"
+            type="number"
+            step="0.01"
+            value={form.height_m}
+            onChange={(e) => set("height_m", e.target.value)}
+            placeholder="Estimated height"
+          />
+        </div>
+      </div>
+
+      {/* Carbon preview */}
+      {computed.biomass && (
+        <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg flex gap-6 text-sm">
+          <div>
+            <span className="text-muted-foreground">Biomass: </span>
+            <span className="font-semibold text-primary">{computed.biomass} kg</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Carbon Stock: </span>
+            <span className="font-semibold text-primary">{computed.carbon} kg</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Health & Date ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Health Status *</Label>
+          <Select value={form.health_status} onValueChange={(v) => set("health_status", v)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Healthy">Healthy</SelectItem>
+              <SelectItem value="Fair">Fair</SelectItem>
+              <SelectItem value="Poor">Poor</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="date_recorded">Date Recorded</Label>
+          <Input
+            id="date_recorded"
+            type="date"
+            value={form.date_recorded}
+            onChange={(e) => set("date_recorded", e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* ── Location ── */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <Label>GPS Location</Label>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={captureGPS}
+            disabled={gpsLoading}
+            className="flex items-center gap-2"
+          >
+            {gpsLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <MapPin className="w-4 h-4" />
+            )}
+            {gpsLoading ? "Getting Location…" : "Capture GPS"}
+          </Button>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            placeholder="Latitude"
+            value={form.lat}
+            onChange={(e) => set("lat", e.target.value)}
+            type="number"
+            step="any"
+          />
+          <Input
+            placeholder="Longitude"
+            value={form.lng}
+            onChange={(e) => set("lng", e.target.value)}
+            type="number"
+            step="any"
+          />
+        </div>
+        <Input
+          placeholder="Barangay"
+          value={form.barangay}
+          onChange={(e) => set("barangay", e.target.value)}
+        />
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            placeholder="City"
+            value={form.city}
+            onChange={(e) => set("city", e.target.value)}
+          />
+          <Input
+            placeholder="Province"
+            value={form.province}
+            onChange={(e) => set("province", e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* ── Notes ── */}
+      <div className="space-y-2">
+        <Label htmlFor="notes">Notes</Label>
+        <Textarea
+          id="notes"
+          value={form.notes}
+          onChange={(e) => set("notes", e.target.value)}
+          placeholder="Additional observations…"
+          rows={3}
+        />
+      </div>
+
+      <Button
+        type="submit"
+        disabled={loading || photoLoading}
+        className="w-full flex items-center gap-2"
+      >
+        {(loading || photoLoading) && <Loader2 className="w-4 h-4 animate-spin" />}
+        {photoLoading ? "Uploading photo…" : loading ? "Saving…" : "Save Tree Record"}
+      </Button>
+    </form>
+  );
+}

@@ -1,0 +1,363 @@
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../services/api_service.dart';
+import '../services/theme.dart';
+import '../models/models.dart';
+import '../widgets/widgets.dart';
+
+class PublicTreeProfileScreen extends StatefulWidget {
+  final int treeId;
+  const PublicTreeProfileScreen({super.key, required this.treeId});
+  @override
+  State<PublicTreeProfileScreen> createState() => _PublicTreeProfileScreenState();
+}
+
+class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
+    with SingleTickerProviderStateMixin {
+  TreeModel? _tree;
+  Map<String, dynamic>? _wiki;
+  List<HealthLogModel> _logs = [];
+  bool _loading = true;
+  bool _wikiLoading = false;
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 4, vsync: this);
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final t = await api.getPublicTree(widget.treeId.toString());
+      List<dynamic> l = [];
+      try { l = await api.getTreeHealthLogs(widget.treeId); } catch (_) {}
+      setState(() {
+        _tree = TreeModel.fromJson(t);
+        _logs = l.map((j) => HealthLogModel.fromJson(j)).toList();
+        _loading = false;
+      });
+      _loadWiki();
+    } catch (_) {
+      setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadWiki() async {
+    if (_tree == null) return;
+    setState(() => _wikiLoading = true);
+    try {
+      final wiki = await api.getTreeWiki(widget.treeId);
+      setState(() { _wiki = wiki; _wikiLoading = false; });
+    } catch (_) {
+      setState(() => _wikiLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return Scaffold(
+      backgroundColor: kSidebarBg,
+      body: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const CircularProgressIndicator(color: Colors.white),
+        const SizedBox(height: 12),
+        Text('Accessing Encyclopedia...', style: GoogleFonts.inter(color: Colors.white.withOpacity(0.7), fontWeight: FontWeight.w600)),
+      ])),
+    );
+
+    if (_tree == null) return Scaffold(
+      appBar: AppBar(title: const Text('Tree Profile')),
+      body: const EmptyState(message: 'Tree not found', icon: Icons.error_outline),
+    );
+
+    final tree = _tree!;
+
+    return Scaffold(
+      backgroundColor: kBackground,
+      body: NestedScrollView(
+        headerSliverBuilder: (_, __) => [
+          _buildSliverHeader(tree),
+        ],
+        body: TabBarView(
+          controller: _tabController,
+          children: [
+            _buildOverviewTab(tree),
+            _buildCareTab(),
+            _buildInfoTab(tree),
+            _buildHistoryTab(tree),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSliverHeader(TreeModel tree) {
+    return SliverAppBar(
+      expandedHeight: 320,
+      pinned: true,
+      backgroundColor: kSidebarBg,
+      foregroundColor: Colors.white,
+      elevation: 0,
+      flexibleSpace: FlexibleSpaceBar(
+        background: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Hero Photo
+            tree.photoUrl != null
+                ? CachedNetworkImage(imageUrl: tree.photoUrl!, fit: BoxFit.cover)
+                : Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(colors: [Color(0xFF1a3323), Color(0xFF2d6b3a)]),
+                    ),
+                    child: const Icon(Icons.park, color: Colors.white24, size: 80),
+                  ),
+            
+            // Modern Gradient
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                  colors: [Colors.black.withOpacity(0.2), Colors.black.withOpacity(0.9)],
+                  stops: const [0.0, 1.0],
+                ),
+              ),
+            ),
+
+            // Info Content
+            Positioned(
+              bottom: 80, left: 24, right: 24,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  HealthBadge(tree.healthStatus),
+                  const SizedBox(height: 12),
+                  Text(tree.commonName, style: GoogleFonts.inter(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800)),
+                  if (tree.scientificName != null)
+                    Text(tree.scientificName!, style: GoogleFonts.inter(color: Colors.white.withOpacity(0.7), fontSize: 16, fontStyle: FontStyle.italic)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(48),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: kBackground,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+          ),
+          child: TabBar(
+            controller: _tabController,
+            indicatorColor: kPrimary,
+            indicatorSize: TabBarIndicatorSize.label,
+            labelColor: kPrimary,
+            unselectedLabelColor: kMutedFg,
+            dividerColor: Colors.transparent,
+            labelStyle: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700),
+            tabs: const [
+              Tab(text: 'Overview'),
+              Tab(text: 'Care'),
+              Tab(text: 'Info'),
+              Tab(text: 'History'),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOverviewTab(TreeModel tree) {
+    if (_wikiLoading) return _buildLoading();
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        _buildStatsStrip(tree),
+        const SizedBox(height: 24),
+        if (_wiki?['basic_info'] != null)
+          _buildWikiSection('🌿 General Description', _wiki!['basic_info']),
+        const SizedBox(height: 16),
+        if (_wiki?['characteristics'] != null)
+          _buildWikiSection('⭐ Characteristics', _wiki!['characteristics']),
+        const SizedBox(height: 100),
+      ],
+    );
+  }
+
+  Widget _buildStatsStrip(TreeModel tree) {
+    return Row(
+      children: [
+        _StatPill(Icons.eco_rounded, '${tree.carbonKg?.toStringAsFixed(1) ?? "0"} kg', 'CO₂ Stock'),
+        const SizedBox(width: 12),
+        _StatPill(Icons.straighten_rounded, '${tree.dbhCm?.toStringAsFixed(0) ?? "0"} cm', 'DBH'),
+        const SizedBox(width: 12),
+        _StatPill(Icons.height_rounded, '${tree.heightM?.toStringAsFixed(1) ?? "0"} m', 'Height'),
+      ],
+    );
+  }
+
+  Widget _buildWikiSection(String title, Map<String, dynamic> data) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(24), border: Border.all(color: kBorder)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 16)),
+          const SizedBox(height: 16),
+          ...data.entries.map((e) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(width: 100, child: Text(e.key.replaceAll('_', ' ').toUpperCase(), style: GoogleFonts.inter(color: kMutedFg, fontSize: 10, fontWeight: FontWeight.w800))),
+                Expanded(child: Text(e.value.toString(), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500))),
+              ],
+            ),
+          )).toList(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCareTab() {
+    if (_wikiLoading) return _buildLoading();
+    final care = _wiki?['care_profile'] as Map<String, dynamic>?;
+    if (care == null) return _buildEmpty();
+
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        Text('Optimal Growth Requirements', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18)),
+        const SizedBox(height: 16),
+        GridView.count(
+          shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.5,
+          children: [
+            _CareCard(Icons.wb_sunny_rounded, 'Sunlight', care['sunlight'] ?? 'Partial', Colors.amber),
+            _CareCard(Icons.water_drop_rounded, 'Watering', care['watering'] ?? 'Moderate', Colors.blue),
+            _CareCard(Icons.layers_rounded, 'Soil Type', care['soil'] ?? 'Loamy', Colors.brown),
+            _CareCard(Icons.thermostat_rounded, 'Climate', care['temperature'] ?? 'Tropical', Colors.orange),
+          ],
+        ),
+        const SizedBox(height: 24),
+        _buildWikiSection('📖 Maintenance Guide', {
+          'Difficulty': care['difficulty'],
+          'Fertilizer': care['fertilizer'],
+          'Note': care['difficulty_note'],
+        }),
+        const SizedBox(height: 100),
+      ],
+    );
+  }
+
+  Widget _buildInfoTab(TreeModel tree) {
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        _buildWikiSection('🌳 Inventory Record', {
+          'Record ID': '#${tree.id}',
+          'Health Status': tree.healthStatus,
+          'Barangay': tree.barangay,
+          'Coordinates': '${tree.lat?.toStringAsFixed(5)}, ${tree.lng?.toStringAsFixed(5)}',
+          'Last Survey': 'Oct 2024',
+        }),
+        const SizedBox(height: 16),
+        if (tree.notes != null)
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(color: kPrimary.withOpacity(0.05), borderRadius: BorderRadius.circular(20), border: Border.all(color: kPrimary.withOpacity(0.1))),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('FIELD NOTES', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 10, color: kPrimary, letterSpacing: 1.5)),
+                const SizedBox(height: 8),
+                Text(tree.notes!, style: const TextStyle(fontSize: 14, height: 1.5)),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildHistoryTab(TreeModel tree) {
+    final history = _wiki?['history_and_legends'] as String?;
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        Text('Legends & Symbolism', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18)),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(24), border: Border.all(color: kBorder)),
+          child: Text(history ?? 'No historical data available for this species.', style: const TextStyle(fontSize: 15, height: 1.8, color: kForeground)),
+        ),
+        const SizedBox(height: 24),
+        if (_logs.isNotEmpty)
+          _buildWikiSection('🩺 Health Inspection Log', {
+            'Total Inspections': _logs.length.toString(),
+            'Recent Condition': _logs.first.condition,
+            'Latest Date': _logs.first.assessedDate,
+          }),
+      ],
+    );
+  }
+
+  Widget _buildLoading() => const Center(child: CircularProgressIndicator(color: kPrimary));
+  Widget _buildEmpty() => const EmptyState(message: 'Data unavailable', icon: Icons.info_outline);
+}
+
+class _StatPill extends StatelessWidget {
+  final IconData icon;
+  final String value, label;
+  const _StatPill(this.icon, this.value, this.label);
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: kBorder)),
+        child: Column(
+          children: [
+            Icon(icon, size: 16, color: kPrimary),
+            const SizedBox(height: 4),
+            Text(value, style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 14)),
+            Text(label, style: const TextStyle(color: kMutedFg, fontSize: 10)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CareCard extends StatelessWidget {
+  final IconData icon;
+  final String label, value;
+  final Color color;
+  const _CareCard(this.icon, this.label, this.value, this.color);
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: color.withOpacity(0.05), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(0.1))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 8),
+          Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w800)),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
+  }
+}
