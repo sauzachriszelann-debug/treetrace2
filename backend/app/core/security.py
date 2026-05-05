@@ -14,11 +14,11 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return pwd_context.hash(password[:72])  # ← CHANGED
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    return pwd_context.verify(plain[:72], hashed)  # ← CHANGED
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -59,8 +59,6 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
     Handles both enum UserRole.admin and plain string 'admin' from the DB.
     """
     role = current_user.role
-    # UserRole is a str enum so direct equality works, but guard against
-    # raw string values returned by some DB drivers / SQLAlchemy configs.
     is_admin = role == UserRole.admin or str(role).split(".")[-1].lower() == "admin"
     if not is_admin:
         raise HTTPException(

@@ -14,7 +14,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": {
-        target: "http://localhost:8000",
+        target: "https://treetrace-1o7l.onrender.com",
         changeOrigin: true,
       },
     },
