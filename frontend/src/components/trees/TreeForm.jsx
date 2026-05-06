@@ -23,6 +23,52 @@ function calcBiomassCarbon(dbh_cm, height_m) {
   };
 }
 
+const DBH_REFERENCES = {
+  none: {
+    label: "No reference",
+    hint: "No reference object provided. Estimate using tree shape, surroundings, and visible context only.",
+  },
+  a4: {
+    label: "A4 paper",
+    hint: "A standard A4 paper is visible beside the trunk for scale. A4 size is 21.0 by 29.7 cm.",
+  },
+  phone: {
+    label: "Smartphone",
+    hint: "A typical smartphone is visible beside the trunk for scale. Estimate the phone width around 7 cm and height around 15 cm.",
+  },
+  coin: {
+    label: "Philippine coin",
+    hint: "A Philippine coin is visible beside the trunk for scale. Use it as the closest visible size reference.",
+  },
+  ruler: {
+    label: "Ruler or tape",
+    hint: "A ruler, tape measure, or marked measuring tool is visible beside the trunk. Use the visible markings as scale.",
+  },
+  person: {
+    label: "Person nearby",
+    hint: "A person is visible near the trunk. Use the person only as an approximate scale reference.",
+  },
+};
+
+const errorToMessage = (error, fallback = "Request failed. Please try again.") => {
+  const detail = error?.response?.data?.detail ?? error?.response?.data?.message ?? error?.message;
+  if (!detail) return fallback;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item?.msg) return item.msg;
+        return JSON.stringify(item);
+      })
+      .join(" ");
+  }
+  if (typeof detail === "object") {
+    return detail.msg || detail.message || JSON.stringify(detail);
+  }
+  return String(detail);
+};
+
 export default function TreeForm({ initial = {}, onSubmit, loading }) {
   const fileRef = useRef(null);
   const [form, setForm] = useState({
@@ -49,6 +95,11 @@ export default function TreeForm({ initial = {}, onSubmit, loading }) {
   const [aiStatus, setAiStatus] = useState(null); // null | "identifying" | "done" | "error" | "estimating"
   const [aiError, setAiError] = useState(null);
   const [computed, setComputed] = useState({ biomass: null, carbon: null });
+  const [dbhReference, setDbhReference] = useState("none");
+  const [dbhDistance, setDbhDistance] = useState("");
+  const [dbhResult, setDbhResult] = useState(null);
+  const [circumferenceCm, setCircumferenceCm] = useState("");
+  const [aiConservation, setAiConservation] = useState(null);
 
   useEffect(() => {
     const { biomass, carbon } = calcBiomassCarbon(
@@ -60,22 +111,53 @@ export default function TreeForm({ initial = {}, onSubmit, loading }) {
 
   const set = (key, val) => setForm((f) => ({ ...f, [key]: val }));
 
+  const calculateDbhFromCircumference = (value) => {
+    setCircumferenceCm(value);
+    const circumference = parseFloat(value);
+    if (!Number.isFinite(circumference) || circumference <= 0) return;
+    const dbh = circumference / Math.PI;
+    set("dbh_cm", dbh.toFixed(2));
+    setDbhResult({
+      dbh_cm: Number(dbh.toFixed(2)),
+      confidence: "High",
+      method: "Manual circumference measurement",
+      analysis_notes: "Calculated from circumference measured at breast height using DBH = circumference / pi.",
+      distance_estimate_m: null,
+      accuracy_note: "High accuracy when circumference is measured with tape at 1.3 meters above ground.",
+    });
+  };
+
   // ── Endangered species check ──────────────────────────────────────────────
   const ENDANGERED = {
     "narra": { status: "Endangered", code: "EN", cut: false },
+    "pterocarpus indicus": { status: "Endangered", code: "EN", cut: false },
     "almaciga": { status: "Critically Endangered", code: "CR", cut: false },
+    "agathis philippinensis": { status: "Critically Endangered", code: "CR", cut: false },
     "molave": { status: "Endangered", code: "EN", cut: false },
+    "vitex parviflora": { status: "Endangered", code: "EN", cut: false },
     "ipil": { status: "Endangered", code: "EN", cut: false },
+    "intsia bijuga": { status: "Endangered", code: "EN", cut: false },
     "apitong": { status: "Endangered", code: "EN", cut: false },
+    "dipterocarpus grandiflorus": { status: "Endangered", code: "EN", cut: false },
     "dao": { status: "Endangered", code: "EN", cut: false },
+    "dracontomelon dao": { status: "Endangered", code: "EN", cut: false },
     "kamagong": { status: "Vulnerable", code: "VU", cut: false },
+    "diospyros philippinensis": { status: "Vulnerable", code: "VU", cut: false },
     "yakal": { status: "Vulnerable", code: "VU", cut: false },
+    "shorea astylosa": { status: "Vulnerable", code: "VU", cut: false },
     "philippine teak": { status: "Critically Endangered", code: "CR", cut: false },
+    "tectona philippinensis": { status: "Critically Endangered", code: "CR", cut: false },
     "lauan": { status: "Vulnerable", code: "VU", cut: false },
+    "red lauan": { status: "Endangered", code: "EN", cut: false },
+    "shorea negrosensis": { status: "Endangered", code: "EN", cut: false },
   };
 
 
-  const endangeredInfo = ENDANGERED[form.common_name?.toLowerCase().trim()];
+  const normalizeSpecies = (value) => value?.toLowerCase().trim() || "";
+  const endangeredInfo =
+    aiConservation ||
+    ENDANGERED[normalizeSpecies(form.common_name)] ||
+    ENDANGERED[normalizeSpecies(form.scientific_name)];
 
 
 
@@ -88,6 +170,8 @@ export default function TreeForm({ initial = {}, onSubmit, loading }) {
     set("photo_url", "");
     setAiStatus(null);
     setAiError(null);
+    setDbhResult(null);
+    setAiConservation(null);
     // ← ADD THIS LINE:
     setTimeout(() => handleAIIdentify(file), 100);
   };
@@ -98,6 +182,8 @@ export default function TreeForm({ initial = {}, onSubmit, loading }) {
     set("photo_url", "");
     setAiStatus(null);
     setAiError(null);
+    setDbhResult(null);
+    setAiConservation(null);
   };
 
   // ── AI Species Identification ──────────────────────────────────────────────
@@ -111,6 +197,14 @@ export default function TreeForm({ initial = {}, onSubmit, loading }) {
     setAiError(null);
     try {
       const result = await aiApi.identifyFromFile(target);
+      const conservation = result.protected || ["CR", "EN", "VU"].includes(result.status_code)
+        ? {
+            status: result.endangered_status || "Protected",
+            code: result.status_code || "EN",
+            cut: result.cutting_allowed !== false,
+          }
+        : null;
+      setAiConservation(conservation);
 
       // Always fill measurements — backend guarantees numeric values
       const dbh = result.estimated_dbh_cm ? String(result.estimated_dbh_cm) : "";
@@ -154,32 +248,54 @@ export default function TreeForm({ initial = {}, onSubmit, loading }) {
       return;
     }
     setAiStatus("estimating");
+    setAiError(null);
     try {
-      const result = await aiApi.identifyFromFile(photoFile);
+      const { file_url } = await storageApi.uploadPhoto(photoFile);
+      const result = await aiApi.identifyFromUrl(file_url);
+      const dbh = result.estimated_dbh_cm;
+      const height = result.estimated_height_m;
+      const isDefaultEstimate = Number(dbh) === 25 && Number(height) === 8;
 
-      // Backend always returns estimated_dbh_cm / estimated_height_m (never null)
-      const dbh = result.estimated_dbh_cm ?? 25;
-      const height = result.estimated_height_m ?? 8;
+      if (!dbh || isDefaultEstimate) {
+        setDbhResult({
+          confidence: "Low",
+          method: "AI visual estimate unavailable",
+          analysis_notes: result.reason || "The AI did not return a photo-specific DBH estimate for this image.",
+          distance_estimate_m: null,
+          accuracy_note: "Use the manual circumference calculator for accurate DBH.",
+        });
+        toast.warning("AI could not estimate DBH from this photo. Please use the manual circumference calculator.");
+        setAiStatus(null);
+        return;
+      }
 
       setForm((prev) => ({
         ...prev,
-        dbh_cm: String(dbh),
-        height_m: String(height),
-        // Also fill species if it came back and fields are still empty
-        common_name: result.common_name && !prev.common_name ? result.common_name : prev.common_name,
-        scientific_name: result.scientific_name && !prev.scientific_name ? result.scientific_name : prev.scientific_name,
+        dbh_cm: dbh ? String(dbh) : prev.dbh_cm,
+        height_m: height ? String(height) : prev.height_m,
       }));
 
-      toast.success(`DBH: ${dbh} cm · Height: ${height} m (AI estimate)`);
+      setDbhResult({
+        dbh_cm: dbh,
+        height_m: height,
+        confidence: result.confidence || "Low",
+        method: "AI visual estimate from uploaded photo URL",
+        analysis_notes: "The photo was uploaded first, then analyzed by the vision AI for rough DBH and height estimates.",
+        distance_estimate_m: null,
+        accuracy_note: "+/- 30-50 cm rough visual estimate. Manual circumference is recommended for accurate DBH.",
+        fallback: true,
+      });
+      toast.success(`DBH: ${dbh || "estimated"} cm - AI visual estimate`);
       setAiStatus("done");
-    } catch {
-      // Even on total failure, give sensible defaults so the form is not blocked
-      setForm((prev) => ({
-        ...prev,
-        dbh_cm: prev.dbh_cm || "25",
-        height_m: prev.height_m || "8",
-      }));
-      toast.warning("AI estimation failed — using default values. Please adjust manually.");
+    } catch (error) {
+      const status = error.response?.status;
+      if (status === 401) {
+        toast.error("Please log in again before measuring DBH.");
+      } else if (status === 413) {
+        toast.error("That photo is too large. Please use a smaller image or retake it.");
+      } else {
+        toast.error(errorToMessage(error, "AI visual estimate failed. Manual circumference is the accurate method."));
+      }
       setAiStatus(null);
     }
   };
@@ -284,19 +400,6 @@ export default function TreeForm({ initial = {}, onSubmit, loading }) {
                 onChange={handlePhotoSelect}
               />
             </label>
-
-            {/* AI Estimate DBH & Height button */}
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={handleAIEstimate}
-              disabled={!photoFile || isAiLoading}
-              className="flex items-center gap-1.5 text-xs w-fit"
-            >
-              <Ruler className="w-3.5 h-3.5" />
-              AI Estimate DBH & Height
-            </Button>
           </div>
         </div>
 
@@ -357,7 +460,7 @@ export default function TreeForm({ initial = {}, onSubmit, loading }) {
                      "Vulnerable Species — Handle with Care"}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {form.common_name} is listed as <strong>{endangeredInfo.status}</strong> under DENR DAO 2017-11.
+                    {(form.common_name || form.scientific_name || "This species")} is listed as <strong>{endangeredInfo.status}</strong> under DENR DAO 2017-11.
                     {!endangeredInfo.cut && " Cutting or transporting is strictly prohibited without DENR permit."}
                   </p>
                 </div>
@@ -387,6 +490,106 @@ export default function TreeForm({ initial = {}, onSubmit, loading }) {
       </div>
 
       {/* ── Measurements ── */}
+      <div className="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="circumference_cm">Manual DBH Calculator</Label>
+          <p className="text-xs text-muted-foreground">
+            Measure trunk circumference at 1.3 meters above ground. DBH is calculated automatically.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label htmlFor="circumference_cm" className="text-xs text-muted-foreground">
+              Circumference at breast height (cm)
+            </Label>
+            <Input
+              id="circumference_cm"
+              type="number"
+              min="0"
+              step="0.01"
+              value={circumferenceCm}
+              onChange={(e) => calculateDbhFromCircumference(e.target.value)}
+              placeholder="e.g., 94.25"
+            />
+          </div>
+          <div className="rounded-md bg-background/80 border border-border px-3 py-2 text-xs text-muted-foreground flex items-center">
+            DBH = circumference / pi. This is the recommended field method for accurate records.
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <Label>AI Photo DBH Estimate</Label>
+            <p className="text-xs text-muted-foreground">
+              Optional estimate. Use a ruler, A4 paper, phone, or known distance for better results.
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={handleAIEstimate}
+            disabled={!photoFile || isAiLoading}
+            className="flex items-center gap-1.5 text-xs w-fit"
+          >
+            {aiStatus === "estimating" ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Ruler className="w-3.5 h-3.5" />
+            )}
+            Measure from Photo
+          </Button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">Visible scale reference</Label>
+            <Select value={dbhReference} onValueChange={setDbhReference}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(DBH_REFERENCES).map(([value, option]) => (
+                  <SelectItem key={value} value={value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="dbh_distance" className="text-xs text-muted-foreground">
+              Camera distance, meters
+            </Label>
+            <Input
+              id="dbh_distance"
+              type="number"
+              min="0"
+              step="0.1"
+              value={dbhDistance}
+              onChange={(e) => setDbhDistance(e.target.value)}
+              placeholder="Optional"
+            />
+          </div>
+        </div>
+        {dbhResult && (
+          <div className="rounded-md bg-background/80 border border-border px-3 py-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">
+              {dbhResult.confidence || "AI"} confidence
+            </span>
+            {dbhResult.distance_estimate_m ? ` - estimated distance ${dbhResult.distance_estimate_m} m` : ""}
+            {dbhResult.accuracy_note ? ` - ${dbhResult.accuracy_note}` : ""}
+          </div>
+        )}
+      </div>
+
+      {form.dbh_cm && (
+        <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+          DBH field is filled. You can still edit it manually before saving.
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="dbh_cm">DBH (cm)</Label>

@@ -40,6 +40,43 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
     }
   }
 
+  Future<void> _submitUnknown() async {
+    if (_photo == null) return;
+    setState(() => _identifying = true);
+    try {
+      final payload = {
+        'photo_url': '',
+        'possible_name': _result?['common_name'],
+        'submitter_notes': _result?['reason'] ?? 'Submitted from mobile AI scanner',
+        'ai_candidates': _result?['possible_candidates'] ?? [],
+      };
+
+      if (await api.isOnline()) {
+        payload['photo_url'] = await api.uploadPhoto(_photo!) ?? '';
+        await api.submitUnknownSpecies(payload);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Submitted for expert review.'),
+              backgroundColor: kHealthy));
+        }
+      } else {
+        await api.queueOfflineAction('SUBMIT_UNKNOWN', payload, photoPath: _photo!.path);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Saved offline. Unknown species will sync later.'),
+              backgroundColor: kHealthy));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Submission failed: $e'), backgroundColor: kPoor));
+      }
+    } finally {
+      if (mounted) setState(() => _identifying = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final notIdentified = _result?['not_identified'] == true;
@@ -228,6 +265,10 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
                     const Icon(Icons.verified_user_rounded, color: Colors.orange, size: 28),
                 ],
               ),
+              if (isProtected) ...[
+                const SizedBox(height: 16),
+                _buildCuttingWarning(),
+              ],
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 16),
                 child: Divider(height: 1),
@@ -258,7 +299,62 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
             ),
           ),
         ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: OutlinedButton.icon(
+            onPressed: _submitUnknown,
+            icon: const Icon(Icons.science_outlined),
+            label: const Text('Submit for Expert Review'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: kPrimary,
+              side: const BorderSide(color: kPrimary),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+          ),
+        ),
       ],
+    );
+  }
+
+  Widget _buildCuttingWarning() {
+    final code = _result?['status_code'] ?? '';
+    final status = _result?['endangered_status'] ?? 'Protected';
+    final strictlyProhibited = _result?['cutting_allowed'] != true;
+    final color = code == 'CR' ? Colors.red : Colors.orange;
+    final title = code == 'CR'
+        ? 'DO NOT CUT - Critically Endangered'
+        : code == 'EN'
+            ? 'Protected - Cutting Prohibited'
+            : 'Protected Species Warning';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.warning_amber_rounded, color: color, size: 24),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title,
+                  style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 13)),
+              const SizedBox(height: 4),
+              Text(
+                'Listed as $status under DENR DAO 2017-11. Cutting or transporting is '
+                '${strictlyProhibited ? 'strictly prohibited' : 'allowed only with proper permit'}.',
+                style: const TextStyle(fontSize: 12, height: 1.35, color: kForeground),
+              ),
+            ]),
+          ),
+        ],
+      ),
     );
   }
 
@@ -330,6 +426,16 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
           Text('Identification Failed', style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: Colors.red)),
           const SizedBox(height: 8),
           Text(_result?['reason'] ?? '', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: Colors.black54)),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _photo == null ? null : _submitUnknown,
+              icon: const Icon(Icons.upload_file),
+              label: const Text('Submit Unknown Species'),
+              style: ElevatedButton.styleFrom(backgroundColor: kPrimary),
+            ),
+          ),
         ],
       ),
     );

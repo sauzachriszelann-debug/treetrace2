@@ -5,7 +5,6 @@ import { authApi } from "@/api/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Leaf, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -16,7 +15,6 @@ export default function Register() {
     full_name: "",
     email: "",
     password: "",
-    role: "field_worker",
   });
   const [loading, setLoading] = useState(false);
 
@@ -26,7 +24,7 @@ export default function Register() {
     e.preventDefault();
     setLoading(true);
     try {
-      await authApi.register(form.full_name, form.email, form.password, form.role);
+      await authApi.register(form.full_name, form.email, form.password);
       // Auto-login after register
       await login(form.email, form.password);
       toast.success("Account created successfully!");
@@ -93,18 +91,6 @@ export default function Register() {
                 required
                 minLength={8}
               />
-            </div>
-            <div className="space-y-2">
-              <Label>Role</Label>
-              <Select value={form.role} onValueChange={(v) => set("role", v)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="field_worker">Field Worker</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
             <Button type="submit" className="w-full flex items-center gap-2" disabled={loading}>
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}

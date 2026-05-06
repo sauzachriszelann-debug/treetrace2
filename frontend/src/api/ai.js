@@ -10,6 +10,27 @@ export const aiApi = {
     return data;
   },
 
+  measureDbh: async (
+    file,
+    {
+      referenceHint = "No reference object provided. Estimate using visible surroundings only.",
+      method = "Camera-assisted photo measurement",
+      knownDistanceM = null,
+    } = {}
+  ) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("reference_hint", referenceHint);
+    form.append("method", method);
+    if (knownDistanceM) {
+      form.append("known_distance_m", String(knownDistanceM));
+    }
+    const { data } = await api.post("/ai/measure-dbh-file", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return data;
+  },
+
   identifyFromUrl: async (image_url) => {
     const { data } = await api.post("/ai/identify-url", { image_url });
     return data;

@@ -1,8 +1,6 @@
 import 'dart:io';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:http/http.dart' as http;
 import '../services/api_service.dart';
 import '../services/theme.dart';
 
@@ -66,6 +64,7 @@ class _DBHMeasureScreenState extends State<DBHMeasureScreen> {
   bool _analyzing = false;
   DBHResult? _result;
   String? _error;
+  final _distanceCtrl = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -308,6 +307,22 @@ class _DBHMeasureScreenState extends State<DBHMeasureScreen> {
       ),
       const SizedBox(height: 12),
 
+      TextFormField(
+        controller: _distanceCtrl,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: const InputDecoration(
+          labelText: 'Distance from tree (optional, meters)',
+          hintText: 'e.g., 3',
+          prefixIcon: Icon(Icons.social_distance_outlined, size: 18, color: kMutedFg),
+        ),
+      ),
+      const SizedBox(height: 8),
+      const Text(
+        'If you know roughly how far you stood from the trunk, enter it. This helps the camera estimate DBH from perspective.',
+        style: TextStyle(color: kMutedFg, fontSize: 11, height: 1.35),
+      ),
+      const SizedBox(height: 12),
+
       // Camera/Gallery buttons
       Row(children: [
         Expanded(child: OutlinedButton.icon(
@@ -473,74 +488,28 @@ class _DBHMeasureScreenState extends State<DBHMeasureScreen> {
     setState(() { _analyzing = true; _error = null; });
 
     try {
-      final bytes = await _photo!.readAsBytes();
-      final b64 = base64Encode(bytes);
-
       final refHint = _quickMode
-          ? 'No reference object is present. Use ground perspective, visible surroundings, tree canopy size, and estimate camera distance (~2-5m typical). The camera was likely held at ~1.5m height.'
+          ? 'No reference object is present. Use ground perspective, visible surroundings, tree canopy size, and estimate camera distance. The camera was likely held at about 1.5m height.'
           : _selectedRef!.geminiHint;
-
-      final prompt = '''You are an expert forester and tree measurement specialist in the Philippines.
-
-Analyze this photo and estimate the tree's DBH (Diameter at Breast Height, measured at 1.3m from ground).
-
-Reference information: $refHint
-
-Please analyze:
-1. The trunk width relative to any visible reference objects or surroundings
-2. Ground perspective to estimate distance from camera to tree
-3. Camera height (typically 1.5m when held normally)
-4. Any visible scale references (people, buildings, vehicles, vegetation)
-5. Tree species characteristics to validate size estimate
-
-Respond ONLY with valid JSON, no markdown:
-{
-  "dbh_cm": <number>,
-  "height_m": <number or null>,
-  "confidence": "Low" or "Medium" or "High",
-  "method": "<brief description of measurement method used>",
-  "analysis_notes": "<2-3 sentences explaining how you estimated the DBH>",
-  "distance_estimate_m": <estimated distance from camera to tree in meters>
-}''';
-
-      final response = await http.post(
-        Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${_getGeminiKey()}'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'contents': [{
-            'parts': [
-              {'text': prompt},
-              {
-                'inline_data': {
-                  'mime_type': 'image/jpeg',
-                  'data': b64,
-                }
-              }
-            ]
-          }],
-          'generationConfig': {'temperature': 0.2, 'maxOutputTokens': 500},
-        }),
+      final knownDistance = double.tryParse(_distanceCtrl.text.trim());
+      final method = _quickMode
+          ? 'Quick photo with perspective and optional distance'
+          : 'Reference object (${_selectedRef!.name}) with optional distance';
+      final json = await api.measureDbh(
+        _photo!,
+        referenceHint: refHint,
+        method: method,
+        knownDistanceM: knownDistance,
       );
 
-      if (response.statusCode != 200) {
-        throw Exception('API error: ${response.statusCode}');
-      }
-
-      final data = jsonDecode(response.body);
-      var raw = data['candidates'][0]['content']['parts'][0]['text'] as String;
-      raw = raw.replaceAll(RegExp(r'^```(?:json)?\s*', multiLine: true), '')
-          .replaceAll(RegExp(r'\s*```\s*$', multiLine: true), '')
-          .trim();
-
-      final json = jsonDecode(raw);
       final result = DBHResult(
         dbhCm: (json['dbh_cm'] as num).toDouble(),
         heightM: json['height_m'] != null ? (json['height_m'] as num).toDouble() : null,
         confidence: json['confidence'] ?? 'Low',
-        method: _quickMode
-            ? 'Quick Photo — Ground perspective & visual analysis'
-            : 'Reference Object (${_selectedRef!.name}) + Ground perspective',
-        notes: json['analysis_notes'] ?? 'AI visual estimation.',
+        method: json['method'] ?? method,
+        notes: '${json['analysis_notes'] ?? 'AI visual estimation.'}\n'
+            'Distance estimate: ${json['distance_estimate_m'] ?? 'unknown'} m. '
+            '${json['accuracy_note'] ?? ''}',
       );
 
       setState(() { _result = result; _step = 3; });
@@ -550,14 +519,6 @@ Respond ONLY with valid JSON, no markdown:
       setState(() => _analyzing = false);
     }
   }
-
-  String _getGeminiKey() {
-    // Read from same key used in api_service
-    // You can also hardcode it here temporarily
-    const key = String.fromEnvironment('GEMINI_KEY', defaultValue: '');
-    return key.isNotEmpty ? key : 'AIzaSyCMmCjul5Y4nM9vyhT1LCRW4CNG9h0Ul3o';
-  }
-
   Widget _tip(String text) => Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [

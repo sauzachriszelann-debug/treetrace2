@@ -12,7 +12,7 @@ import {
 
 // ── AI Wiki Content Generator ─────────────────────────────────────────────────
 async function fetchTreeWiki(treeId) {
-  const res = await fetch(`http://localhost:8000/api/public/tree/${treeId}/wiki`);
+  const res = await fetch(`/api/public/tree/${treeId}/wiki`);
   if (!res.ok) throw new Error("Wiki fetch failed");
   return res.json();
 }

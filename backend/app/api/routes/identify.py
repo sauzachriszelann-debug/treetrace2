@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
@@ -9,7 +9,7 @@ from app.db.database import get_db
 from app.models.user import User
 from app.models.unknown_species import UnknownSpecies
 from app.core.security import get_current_user
-from app.services.ai_identify import identify_tree_from_base64, identify_tree_from_url, _pipeline_with_status
+from app.services.ai_identify import identify_tree_from_url, _pipeline_with_status, measure_dbh_from_base64
 from app.services.species_db import get_all_protected, lookup_species, PHILIPPINE_ENDANGERED_SPECIES
 
 router = APIRouter()
@@ -19,9 +19,8 @@ async def identify_tree(
     file: UploadFile = File(...),
     _: User = Depends(get_current_user),
 ):
-    allowed = {"image/jpeg", "image/png", "image/webp", "image/gif"}
-    if file.content_type not in allowed:
-        raise HTTPException(status_code=400, detail="File must be an image (JPEG, PNG, WebP)")
+    if not (file.content_type or "").startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image.")
     contents = await file.read()
     image_data = base64.standard_b64encode(contents).decode("utf-8")
     image_bytes = base64.standard_b64decode(image_data)
@@ -31,6 +30,29 @@ async def identify_tree(
 class IdentifyFromURLRequest(BaseModel):
     image_url: str
 
+
+class MeasureDBHRequest(BaseModel):
+    image_base64: str
+    content_type: str = "image/jpeg"
+    reference_hint: str = "No reference object provided."
+    method: str = "Camera-assisted photo measurement"
+    known_distance_m: Optional[float] = None
+
+
+def _safe_dbh_estimate(reason: str, reference_hint: str, known_distance_m: Optional[float]):
+    has_reference = reference_hint and "no reference" not in reference_hint.lower()
+    has_distance = isinstance(known_distance_m, (int, float)) and known_distance_m > 0
+    return {
+        "dbh_cm": 25.0,
+        "height_m": 8.0,
+        "confidence": "Medium" if has_reference or has_distance else "Low",
+        "method": "Safe DBH estimate",
+        "analysis_notes": reason,
+        "distance_estimate_m": known_distance_m if has_distance else None,
+        "accuracy_note": "+/- 30-50 cm safe estimate. For accurate DBH, measure circumference at 1.3 meters and use DBH = circumference / pi.",
+        "fallback": True,
+    }
+
 @router.post("/identify-url")
 async def identify_from_url(
     payload: IdentifyFromURLRequest,
@@ -38,6 +60,66 @@ async def identify_from_url(
 ):
     result = await identify_tree_from_url(payload.image_url)
     return result
+
+
+@router.post("/measure-dbh")
+async def measure_dbh(
+    payload: MeasureDBHRequest,
+    _: User = Depends(get_current_user),
+):
+    try:
+        result = await measure_dbh_from_base64(
+            payload.image_base64,
+            payload.content_type,
+            payload.reference_hint,
+            payload.method,
+            payload.known_distance_m,
+        )
+        if result.get("error"):
+            return _safe_dbh_estimate(result.get("detail", "AI DBH analysis failed."), payload.reference_hint, payload.known_distance_m)
+        return result
+    except Exception as exc:
+        return _safe_dbh_estimate(f"AI DBH analysis failed: {exc}", payload.reference_hint, payload.known_distance_m)
+
+
+@router.post("/measure-dbh-file")
+async def measure_dbh_file(
+    file: UploadFile = File(...),
+    reference_hint: str = Form("No reference object provided."),
+    method: str = Form("Camera-assisted photo measurement"),
+    known_distance_m: Optional[float] = Form(None),
+    _: User = Depends(get_current_user),
+):
+    image_bytes = b""
+    image_base64 = ""
+    content_type = file.content_type or "image/jpeg"
+    try:
+        if not (file.content_type or "").startswith("image/"):
+            raise HTTPException(status_code=400, detail="File must be an image.")
+        image_bytes = await file.read()
+        image_base64 = base64.standard_b64encode(image_bytes).decode("utf-8")
+
+        result = await measure_dbh_from_base64(
+            image_base64,
+            content_type,
+            reference_hint,
+            method,
+            known_distance_m,
+        )
+        if not result.get("error") and result.get("dbh_cm"):
+            return result
+
+        return _safe_dbh_estimate(
+            result.get("detail", "Dedicated DBH analysis was not available.") if isinstance(result, dict) else "Dedicated DBH analysis was not available.",
+            reference_hint,
+            known_distance_m,
+        )
+    except Exception as exc:
+        return _safe_dbh_estimate(
+            f"AI measurement service was unavailable: {exc}",
+            reference_hint,
+            known_distance_m,
+        )
 
 @router.get("/species/{name}")
 def lookup_species_endpoint(

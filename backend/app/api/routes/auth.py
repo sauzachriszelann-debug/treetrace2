@@ -10,6 +10,10 @@ from app.core.security import (
 router = APIRouter()
 
 
+def _role_value(role: UserRole | str) -> str:
+    return role.value if isinstance(role, UserRole) else str(role).split(".")[-1]
+
+
 @router.post("/register", response_model=TokenResponse, status_code=201)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     """Public self-registration — citizen role only."""
@@ -33,7 +37,10 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
-    token = create_access_token({"sub": str(user.id)})
+    token = create_access_token({
+        "sub": str(user.id),
+        "role": _role_value(user.role),
+    })
     return {"access_token": token, "token_type": "bearer"}
 
 
@@ -51,7 +58,10 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is deactivated",
         )
-    token = create_access_token({"sub": str(user.id)})
+    token = create_access_token({
+        "sub": str(user.id),
+        "role": _role_value(user.role),
+    })
     return {"access_token": token, "token_type": "bearer"}
 
 

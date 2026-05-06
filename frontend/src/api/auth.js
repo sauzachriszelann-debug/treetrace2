@@ -6,7 +6,7 @@ export const authApi = {
     return data; // { access_token, token_type }
   },
 
-  register: async (full_name, email, password, role = "field_worker") => {
+  register: async (full_name, email, password, role = "citizen") => {
     const { data } = await api.post("/auth/register", {
       full_name,
       email,

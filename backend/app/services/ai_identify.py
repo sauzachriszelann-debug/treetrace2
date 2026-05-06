@@ -67,11 +67,11 @@ DBH ESTIMATION:
   Look for scale references: people (~170cm), motorcycles (~80cm), cars (~150cm), doors (~200cm).
   If NO scale reference: estimate from species maturity and crown size.
   Seedling ≤5cm | Juvenile 5-15cm | Sub-adult 15-35cm | Mature 35-70cm | Old-growth 70-200+cm
-  estimated_dbh_cm MUST be a positive integer 1-300. NEVER null or 0.
+  estimated_dbh_cm should be a positive integer 1-300 only when the image gives enough visual cues. Use null when the image does not support a photo-specific estimate.
 
 HEIGHT ESTIMATION:
   Shrub/small 2-6m | Medium 6-15m | Large 15-30m | Emergent 30-60m
-  estimated_height_m MUST be a positive integer 1-80. NEVER null or 0.
+  estimated_height_m should be a positive integer 1-80 only when the image gives enough visual cues. Use null when uncertain.
 
 confidence: "High" >70% certain | "Medium" 40-70% | "Low" <40%
 not_identified: true ONLY if no plant visible at all
@@ -84,6 +84,16 @@ def _to_int(val, default: int, lo: int = 1, hi: int = 500) -> int:
         return max(lo, min(hi, n if n > 0 else default))
     except (TypeError, ValueError):
         return default
+
+
+def _optional_int(val, lo: int = 1, hi: int = 500) -> int | None:
+    try:
+        if val is None or str(val).strip().lower() in {"", "null", "none", "unknown"}:
+            return None
+        n = int(round(float(str(val))))
+        return max(lo, min(hi, n)) if n > 0 else None
+    except (TypeError, ValueError):
+        return None
 
 
 # ── 1. PlantNet ───────────────────────────────────────────────────────────────
@@ -152,8 +162,8 @@ async def _gemini(image_b64: str, content_type: str, hint: dict | None) -> dict:
         result = json.loads(raw.strip())
         if result.get("not_identified"):
             return result
-        result["estimated_dbh_cm"]   = _to_int(result.get("estimated_dbh_cm"),  25, 1, 300)
-        result["estimated_height_m"] = _to_int(result.get("estimated_height_m"), 8, 1, 80)
+        result["estimated_dbh_cm"]   = _optional_int(result.get("estimated_dbh_cm"), 1, 300)
+        result["estimated_height_m"] = _optional_int(result.get("estimated_height_m"), 1, 80)
         result.setdefault("common_name",            "Unknown Tree")
         result.setdefault("scientific_name",         "Unknown")
         result.setdefault("family",                  "Unknown")
@@ -469,7 +479,99 @@ async def identify_tree_from_url(image_url: str) -> dict:
         return await _pipeline(image_bytes, image_b64, content_type)
     except Exception as e:
         return {"not_identified": True, "reason": f"Failed to download image: {e}",
-                "estimated_dbh_cm": 25, "estimated_height_m": 8}
+                "estimated_dbh_cm": None, "estimated_height_m": None}
+
+
+DBH_MEASURE_PROMPT = """\
+You are an expert Philippine forester measuring DBH from a field photo.
+
+Estimate DBH (diameter at breast height) at 1.3 meters above ground.
+
+Measurement context:
+- Method: {method}
+- Scale/reference: {reference_hint}
+- User-entered camera distance: {known_distance}
+
+Important rules:
+- If a known reference object is visible near the trunk, use it as the primary scale.
+- If user-entered camera distance is provided, use it as a secondary perspective cue.
+- If no reference or distance is available, use ground perspective, camera height, nearby objects, trunk taper, and species maturity only. Mark confidence Low unless the photo has strong scale cues.
+- Estimate camera-to-tree distance from the image, but be honest about uncertainty.
+- DBH must be a positive number in centimeters.
+
+Respond ONLY with valid JSON:
+{
+  "dbh_cm": 32.5,
+  "height_m": 11.0,
+  "confidence": "Low / Medium / High",
+  "method": "brief method used",
+  "analysis_notes": "2-3 sentences explaining scale cues, distance estimate, and uncertainty",
+  "distance_estimate_m": 3.2,
+  "accuracy_note": "expected error range, e.g. +/- 10-15 cm"
+}
+"""
+
+
+async def measure_dbh_from_base64(
+    image_data: str,
+    content_type: str = "image/jpeg",
+    reference_hint: str = "No reference object provided.",
+    method: str = "Camera-assisted photo measurement",
+    known_distance_m: float | None = None,
+) -> dict:
+    known_distance = (
+        f"{known_distance_m:.2f} meters"
+        if isinstance(known_distance_m, (int, float)) and known_distance_m > 0
+        else "not provided"
+    )
+    prompt = (
+        DBH_MEASURE_PROMPT
+        .replace("{method}", method)
+        .replace("{reference_hint}", reference_hint)
+        .replace("{known_distance}", known_distance)
+    )
+    try:
+        url = f"{GEMINI_URL}?key={GEMINI_API_KEY}"
+        payload = {
+            "contents": [{
+                "parts": [
+                    {"text": prompt},
+                    {"inline_data": {"mime_type": content_type, "data": image_data}},
+                ],
+            }],
+            "generationConfig": {"temperature": 0.1, "maxOutputTokens": 600},
+        }
+        async with httpx.AsyncClient(timeout=30) as http:
+            resp = await http.post(url, json=payload)
+        if resp.status_code != 200:
+            raise Exception(f"Gemini {resp.status_code}")
+        raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.MULTILINE)
+        raw = re.sub(r"\s*```\s*$", "", raw, flags=re.MULTILINE)
+        result = json.loads(raw)
+        result["dbh_cm"] = round(float(result.get("dbh_cm") or 0), 1)
+        if result["dbh_cm"] <= 0:
+            raise ValueError("Invalid DBH result")
+        if result.get("height_m") is not None:
+            result["height_m"] = round(float(result["height_m"]), 1)
+        result.setdefault("confidence", "Low")
+        result.setdefault("method", method)
+        result.setdefault("analysis_notes", "")
+        result.setdefault("distance_estimate_m", None)
+        result.setdefault("accuracy_note", "+/- 20-30 cm without a clear scale reference")
+        return result
+    except Exception as e:
+        return {
+            "error": True,
+            "detail": f"DBH analysis failed: {e}",
+            "dbh_cm": 25.0,
+            "height_m": None,
+            "confidence": "Low",
+            "method": method,
+            "analysis_notes": "Fallback estimate only. Retake with A4 paper, ruler, or known distance for better accuracy.",
+            "distance_estimate_m": known_distance_m,
+            "accuracy_note": "+/- 30-50 cm fallback estimate",
+        }
 
 
 async def _pipeline(image_bytes: bytes, image_b64: str, content_type: str) -> dict:
@@ -493,8 +595,8 @@ async def _pipeline(image_bytes: bytes, image_b64: str, content_type: str) -> di
                 "is_tree":                True,
                 "not_identified":         False,
                 "confidence":             pn.get("confidence", "Low"),
-                "estimated_dbh_cm":       25,
-                "estimated_height_m":     8,
+                "estimated_dbh_cm":       None,
+                "estimated_height_m":     None,
             }
         else:
             return {
@@ -502,8 +604,8 @@ async def _pipeline(image_bytes: bytes, image_b64: str, content_type: str) -> di
                 "partial":             True,
                 "reason":              cl.get("reason", "Species not identified."),
                 "possible_candidates": cl.get("possible_candidates", []),
-                "estimated_dbh_cm":    25,
-                "estimated_height_m":  8,
+                "estimated_dbh_cm":    None,
+                "estimated_height_m":  None,
                 "common_name":         "",
                 "scientific_name":     "",
             }
@@ -524,7 +626,9 @@ async def _pipeline(image_bytes: bytes, image_b64: str, content_type: str) -> di
 
 
 def _enrich(result: dict) -> dict:
-    info = lookup_species(result.get("common_name", ""))
+    common_name = result.get("common_name", "")
+    scientific_name = result.get("scientific_name", "")
+    info = lookup_species(common_name) or lookup_species(scientific_name)
     if info:
         result["endangered_status"] = info["status"]
         result["status_code"]       = info["status_code"]
@@ -532,6 +636,9 @@ def _enrich(result: dict) -> dict:
         result["cutting_allowed"]   = info["cutting_allowed"]
         result["protected"]         = info["protected"]
     else:
+        result["_needs_status_check"] = True
+        result["_common_name"] = common_name
+        result["_scientific_name"] = scientific_name
         result["endangered_status"] = "Not Listed"
         result["status_code"]       = "NL"
         result["iucn_color"]        = "#757575"

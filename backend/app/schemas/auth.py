@@ -6,7 +6,7 @@ class RegisterRequest(BaseModel):
     full_name: str
     email: EmailStr
     password: str
-    role: str = "field_worker"
+    role: str = "citizen"
 
 
 class LoginRequest(BaseModel):

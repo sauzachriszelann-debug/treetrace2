@@ -132,8 +132,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     setState(() => _saving = true);
     try {
       String? photoUrl;
-      if (_photo != null) photoUrl = await api.uploadPhoto(_photo!);
-      await api.createTree({
+      final payload = {
         'common_name':     _nameCtrl.text.trim(),
         'scientific_name': _sciCtrl.text.trim().isEmpty ? null : _sciCtrl.text.trim(),
         'health_status':   _health,
@@ -142,11 +141,21 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
         'height_m':        double.tryParse(_heightCtrl.text),
         'notes':           _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
         'photo_url':       photoUrl,
-      });
+      };
+
+      if (await api.isOnline()) {
+        if (_photo != null) payload['photo_url'] = await api.uploadPhoto(_photo!);
+        await api.createTree(payload);
+      } else {
+        await api.queueOfflineAction('CREATE_TREE', payload, photoPath: _photo?.path);
+      }
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Tree saved!'), backgroundColor: kHealthy));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(await api.isOnline()
+                ? 'Tree saved!'
+                : 'Saved offline. It will sync when signal returns.'),
+            backgroundColor: kHealthy));
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -354,8 +363,19 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
       'yakal':            {'status': 'Vulnerable',            'code': 'VU', 'cut': false},
       'philippine teak':  {'status': 'Critically Endangered', 'code': 'CR', 'cut': false},
       'lauan':            {'status': 'Vulnerable',            'code': 'VU', 'cut': false},
+      'red lauan':        {'status': 'Endangered',            'code': 'EN', 'cut': false},
+      'pterocarpus indicus': {'status': 'Endangered',         'code': 'EN', 'cut': false},
+      'diospyros philippinensis': {'status': 'Vulnerable',    'code': 'VU', 'cut': false},
+      'philippine ebony': {'status': 'Vulnerable',            'code': 'VU', 'cut': false},
+      'shorea astylosa':  {'status': 'Vulnerable',            'code': 'VU', 'cut': false},
+      'agathis philippinensis': {'status': 'Critically Endangered', 'code': 'CR', 'cut': false},
+      'tectona philippinensis': {'status': 'Critically Endangered', 'code': 'CR', 'cut': false},
     };
-    return endangered[name];
+    if (endangered[name] != null) return endangered[name];
+    for (final entry in endangered.entries) {
+      if (name.contains(entry.key) || entry.key.contains(name)) return entry.value;
+    }
+    return null;
   }
 
   void _showPhotoOptions() {

@@ -43,14 +43,14 @@ def sync_postgres_sequences():
 # Move database creation to a startup event so it doesn't freeze the server
 @app.on_event("startup")
 def startup_event():
-    print("📡 Attempting to connect to Aiven Database...")
+    print("Attempting to connect to Aiven Database...")
     try:
         # This will create tables if they don't exist
         Base.metadata.create_all(bind=engine)
         sync_postgres_sequences()
-        print("✅ Database connection successful and tables synchronized!")
+        print("Database connection successful and tables synchronized!")
     except Exception as e:
-        print("❌ DATABASE CONNECTION ERROR:")
+        print("DATABASE CONNECTION ERROR:")
         print(e)
 
 app.add_middleware(

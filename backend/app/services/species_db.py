@@ -5,6 +5,7 @@
 import httpx
 import asyncio
 import re
+import unicodedata
 
 try:
     from app.core.config import settings
@@ -277,6 +278,34 @@ PHILIPPINE_ENDANGERED_SPECIES = {
 # ── Runtime cache (avoids repeated API calls) ─────────────────────────────────
 _runtime_cache: dict = {}
 
+SPECIES_ALIASES = {
+    "pterocarpus indicus": "narra",
+    "philippine mahogany": "red lauan",
+    "shorea negrosensis": "red lauan",
+    "shorea astylosa": "yakal",
+    "vitex parviflora": "molave",
+    "intsia bijuga": "ipil",
+    "dracontomelon dao": "dao",
+    "dipterocarpus grandiflorus": "apitong",
+    "diospyros philippinensis": "kamagong",
+    "philippine ebony": "kamagong",
+    "agathis philippinensis": "almaciga",
+    "manila copal": "almaciga",
+    "tectona philippinensis": "philippine teak",
+    "afzelia rhomboidea": "tindalo",
+    "xanthostemon verdugonianus": "mangkono",
+    "heritiera sylvatica": "dungon",
+    "litsea leytensis": "batikuling",
+}
+
+
+def _normalize_name(name: str) -> str:
+    text = unicodedata.normalize("NFKD", str(name or ""))
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = text.lower().replace("_", " ").replace("-", " ")
+    text = re.sub(r"\b(tree|species|plant)\b", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
 # ── IUCN status code mapping ──────────────────────────────────────────────────
 IUCN_MAP = {
     "extinct":                         ("EX", "#000000", False),
@@ -514,13 +543,16 @@ async def auto_check_species(common_name: str, scientific_name: str = "") -> dic
 # ── Sync wrapper (for non-async code) ────────────────────────────────────────
 def lookup_species(common_name: str) -> dict | None:
     """Fast local lookup only — no API calls."""
-    key = common_name.lower().strip()
+    key = _normalize_name(common_name)
+    key = SPECIES_ALIASES.get(key, key)
     if key in PHILIPPINE_ENDANGERED_SPECIES:
         return PHILIPPINE_ENDANGERED_SPECIES[key]
     for species_name, data in PHILIPPINE_ENDANGERED_SPECIES.items():
-        if species_name in key or key in species_name:
+        species_key = _normalize_name(species_name)
+        scientific_key = _normalize_name(data["scientific_name"])
+        if species_key in key or key in species_key:
             return data
-        if data["scientific_name"].lower() in key.lower():
+        if scientific_key in key or key in scientific_key:
             return data
     return None
 

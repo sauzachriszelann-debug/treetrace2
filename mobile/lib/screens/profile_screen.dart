@@ -2,10 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_provider.dart';
+import '../services/api_service.dart';
 import '../services/theme.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  late Future<int> _queuedCount;
+
+  @override
+  void initState() {
+    super.initState();
+    _queuedCount = api.queuedCount();
+  }
+
+  void _refreshQueue() {
+    setState(() => _queuedCount = api.queuedCount());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,6 +44,9 @@ class ProfileScreen extends StatelessWidget {
                 children: [
                   _buildSectionTitle('Account Information'),
                   _buildAccountCard(user),
+                  const SizedBox(height: 24),
+                  _buildSectionTitle('Field Sync'),
+                  _buildOfflineSyncCard(context),
                   const SizedBox(height: 24),
                   if (user?.role == 'citizen') ...[
                     _buildSectionTitle('Membership Status'),
@@ -234,6 +255,62 @@ class ProfileScreen extends StatelessWidget {
         const SizedBox(height: 12),
         _buildSettingsTile(Icons.logout_rounded, 'Sign Out', () => auth.logout(), isDestructive: true),
       ],
+    );
+  }
+
+  Widget _buildOfflineSyncCard(BuildContext context) {
+    return FutureBuilder<int>(
+      future: _queuedCount,
+      builder: (context, snap) {
+        final count = snap.data ?? 0;
+        return Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: kCard,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: count > 0 ? Colors.orange.withOpacity(0.35) : kBorder),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Icon(count > 0 ? Icons.cloud_upload_outlined : Icons.cloud_done_outlined,
+                  color: count > 0 ? Colors.orange : kPrimary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  count > 0 ? '$count pending field record${count == 1 ? '' : 's'}' : 'All field records synced',
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 8),
+            Text(
+              count > 0
+                  ? 'Saved offline records will upload automatically when your signal returns.'
+                  : 'Offline tree and unknown-species submissions are ready for remote barangay work.',
+              style: const TextStyle(color: kMutedFg, fontSize: 12, height: 1.35),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  final synced = await api.syncOfflineQueue();
+                  _refreshQueue();
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(synced > 0
+                        ? 'Synced $synced offline record${synced == 1 ? '' : 's'}.'
+                        : 'No offline records synced yet.'),
+                    backgroundColor: synced > 0 ? kHealthy : kMutedFg,
+                  ));
+                },
+                icon: const Icon(Icons.sync),
+                label: const Text('Sync Now'),
+              ),
+            ),
+          ]),
+        );
+      },
     );
   }
 

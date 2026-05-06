@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 
 // OLD: const String kBaseUrl = 'http://10.0.2.2:8000/api';
@@ -16,7 +18,11 @@ class ApiService {
   ApiService._internal();
 
   final _storage = const FlutterSecureStorage();
+  final _connectivity = Connectivity();
   late final Dio _dio;
+  StreamSubscription? _connectivitySub;
+
+  static const _queueKey = 'treetrace_offline_queue';
 
   void init() {
     _dio = Dio(BaseOptions(
@@ -41,6 +47,78 @@ class ApiService {
         return handler.next(error);
       },
     ));
+
+    _connectivitySub ??= _connectivity.onConnectivityChanged.listen((result) {
+      if (!result.contains(ConnectivityResult.none)) {
+        syncOfflineQueue();
+      }
+    });
+    syncOfflineQueue();
+  }
+
+  Future<bool> isOnline() async {
+    final result = await _connectivity.checkConnectivity();
+    return !result.contains(ConnectivityResult.none);
+  }
+
+  Future<List<Map<String, dynamic>>> _readQueue() async {
+    final raw = await _storage.read(key: _queueKey);
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final decoded = jsonDecode(raw) as List;
+      return decoded.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<int> queuedCount() async => (await _readQueue()).length;
+
+  Future<void> _writeQueue(List<Map<String, dynamic>> queue) =>
+      _storage.write(key: _queueKey, value: jsonEncode(queue));
+
+  Future<void> queueOfflineAction(String type, Map<String, dynamic> payload,
+      {String? photoPath}) async {
+    final queue = await _readQueue();
+    queue.add({
+      'id': DateTime.now().millisecondsSinceEpoch,
+      'type': type,
+      'payload': payload,
+      'photo_path': photoPath,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+    await _writeQueue(queue);
+  }
+
+  Future<int> syncOfflineQueue() async {
+    if (!await isOnline()) return 0;
+    final queue = await _readQueue();
+    if (queue.isEmpty) return 0;
+
+    final remaining = <Map<String, dynamic>>[];
+    var synced = 0;
+    for (final item in queue) {
+      try {
+        final payload = Map<String, dynamic>.from(item['payload'] ?? {});
+        final photoPath = item['photo_path'] as String?;
+        if (item['type'] == 'CREATE_TREE') {
+          if (photoPath != null && photoPath.isNotEmpty && File(photoPath).existsSync()) {
+            payload['photo_url'] = await uploadPhoto(File(photoPath));
+          }
+          await createTree(payload);
+        } else if (item['type'] == 'SUBMIT_UNKNOWN') {
+          if (photoPath != null && photoPath.isNotEmpty && File(photoPath).existsSync()) {
+            payload['photo_url'] = await uploadPhoto(File(photoPath)) ?? '';
+          }
+          await submitUnknownSpecies(payload);
+        }
+        synced++;
+      } catch (_) {
+        remaining.add(item);
+      }
+    }
+    await _writeQueue(remaining);
+    return synced;
   }
 
   Future<void> saveToken(String token) =>
@@ -121,6 +199,29 @@ class ApiService {
     return res.data;
   }
 
+  Future<Map<String, dynamic>> submitUnknownSpecies(
+      Map<String, dynamic> data) async {
+    final res = await _dio.post('/ai/unknown-species', data: data);
+    return res.data;
+  }
+
+  Future<Map<String, dynamic>> measureDbh(
+    File imageFile, {
+    required String referenceHint,
+    required String method,
+    double? knownDistanceM,
+  }) async {
+    final bytes = await imageFile.readAsBytes();
+    final res = await _dio.post('/ai/measure-dbh', data: {
+      'image_base64': base64Encode(bytes),
+      'content_type': 'image/jpeg',
+      'reference_hint': referenceHint,
+      'method': method,
+      'known_distance_m': knownDistanceM,
+    });
+    return res.data;
+  }
+
   // ── Public ────────────────────────────────────────────────────────────────
   Future<List<dynamic>> getPublicTrees() async {
     final res = await _dio.get('/public/trees/all');
@@ -158,12 +259,11 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> register(
-      String fullName, String email, String password, String role) async {
+      String fullName, String email, String password) async {
     final res = await _dio.post('/auth/register', data: {
       'full_name': fullName,
       'email': email,
       'password': password,
-      'role': role,
     });
     return res.data;
   }

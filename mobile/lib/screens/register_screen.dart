@@ -29,7 +29,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
     setState(() { _loading = true; _error = null; });
     try {
-      await api.register(_nameCtrl.text.trim(), _emailCtrl.text.trim(), _passCtrl.text, 'citizen');
+      await api.register(_nameCtrl.text.trim(), _emailCtrl.text.trim(), _passCtrl.text);
       final ok = await context.read<AuthProvider>().login(_emailCtrl.text.trim(), _passCtrl.text);
       if (!ok && mounted) setState(() => _error = 'Registration succeeded but login failed. Try logging in.');
     } catch (e) {
