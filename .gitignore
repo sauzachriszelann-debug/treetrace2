@@ -1,0 +1,6 @@
+backend/.env
+.env
+.idea/
+frontend/dist/
+backend/app/**/__pycache__/
+*.pyc
