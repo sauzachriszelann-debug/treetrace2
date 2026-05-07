@@ -15,6 +15,7 @@ import 'screens/add_tree_screen.dart';
 import 'screens/ai_identify_screen.dart';
 import 'screens/public_portal_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/upgrade_screen.dart';
 
 void main() {
   debugPrint("DEBUG: main() started");
@@ -43,7 +44,8 @@ class TreeTraceApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: buildTheme(),
       home: Consumer<AuthProvider>(builder: (_, auth, __) {
-        debugPrint("DEBUG: Consumer Build - Loading: ${auth.loading}, LoggedIn: ${auth.isLoggedIn}");
+        debugPrint(
+            "DEBUG: Consumer Build - Loading: ${auth.loading}, LoggedIn: ${auth.isLoggedIn}");
         if (auth.loading) return const SplashScreen();
         if (!auth.isLoggedIn) return const LoginScreen();
         if (auth.user?.role == 'citizen') return const PublicMainShell();
@@ -67,6 +69,7 @@ const _adminNavItems = [
   _NavItem('Map', Icons.map_outlined, Icons.map),
   _NavItem('AI Identify', Icons.auto_awesome_outlined, Icons.auto_awesome),
   _NavItem('Scan QR', Icons.qr_code_scanner_outlined, Icons.qr_code_scanner),
+  _NavItem('Profile', Icons.person_outline, Icons.person),
 ];
 
 class AdminMainShell extends StatefulWidget {
@@ -77,24 +80,29 @@ class AdminMainShell extends StatefulWidget {
 
 class _AdminMainShellState extends State<AdminMainShell> {
   int _index = 0;
-  final _screens = const [
-    DashboardScreen(),
-    TreeListScreen(),
-    MapScreen(),
-    AIIdentifyScreen(),
-    ScanQRScreen(),
-  ];
+
+  void _goHome() => setState(() => _index = 0);
 
   @override
   Widget build(BuildContext context) {
+    final screens = [
+      const DashboardScreen(),
+      const TreeListScreen(),
+      MapScreen(onBack: _goHome),
+      AIIdentifyScreen(onBack: _goHome),
+      ScanQRScreen(onBack: _goHome),
+      const ProfileScreen(),
+    ];
+
     return Scaffold(
-      body: IndexedStack(index: _index, children: _screens),
+      body: IndexedStack(index: _index, children: screens),
       floatingActionButton: _index == 1
           ? FloatingActionButton(
               backgroundColor: kPrimary,
               foregroundColor: Colors.white,
               elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
               onPressed: () async {
                 await Navigator.push(context,
                     MaterialPageRoute(builder: (_) => const AddTreeScreen()));
@@ -112,11 +120,13 @@ class _AdminMainShellState extends State<AdminMainShell> {
           backgroundColor: kCard,
           indicatorColor: kPrimary.withOpacity(0.12),
           labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: _adminNavItems.map((item) => NavigationDestination(
-            icon: Icon(item.icon, color: kMutedFg),
-            selectedIcon: Icon(item.activeIcon, color: kPrimary),
-            label: item.label,
-          )).toList(),
+          destinations: _adminNavItems
+              .map((item) => NavigationDestination(
+                    icon: Icon(item.icon, color: kMutedFg),
+                    selectedIcon: Icon(item.activeIcon, color: kPrimary),
+                    label: item.label,
+                  ))
+              .toList(),
         ),
       ),
     );
@@ -140,33 +150,149 @@ class PublicMainShell extends StatefulWidget {
 
 class _PublicMainShellState extends State<PublicMainShell> {
   int _index = 0;
-  final _screens = const [
-    PublicPortalScreen(),
-    MapScreen(),
-    AIIdentifyScreen(),
-    ScanQRScreen(),
-    ProfileScreen(),
-  ];
+
+  void _goHome() => setState(() => _index = 0);
 
   @override
   Widget build(BuildContext context) {
+    final screens = [
+      PublicPortalScreen(
+        onOpenMap: () => setState(() => _index = 1),
+        onOpenAiScan: () => setState(() => _index = 2),
+        onOpenQrScan: () => setState(() => _index = 3),
+      ),
+      MapScreen(onBack: _goHome),
+      AIIdentifyScreen(onBack: _goHome),
+      ScanQRScreen(onBack: _goHome),
+      const ProfileScreen(),
+    ];
+
     return Scaffold(
-      body: IndexedStack(index: _index, children: _screens),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: kBorder, width: 1)),
+      extendBody: true,
+      body: IndexedStack(index: _index, children: screens),
+      bottomNavigationBar: _PublicBottomNav(
+        selectedIndex: _index,
+        onSelected: (i) => setState(() => _index = i),
+      ),
+    );
+  }
+}
+
+class _PublicBottomNav extends StatelessWidget {
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+  const _PublicBottomNav({
+    required this.selectedIndex,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        height: 92,
+        padding: const EdgeInsets.fromLTRB(6, 8, 6, 6),
+        decoration: BoxDecoration(
+          color: kCard,
+          border: const Border(top: BorderSide(color: kBorder, width: 1)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 18,
+              offset: const Offset(0, -6),
+            ),
+          ],
         ),
-        child: NavigationBar(
-          selectedIndex: _index,
-          onDestinationSelected: (i) => setState(() => _index = i),
-          backgroundColor: kCard,
-          indicatorColor: kPrimary.withOpacity(0.12),
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: _publicNavItems.map((item) => NavigationDestination(
-            icon: Icon(item.icon, color: kMutedFg),
-            selectedIcon: Icon(item.activeIcon, color: kPrimary),
-            label: item.label,
-          )).toList(),
+        child: Row(
+          children: List.generate(_publicNavItems.length, (index) {
+            if (index == 2) {
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => onSelected(index),
+                  child: SizedBox(
+                    height: 78,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      alignment: Alignment.topCenter,
+                      children: [
+                        Positioned(
+                          top: -24,
+                          child: Container(
+                          width: 68,
+                          height: 68,
+                          decoration: BoxDecoration(
+                            color: kPrimary,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: kCard, width: 5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: kPrimary.withOpacity(0.35),
+                                blurRadius: 18,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.camera_alt_rounded,
+                            color: Colors.white,
+                            size: 32,
+                          ),
+                        ),
+                        ),
+                        Positioned(
+                          bottom: 4,
+                          child: Text(
+                            'AI Scan',
+                            maxLines: 1,
+                            style: TextStyle(
+                              color: selectedIndex == index
+                                  ? kPrimary
+                                  : kMutedFg,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            final item = _publicNavItems[index];
+            final selected = selectedIndex == index;
+            return Expanded(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => onSelected(index),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      selected ? item.activeIcon : item.icon,
+                      color: selected ? kPrimary : kMutedFg,
+                      size: 23,
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      item.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: selected ? kPrimary : kMutedFg,
+                        fontSize: 10,
+                        fontWeight:
+                            selected ? FontWeight.w800 : FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
         ),
       ),
     );

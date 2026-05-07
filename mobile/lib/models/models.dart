@@ -114,6 +114,9 @@ class UserModel {
   final String email;
   final String role;
   final bool isActive;
+  final String subscriptionPlan;
+  final bool upgradeRequested;
+  final int aiIdentificationsToday;
 
   UserModel({
     required this.id,
@@ -121,6 +124,9 @@ class UserModel {
     required this.email,
     required this.role,
     required this.isActive,
+    required this.subscriptionPlan,
+    required this.upgradeRequested,
+    required this.aiIdentificationsToday,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> j) => UserModel(
@@ -129,7 +135,29 @@ class UserModel {
         email: j['email'] ?? '',
         role: j['role'] ?? 'field_worker',
         isActive: j['is_active'] ?? true,
+        subscriptionPlan: j['subscription_plan'] ?? 'free',
+        upgradeRequested: j['upgrade_requested'] ?? false,
+        aiIdentificationsToday: j['ai_identifications_today'] ?? 0,
+      );
+
+  UserModel copyWith({
+    String? subscriptionPlan,
+    bool? upgradeRequested,
+    int? aiIdentificationsToday,
+  }) =>
+      UserModel(
+        id: id,
+        fullName: fullName,
+        email: email,
+        role: role,
+        isActive: isActive,
+        subscriptionPlan: subscriptionPlan ?? this.subscriptionPlan,
+        upgradeRequested: upgradeRequested ?? this.upgradeRequested,
+        aiIdentificationsToday:
+            aiIdentificationsToday ?? this.aiIdentificationsToday,
       );
 
   bool get isAdmin => role.toLowerCase().contains('admin');
+  bool get isInstitutional => role == 'admin' || role == 'field_worker';
+  bool get isPro => subscriptionPlan == 'pro';
 }

@@ -56,6 +56,11 @@ def create_health_log(
     current_user: User = Depends(get_current_user),
 ):
     """Create a health assessment log and update the tree's health_status."""
+    if current_user.role == "citizen":
+        raise HTTPException(
+            status_code=403,
+            detail="Citizen accounts cannot add official health assessments.",
+        )
     tree = db.query(Tree).filter(Tree.id == payload.tree_id).first()
     if not tree:
         raise HTTPException(status_code=404, detail="Tree not found")
@@ -89,8 +94,13 @@ def get_health_log(
 def delete_health_log(
     log_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
+    if current_user.role == "citizen":
+        raise HTTPException(
+            status_code=403,
+            detail="Citizen accounts cannot delete official health assessments.",
+        )
     log = db.query(HealthLog).filter(HealthLog.id == log_id).first()
     if not log:
         raise HTTPException(status_code=404, detail="Health log not found")

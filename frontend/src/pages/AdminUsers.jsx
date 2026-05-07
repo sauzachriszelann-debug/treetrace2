@@ -109,6 +109,16 @@ export default function AdminUsers() {
     }
   };
 
+  const handlePlanChange = async (userId, plan) => {
+    try {
+      await usersApi.updateSubscription(userId, plan);
+      qc.invalidateQueries({ queryKey: ["users"] });
+      toast.success(plan === "pro" ? "User upgraded to Pro." : "User moved to Free plan.");
+    } catch {
+      toast.error("Failed to update subscription.");
+    }
+  };
+
   const handleDeactivate = async (userId) => {
     if (!confirm("Deactivate this user? They will no longer be able to log in.")) return;
     try {
@@ -132,6 +142,7 @@ export default function AdminUsers() {
 
   const activeCount   = users.filter((u) => u.is_active).length;
   const adminCount    = users.filter((u) => String(u.role).includes("admin")).length;
+  const upgradeCount  = users.filter((u) => u.upgrade_requested).length;
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
@@ -140,7 +151,7 @@ export default function AdminUsers() {
         <div>
           <h1 className="font-fraunces text-3xl font-semibold">User Management</h1>
           <p className="text-muted-foreground mt-1">
-            {activeCount} active · {adminCount} admin{adminCount !== 1 ? "s" : ""}
+            {activeCount} active · {adminCount} admin{adminCount !== 1 ? "s" : ""} · {upgradeCount} upgrade request{upgradeCount !== 1 ? "s" : ""}
           </p>
         </div>
 
@@ -319,6 +330,8 @@ export default function AdminUsers() {
         <div className="space-y-2">
           {users.map((u) => {
             const isAdmin = String(u.role).includes("admin");
+            const isInstitutional = String(u.role).includes("admin") || String(u.role).includes("field_worker");
+            const planLabel = isInstitutional ? "INSTITUTIONAL" : (u.subscription_plan || "free").toUpperCase();
             return (
               <Card key={u.id} className={`border-border ${!u.is_active ? "opacity-60" : ""}`}>
                 <CardContent className="p-4">
@@ -341,26 +354,49 @@ export default function AdminUsers() {
                           {!u.is_active && (
                             <Badge variant="destructive" className="text-xs px-1.5 py-0">Inactive</Badge>
                           )}
+                          <Badge variant={u.subscription_plan === "pro" || isInstitutional ? "default" : "outline"} className="text-xs px-1.5 py-0">
+                            {planLabel}
+                          </Badge>
+                          {u.upgrade_requested && (
+                            <Badge className="text-xs px-1.5 py-0 bg-emerald-600">Upgrade requested</Badge>
+                          )}
                         </div>
                         <p className="text-muted-foreground text-xs">{u.email}</p>
+                        <p className="text-muted-foreground text-xs">
+                          AI today: {u.ai_identifications_today ?? 0}{u.subscription_plan === "pro" || isInstitutional ? " · unlimited" : " / 3 free"}
+                        </p>
                       </div>
                     </div>
 
                     {/* Controls */}
                     <div className="flex items-center gap-2">
                       {u.id !== me?.id && u.is_active ? (
-                        <Select
-                          value={String(u.role).split(".").pop()}
-                          onValueChange={(v) => handleRoleChange(u.id, v)}
-                        >
-                          <SelectTrigger className="w-36 h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="field_worker">Field Worker</SelectItem>
-                            <SelectItem value="admin">Admin</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <>
+                          <Select
+                            value={String(u.role).split(".").pop()}
+                            onValueChange={(v) => handleRoleChange(u.id, v)}
+                          >
+                            <SelectTrigger className="w-36 h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="field_worker">Field Worker</SelectItem>
+                              <SelectItem value="admin">Admin</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Select
+                            value={u.subscription_plan || "free"}
+                            onValueChange={(v) => handlePlanChange(u.id, v)}
+                          >
+                            <SelectTrigger className="w-28 h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="free">Free</SelectItem>
+                              <SelectItem value="pro">Pro</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </>
                       ) : (
                         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-muted text-xs text-muted-foreground">
                           <ShieldCheck className="w-3.5 h-3.5" />

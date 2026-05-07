@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../services/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/theme.dart';
+import 'upgrade_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -50,7 +51,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 24),
                   if (user?.role == 'citizen') ...[
                     _buildSectionTitle('Membership Status'),
-                    _buildPlanCard(),
+                    _buildPlanCard(user),
                     const SizedBox(height: 24),
                   ],
                   _buildSettingsSection(auth),
@@ -185,7 +186,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildPlanCard() {
+  Widget _buildPlanCard(dynamic user) {
+    final isPro = user?.isPro == true;
+    final requested = user?.upgradeRequested == true;
+    final planTitle = isPro
+        ? 'Professional Plan'
+        : requested
+            ? 'Free Tier Plan - Pro Request Pending'
+            : 'Free Tier Plan';
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -202,30 +211,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Free Tier Plan', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: kPrimary)),
+              Expanded(
+                child: Text(planTitle,
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: kPrimary)),
+              ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: Colors.orange.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
-                child: const Text('UPGRADE', style: TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.w900)),
+                decoration: BoxDecoration(
+                    color: (isPro ? kHealthy : Colors.orange).withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20)),
+                child: Text(isPro ? 'PRO' : requested ? 'PENDING' : 'UPGRADE',
+                    style: TextStyle(
+                        color: isPro ? kHealthy : Colors.orange,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900)),
               ),
             ],
           ),
           const SizedBox(height: 16),
           _buildFeatureRow(Icons.check_circle_outline, 'Public tree map access'),
           _buildFeatureRow(Icons.check_circle_outline, 'QR scanner enabled'),
-          _buildFeatureRow(Icons.lock_outline, 'Unlimited AI scans (Pro Only)', isLocked: true),
+          _buildFeatureRow(
+              isPro ? Icons.check_circle_outline : Icons.lock_outline,
+              isPro ? 'Unlimited AI scans enabled' : 'Unlimited AI scans (Pro Only)',
+              isLocked: !isPro),
+          _buildFeatureRow(Icons.auto_awesome_outlined,
+              'AI scans today: ${user?.aiIdentificationsToday ?? 0}${isPro ? ' / unlimited' : ' / 3'}'),
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () {},
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: kPrimary,
                 side: const BorderSide(color: kPrimary),
                 elevation: 0,
               ),
-              child: const Text('View All Plans'),
+              child: Text(isPro ? 'View Pro Benefits' : 'View All Plans'),
             ),
           ),
         ],

@@ -26,6 +26,7 @@ export default function TreeDetail() {
   const [editing, setEditing]         = useState(false);
   const [showLogForm, setShowLogForm] = useState(false);
   const [saving, setSaving]           = useState(false);
+  const canManageOfficialTree = user?.role !== "citizen";
 
   const { data: tree, isLoading } = useQuery({
     queryKey: ["tree", id],
@@ -38,6 +39,11 @@ export default function TreeDetail() {
   });
 
   const handleUpdate = async (data) => {
+    if (!canManageOfficialTree) {
+      toast.error("Citizen accounts cannot edit official inventory trees.");
+      setEditing(false);
+      return;
+    }
     setSaving(true);
     try {
       await treesApi.update(id, data);
@@ -64,6 +70,10 @@ export default function TreeDetail() {
   };
 
   const handleAddLog = async (data) => {
+    if (!canManageOfficialTree) {
+      toast.error("Citizen accounts cannot add official health assessments.");
+      return;
+    }
     try {
       await healthLogsApi.create({
         ...data,
@@ -140,15 +150,17 @@ export default function TreeDetail() {
                   )}
 
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setEditing(!editing)}
-            className="flex items-center gap-2"
-          >
-            <Edit className="w-4 h-4" />
-            {editing ? "Cancel" : "Edit"}
-          </Button>
+          {canManageOfficialTree && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setEditing(!editing)}
+              className="flex items-center gap-2"
+            >
+              <Edit className="w-4 h-4" />
+              {editing ? "Cancel" : "Edit"}
+            </Button>
+          )}
           {user?.role === "admin" && (
             <Button
               variant="destructive"
@@ -254,14 +266,16 @@ export default function TreeDetail() {
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <h2 className="font-fraunces text-xl">Health Assessment History</h2>
-                <Button
-                  size="sm"
-                  onClick={() => setShowLogForm(!showLogForm)}
-                  className="flex items-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Assessment
-                </Button>
+                {canManageOfficialTree && (
+                  <Button
+                    size="sm"
+                    onClick={() => setShowLogForm(!showLogForm)}
+                    className="flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Assessment
+                  </Button>
+                )}
               </div>
 
               {showLogForm && (

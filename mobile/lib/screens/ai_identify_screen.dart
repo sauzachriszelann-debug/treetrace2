@@ -1,14 +1,19 @@
 import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
+import '../services/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/theme.dart';
 import '../widgets/widgets.dart';
 import 'add_tree_screen.dart';
+import 'upgrade_screen.dart';
 
 class AIIdentifyScreen extends StatefulWidget {
-  const AIIdentifyScreen({super.key});
+  final VoidCallback? onBack;
+  const AIIdentifyScreen({super.key, this.onBack});
   @override
   State<AIIdentifyScreen> createState() => _AIIdentifyScreenState();
 }
@@ -32,9 +37,17 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
     try {
       final r = await api.identifyTree(f);
       setState(() => _result = r);
-    } catch (_) {
-      setState(() => _result = {'not_identified': true,
-        'reason': 'Identification failed. Please ensure you have an active internet connection.'});
+    } catch (e) {
+      final isLimit = e is DioException && e.response?.statusCode == 402;
+      final responseData = e is DioException ? e.response?.data : null;
+      final detail = responseData is Map ? responseData['detail'] : null;
+      setState(() => _result = {
+        'not_identified': true,
+        'limit_reached': isLimit,
+        'reason': isLimit
+            ? detail ?? 'Free AI limit reached. Upgrade to Pro for unlimited scans.'
+            : 'Identification failed. Please ensure you have an active internet connection.'
+      });
     } finally {
       setState(() => _identifying = false);
     }
@@ -77,15 +90,28 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
     }
   }
 
+  void _handleBack() {
+    if (widget.onBack != null) {
+      widget.onBack!();
+    } else {
+      Navigator.maybePop(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final notIdentified = _result?['not_identified'] == true;
     final confidence    = _result?['confidence'] as String?;
     final isProtected   = _result?['protected'] == true;
+    final isCitizen     = context.watch<AuthProvider>().user?.role == 'citizen';
 
     return Scaffold(
       backgroundColor: kBackground,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: _handleBack,
+        ),
         title: Text('AI Tree Scanner', 
           style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 18)),
         centerTitle: true,
@@ -106,7 +132,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
 
             // ── Result Area ──────────────────────────────────────────────────
             if (_result != null && !notIdentified)
-              _buildResultCard(isProtected, confidence)
+              _buildResultCard(isProtected, confidence, isCitizen)
             else if (notIdentified)
               _buildErrorCard()
             else if (!_identifying)
@@ -210,12 +236,20 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Container(
-          padding: const EdgeInsets.all(20),
+          width: 92,
+          height: 92,
           decoration: BoxDecoration(
-            color: kPrimary.withOpacity(0.08),
+            color: kPrimary,
             shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: kPrimary.withOpacity(0.28),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
-          child: const Icon(Icons.camera_enhance_rounded, size: 48, color: kPrimary),
+          child: const Icon(Icons.camera_alt_rounded, size: 44, color: Colors.white),
         ),
         const SizedBox(height: 20),
         Text('Scan a Tree',
@@ -233,15 +267,28 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
     );
   }
 
-  Widget _buildResultCard(bool isProtected, String? confidence) {
+  Widget _buildResultCard(bool isProtected, String? confidence, bool isCitizen) {
+    final commonName = _textValue('common_name', fallback: 'Unknown Species');
+    final scientificName = _textValue('scientific_name', fallback: '');
+    final status = _textValue('endangered_status', fallback: 'Not Listed');
+    final family = _textValue('family', fallback: 'Unknown');
+    final habitat = _textValue('habitat', fallback: 'Philippines / Southeast Asia');
+    final description = _textValue('description',
+        fallback: 'No description is available yet for this species.');
+    final features = _textValue('distinguishing_features',
+        fallback: 'Leaf form, bark texture, branching pattern, flowers, and fruit are used for identification.');
+    final lookAlikes = _textValue('look_alikes',
+        fallback: 'No look-alike species were returned by the AI.');
+    final uses = _textValue('uses',
+        fallback: 'Provides shade, habitat value, carbon storage, and ecological benefits.');
+
     return Column(
       children: [
         Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: kCard,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: kBorder),
+            color: kSidebarBg,
+            borderRadius: BorderRadius.circular(22),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -253,45 +300,118 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(_result!['common_name'] ?? 'Unknown Species',
-                            style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w800)),
+                        Text(commonName,
+                            style: GoogleFonts.inter(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white)),
                         const SizedBox(height: 4),
-                        Text(_result!['scientific_name'] ?? '',
-                            style: GoogleFonts.inter(fontSize: 14, fontStyle: FontStyle.italic, color: kMutedFg)),
+                        Text(scientificName,
+                            style: GoogleFonts.inter(
+                                fontSize: 14,
+                                fontStyle: FontStyle.italic,
+                                color: kSidebarText)),
                       ],
                     ),
                   ),
                   if (isProtected)
-                    const Icon(Icons.verified_user_rounded, color: Colors.orange, size: 28),
+                    const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 30),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _MiniBadge(Icons.auto_awesome, confidence ?? 'AI Match'),
+                  _MiniBadge(Icons.shield_outlined, status),
+                  _MiniBadge(Icons.category_outlined, family),
                 ],
               ),
               if (isProtected) ...[
                 const SizedBox(height: 16),
                 _buildCuttingWarning(),
               ],
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Divider(height: 1),
-              ),
-              _buildQuickInfoGrid(),
-              const SizedBox(height: 20),
-              Text('Description', style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 14)),
-              const SizedBox(height: 8),
-              Text(
-                _result!['description'] ?? 'No description available for this species.',
-                style: TextStyle(color: kForeground.withOpacity(0.8), height: 1.5, fontSize: 14),
-              ),
             ],
           ),
+        ),
+        const SizedBox(height: 16),
+        _buildQuickInfoGrid(),
+        const SizedBox(height: 16),
+        _buildEncyclopediaSection(
+          title: 'Overview',
+          icon: Icons.menu_book_outlined,
+          child: Text(description,
+              style: TextStyle(
+                  color: kForeground.withOpacity(0.82),
+                  height: 1.5,
+                  fontSize: 14)),
+        ),
+        const SizedBox(height: 12),
+        _buildEncyclopediaSection(
+          title: 'Basic Info',
+          icon: Icons.info_outline,
+          child: Column(
+            children: [
+              _InfoRow('Scientific Name', scientificName.isEmpty ? 'Unknown' : scientificName),
+              _InfoRow('Family', family),
+              _InfoRow('Habitat', habitat),
+              _InfoRow('Conservation Status', status),
+              _InfoRow('Cutting Rule',
+                  _result?['cutting_allowed'] == true ? 'Permit required if regulated' : 'Do not cut'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildEncyclopediaSection(
+          title: 'Characteristics',
+          icon: Icons.local_florist_outlined,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _InfoRow('Diagnostic Features', features),
+              _InfoRow('Look-alikes', lookAlikes),
+              _InfoRow('DBH Method',
+                  _textValue('dbh_method', fallback: 'Photo-based visual estimate only')),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildEncyclopediaSection(
+          title: 'Care Profile',
+          icon: Icons.spa_outlined,
+          child: Column(
+            children: const [
+              _CareTile(Icons.wb_sunny_outlined, 'Sunlight', 'Full sun to partial shade'),
+              _CareTile(Icons.water_drop_outlined, 'Watering', 'Water young trees regularly; mature trees tolerate short dry periods'),
+              _CareTile(Icons.grass_outlined, 'Soil', 'Well-draining loamy soil is preferred'),
+              _CareTile(Icons.content_cut_outlined, 'Pruning', 'Remove dead, diseased, or crossing branches only'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildEncyclopediaSection(
+          title: 'Uses & Ecological Value',
+          icon: Icons.eco_outlined,
+          child: Text(uses,
+              style: TextStyle(
+                  color: kForeground.withOpacity(0.82),
+                  height: 1.5,
+                  fontSize: 14)),
         ),
         const SizedBox(height: 20),
         SizedBox(
           width: double.infinity,
           height: 56,
           child: ElevatedButton.icon(
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddTreeScreen(aiResult: _result))),
-            icon: const Icon(Icons.add_location_alt_rounded),
-            label: const Text('Add to Inventory', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            onPressed: isCitizen
+                ? _submitUnknown
+                : () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddTreeScreen(aiResult: _result))),
+            icon: Icon(isCitizen ? Icons.science_outlined : Icons.add_location_alt_rounded),
+            label: Text(
+              isCitizen ? 'Submit for Expert Review' : 'Add to Inventory',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: kPrimary,
               foregroundColor: Colors.white,
@@ -299,22 +419,63 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          height: 48,
-          child: OutlinedButton.icon(
-            onPressed: _submitUnknown,
-            icon: const Icon(Icons.science_outlined),
-            label: const Text('Submit for Expert Review'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: kPrimary,
-              side: const BorderSide(color: kPrimary),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        if (!isCitizen) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: OutlinedButton.icon(
+              onPressed: _submitUnknown,
+              icon: const Icon(Icons.science_outlined),
+              label: const Text('Submit for Expert Review'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: kPrimary,
+                side: const BorderSide(color: kPrimary),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
             ),
           ),
-        ),
+        ],
       ],
+    );
+  }
+
+  String _textValue(String key, {required String fallback}) {
+    final value = _result?[key];
+    if (value == null) return fallback;
+    final text = value.toString().trim();
+    return text.isEmpty || text.toLowerCase() == 'null' ? fallback : text;
+  }
+
+  Widget _buildEncyclopediaSection({
+    required String title,
+    required IconData icon,
+    required Widget child,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: kBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: kPrimary, size: 19),
+              const SizedBox(width: 8),
+              Text(title,
+                  style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w800, fontSize: 15)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
     );
   }
 
@@ -416,6 +577,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
   }
 
   Widget _buildErrorCard() {
+    final limitReached = _result?['limit_reached'] == true;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(color: Colors.red.withOpacity(0.05), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.red.withOpacity(0.2))),
@@ -430,9 +592,14 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: _photo == null ? null : _submitUnknown,
-              icon: const Icon(Icons.upload_file),
-              label: const Text('Submit Unknown Species'),
+              onPressed: limitReached
+                  ? () => Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const UpgradeScreen()))
+                  : _photo == null
+                      ? null
+                      : _submitUnknown,
+              icon: Icon(limitReached ? Icons.workspace_premium_outlined : Icons.upload_file),
+              label: Text(limitReached ? 'View Pro Plans' : 'Submit Unknown Species'),
               style: ElevatedButton.styleFrom(backgroundColor: kPrimary),
             ),
           ),
@@ -465,6 +632,111 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
             const SizedBox(height: 16),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _MiniBadge extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _MiniBadge(this.icon, this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: Colors.white.withOpacity(0.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: kSidebarPrimary, size: 14),
+          const SizedBox(width: 5),
+          Text(label,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _InfoRow(this.label, this.value);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 112,
+            child: Text(label,
+                style: const TextStyle(
+                    color: kMutedFg,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600)),
+          ),
+          Expanded(
+            child: Text(value,
+                style: const TextStyle(
+                    color: kForeground,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    height: 1.35)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CareTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String description;
+  const _CareTile(this.icon, this.title, this.description);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 9),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: kBackground,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kBorder.withOpacity(0.65)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: kPrimary, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w800, fontSize: 13)),
+                const SizedBox(height: 3),
+                Text(description,
+                    style: const TextStyle(
+                        color: kMutedFg, fontSize: 12, height: 1.3)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

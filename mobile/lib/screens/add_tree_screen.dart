@@ -166,7 +166,10 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Tree')),
+      appBar: AppBar(
+        leading: const BackButton(),
+        title: const Text('Add Tree'),
+      ),
       body: Form(
         key: _formKey,
         child: SingleChildScrollView(

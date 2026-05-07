@@ -8,7 +8,8 @@ import '../widgets/widgets.dart';
 import 'tree_detail_screen.dart';
 
 class ScanQRScreen extends StatefulWidget {
-  const ScanQRScreen({super.key});
+  final VoidCallback? onBack;
+  const ScanQRScreen({super.key, this.onBack});
   @override
   State<ScanQRScreen> createState() => _ScanQRScreenState();
 }
@@ -60,6 +61,14 @@ class _ScanQRScreenState extends State<ScanQRScreen> with SingleTickerProviderSt
   void _reset() {
     setState(() { _scanned = false; _loading = false; });
     _ctrl.start();
+  }
+
+  void _handleBack() {
+    if (widget.onBack != null) {
+      widget.onBack!();
+    } else {
+      Navigator.maybePop(context);
+    }
   }
 
   void _showError(String title, String msg) {
@@ -209,6 +218,10 @@ class _ScanQRScreenState extends State<ScanQRScreen> with SingleTickerProviderSt
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: _handleBack,
+        ),
         title: Text('Scan Tree Tag', style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 18)),
         centerTitle: true,
         backgroundColor: Colors.white,
@@ -218,19 +231,15 @@ class _ScanQRScreenState extends State<ScanQRScreen> with SingleTickerProviderSt
       body: Stack(children: [
         MobileScanner(controller: _ctrl, onDetect: _onDetect),
 
-        // Dark overlay for focus
-        ColorFiltered(
-          colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.5), BlendMode.srcOut),
-          child: Stack(
-            children: [
-              Container(decoration: const BoxDecoration(color: Colors.black, backgroundBlendMode: BlendMode.dstOut)),
-              Center(
-                child: Container(
-                  width: 250, height: 250,
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
-                ),
-              ),
-            ],
+        // Dark overlay with transparent scanner window.
+        IgnorePointer(
+          child: CustomPaint(
+            size: Size.infinite,
+            painter: _ScannerOverlayPainter(
+              cutoutSize: 250,
+              radius: 24,
+              overlayColor: Colors.black.withOpacity(0.58),
+            ),
           ),
         ),
 
@@ -334,6 +343,40 @@ class _ScanQRScreenState extends State<ScanQRScreen> with SingleTickerProviderSt
         ),
       ),
     );
+  }
+}
+
+class _ScannerOverlayPainter extends CustomPainter {
+  final double cutoutSize;
+  final double radius;
+  final Color overlayColor;
+
+  const _ScannerOverlayPainter({
+    required this.cutoutSize,
+    required this.radius,
+    required this.overlayColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final overlayPath = Path()
+      ..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
+    final cutoutRect = Rect.fromCenter(
+      center: Offset(size.width / 2, size.height / 2),
+      width: cutoutSize,
+      height: cutoutSize,
+    );
+    final cutoutPath = Path()
+      ..addRRect(RRect.fromRectAndRadius(cutoutRect, Radius.circular(radius)));
+    final path = Path.combine(PathOperation.difference, overlayPath, cutoutPath);
+    canvas.drawPath(path, Paint()..color = overlayColor);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ScannerOverlayPainter oldDelegate) {
+    return cutoutSize != oldDelegate.cutoutSize ||
+        radius != oldDelegate.radius ||
+        overlayColor != oldDelegate.overlayColor;
   }
 }
 

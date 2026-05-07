@@ -4,6 +4,8 @@ import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import { Link } from "react-router-dom";
 import HealthBadge from "@/components/trees/HealthBadge";
 import { MapPin } from "lucide-react";
+import { useAuth } from "@/lib/AuthContext";
+import PublicPortal from "@/pages/PublicPortal";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
@@ -19,6 +21,16 @@ L.Icon.Default.mergeOptions({
 const DEFAULT_CENTER = [7.3047, 125.6856];
 
 export default function TreeMapPage() {
+  const { user } = useAuth();
+
+  if (user?.role === "citizen") {
+    return <PublicPortal />;
+  }
+
+  return <InternalTreeMap />;
+}
+
+function InternalTreeMap() {
   const { data: trees = [], isLoading } = useQuery({
     queryKey: ["trees"],
     queryFn: () => treesApi.list({ limit: 500 }),

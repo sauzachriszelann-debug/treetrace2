@@ -100,6 +100,39 @@ def update_role(
     return {"message": "Role updated"}
 
 
+@router.put("/{user_id}/subscription")
+def update_subscription(
+    user_id: int,
+    plan: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Update a user's subscription plan. Admin only."""
+    normalized = plan.lower().strip()
+    if normalized not in ("free", "pro"):
+        raise HTTPException(status_code=400, detail="Plan must be free or pro")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.subscription_plan = normalized
+    user.upgrade_requested = False
+    db.commit()
+    return {"message": "Subscription updated", "plan": normalized}
+
+
+@router.post("/request-upgrade")
+def request_upgrade(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Request Pro upgrade for admin approval."""
+    if (current_user.subscription_plan or "free").lower() == "pro":
+        return {"message": "Account is already Pro", "subscription_plan": "pro"}
+    current_user.upgrade_requested = True
+    db.commit()
+    return {"message": "Upgrade request submitted", "upgrade_requested": True}
+
+
 @router.put("/{user_id}/deactivate")
 def deactivate_user(
     user_id: int,

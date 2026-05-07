@@ -40,6 +40,20 @@ def sync_postgres_sequences():
             )
 
 
+def sync_subscription_columns():
+    if not settings.SQLALCHEMY_DATABASE_URL.startswith("postgresql"):
+        return
+    statements = (
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_plan VARCHAR(20) NOT NULL DEFAULT 'free'",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS upgrade_requested BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_identifications_today INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_usage_date DATE",
+    )
+    with engine.begin() as conn:
+        for statement in statements:
+            conn.execute(text(statement))
+
+
 # Move database creation to a startup event so it doesn't freeze the server
 @app.on_event("startup")
 def startup_event():
@@ -47,6 +61,7 @@ def startup_event():
     try:
         # This will create tables if they don't exist
         Base.metadata.create_all(bind=engine)
+        sync_subscription_columns()
         sync_postgres_sequences()
         print("Database connection successful and tables synchronized!")
     except Exception as e:

@@ -5,12 +5,10 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
-
 // OLD: const String kBaseUrl = 'http://10.0.2.2:8000/api';
 // For real device on same WiFi: 'http://192.168.x.x:8000/api'
 // NEW:
 const String kBaseUrl = 'https://treetrace-1o7l.onrender.com/api';
-
 
 class ApiService {
   static final ApiService _instance = ApiService._internal();
@@ -102,12 +100,16 @@ class ApiService {
         final payload = Map<String, dynamic>.from(item['payload'] ?? {});
         final photoPath = item['photo_path'] as String?;
         if (item['type'] == 'CREATE_TREE') {
-          if (photoPath != null && photoPath.isNotEmpty && File(photoPath).existsSync()) {
+          if (photoPath != null &&
+              photoPath.isNotEmpty &&
+              File(photoPath).existsSync()) {
             payload['photo_url'] = await uploadPhoto(File(photoPath));
           }
           await createTree(payload);
         } else if (item['type'] == 'SUBMIT_UNKNOWN') {
-          if (photoPath != null && photoPath.isNotEmpty && File(photoPath).existsSync()) {
+          if (photoPath != null &&
+              photoPath.isNotEmpty &&
+              File(photoPath).existsSync()) {
             payload['photo_url'] = await uploadPhoto(File(photoPath)) ?? '';
           }
           await submitUnknownSpecies(payload);
@@ -139,6 +141,11 @@ class ApiService {
 
   Future<Map<String, dynamic>> getMe() async {
     final res = await _dio.get('/auth/me');
+    return res.data;
+  }
+
+  Future<Map<String, dynamic>> requestUpgrade() async {
+    final res = await _dio.post('/users/request-upgrade');
     return res.data;
   }
 

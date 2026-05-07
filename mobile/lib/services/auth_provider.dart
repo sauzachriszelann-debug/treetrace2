@@ -40,9 +40,23 @@ class AuthProvider extends ChangeNotifier {
       _user = UserModel.fromJson(me);
       notifyListeners();
       return true;
-    } catch (_) {
+    } catch (error) {
+      debugPrint('DEBUG: login failed: $error');
       return false;
     }
+  }
+
+  Future<void> refreshUser() async {
+    final me = await api.getMe();
+    _user = UserModel.fromJson(me);
+    notifyListeners();
+  }
+
+  void markUpgradeRequested() {
+    final current = _user;
+    if (current == null) return;
+    _user = current.copyWith(upgradeRequested: true);
+    notifyListeners();
   }
 
   Future<void> logout() async {

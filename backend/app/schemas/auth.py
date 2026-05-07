@@ -24,6 +24,9 @@ class UserOut(BaseModel):
     full_name: str
     email: str
     role: str
+    subscription_plan: str = "free"
+    upgrade_requested: bool = False
+    ai_identifications_today: int = 0
     is_active: bool
 
     class Config:

@@ -23,6 +23,16 @@ export const usersApi = {
     return data;
   },
 
+  updateSubscription: async (userId, plan) => {
+    const { data } = await api.put(`/users/${userId}/subscription`, null, { params: { plan } });
+    return data;
+  },
+
+  requestUpgrade: async () => {
+    const { data } = await api.post("/users/request-upgrade");
+    return data;
+  },
+
   deactivate: async (userId) => {
     const { data } = await api.put(`/users/${userId}/deactivate`);
     return data;

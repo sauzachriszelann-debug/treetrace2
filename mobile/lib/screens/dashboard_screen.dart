@@ -154,20 +154,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             ),
 
-            actions: [
-
-              IconButton(
-
-                icon: const Icon(Icons.logout_outlined,
-
-                    color: kSidebarText, size: 20),
-
-                onPressed: () => context.read<AuthProvider>().logout(),
-
-              ),
-
-            ],
-
           ),
 
 

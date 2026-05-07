@@ -2,11 +2,12 @@ from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
+from datetime import date
 import base64
 import json
 
 from app.db.database import get_db
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.unknown_species import UnknownSpecies
 from app.core.security import get_current_user
 from app.services.ai_identify import identify_tree_from_url, _pipeline_with_status, measure_dbh_from_base64
@@ -14,11 +15,40 @@ from app.services.species_db import get_all_protected, lookup_species, PHILIPPIN
 
 router = APIRouter()
 
+FREE_AI_DAILY_LIMIT = 3
+
+
+def enforce_ai_limit(user: User, db: Session):
+    if user.role in (UserRole.admin, UserRole.field_worker):
+        return
+    if (user.subscription_plan or "free").lower() == "pro":
+        return
+
+    today = date.today()
+    if user.ai_usage_date != today:
+        user.ai_usage_date = today
+        user.ai_identifications_today = 0
+
+    if user.ai_identifications_today >= FREE_AI_DAILY_LIMIT:
+        db.commit()
+        raise HTTPException(
+            status_code=402,
+            detail=(
+                "Free AI identification limit reached for today. "
+                "Upgrade to Pro for unlimited AI identification."
+            ),
+        )
+
+    user.ai_identifications_today += 1
+    db.commit()
+
 @router.post("/identify")
 async def identify_tree(
     file: UploadFile = File(...),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
+    enforce_ai_limit(current_user, db)
     if not (file.content_type or "").startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image.")
     contents = await file.read()
@@ -56,8 +86,10 @@ def _safe_dbh_estimate(reason: str, reference_hint: str, known_distance_m: Optio
 @router.post("/identify-url")
 async def identify_from_url(
     payload: IdentifyFromURLRequest,
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
+    enforce_ai_limit(current_user, db)
     result = await identify_tree_from_url(payload.image_url)
     return result
 

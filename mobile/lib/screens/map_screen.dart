@@ -9,7 +9,8 @@ import '../widgets/widgets.dart';
 import 'public_tree_profile_screen.dart';
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
+  final VoidCallback? onBack;
+  const MapScreen({super.key, this.onBack});
   @override
   State<MapScreen> createState() => _MapScreenState();
 }
@@ -45,6 +46,14 @@ class _MapScreenState extends State<MapScreen> {
   List<TreeModel> get _filtered => _filter == 'all'
       ? _trees
       : _trees.where((t) => t.healthStatus == _filter).toList();
+
+  void _handleBack() {
+    if (widget.onBack != null) {
+      widget.onBack!();
+    } else {
+      Navigator.maybePop(context);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -87,6 +96,16 @@ class _MapScreenState extends State<MapScreen> {
           // ── Top Controls (Search & Layer Toggle) ───────────────────────────
           _buildTopControls(),
 
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: _buildCircularButton(
+                Icons.arrow_back_rounded,
+                _handleBack,
+              ),
+            ),
+          ),
+
           // ── Data Legend ────────────────────────────────────────────────────
           if (!_loading) _buildFloatingLegend(),
         ],
@@ -126,6 +145,7 @@ class _MapScreenState extends State<MapScreen> {
           children: [
             Row(
               children: [
+                const SizedBox(width: 62),
                 Expanded(
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16),

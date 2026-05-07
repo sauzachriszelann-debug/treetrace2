@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -70,6 +71,7 @@ const errorToMessage = (error, fallback = "Request failed. Please try again.") =
 };
 
 export default function TreeForm({ initial = {}, onSubmit, loading }) {
+  const navigate = useNavigate();
   const fileRef = useRef(null);
   const [form, setForm] = useState({
     common_name: "",
@@ -235,9 +237,19 @@ export default function TreeForm({ initial = {}, onSubmit, loading }) {
         setAiStatus("done");
         toast.success(`Identified: ${result.common_name}`);
       }
-    } catch {
-      setAiStatus("partial");
-      setAiError("Identification request failed. Please enter the species name manually.");
+    } catch (error) {
+      if (error?.response?.status === 402) {
+        toast.error(error.response.data?.detail || "Free AI limit reached. Upgrade to Pro for unlimited AI identification.", {
+          action: {
+            label: "Upgrade",
+            onClick: () => navigate("/upgrade"),
+          },
+        });
+        setAiStatus(null);
+      } else {
+        setAiStatus("partial");
+        setAiError("Identification request failed. Please enter the species name manually.");
+      }
     }
   };
 

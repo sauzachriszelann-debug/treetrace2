@@ -3,6 +3,7 @@ import {
   LayoutDashboard, TreePine, Map, Plus, QrCode,
   Users, BarChart3, LogOut, Leaf, ScanLine, Globe,
   Sparkles, Network, WifiOff,
+  Crown,
 } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
@@ -17,6 +18,7 @@ const navItems = [
   { label: "Community",      icon: Network,          path: "/community" },
   { label: "QR Scanner",     icon: ScanLine,         path: "/scan" },
   { label: "Public Portal",  icon: Globe,            path: "/public" },
+  { label: "Upgrade Pro",    icon: Crown,            path: "/upgrade" },
 ];
 
 const adminItems = [
@@ -30,6 +32,19 @@ export default function Sidebar({ user }) {
   const { logout } = useAuth();
   const { isOnline, queueLength } = useOfflineSync();
   const isAdmin = user?.role === "admin";
+  const isCitizen = user?.role === "citizen";
+  const roleText = user?.role?.replace("_", " ") || "field worker";
+  const planText = user?.role === "admin" || user?.role === "field_worker"
+    ? "INSTITUTIONAL"
+    : (user?.subscription_plan || "free").toUpperCase();
+  const visibleNavItems = navItems
+    .filter((item) => !(isCitizen && ["Add Tree", "Public Portal"].includes(item.label)))
+    .map((item) => {
+      if (isCitizen && item.label === "Tree Map") {
+        return { ...item, path: "/public" };
+      }
+      return item;
+    });
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 bg-sidebar flex flex-col z-50 shadow-2xl">
@@ -64,7 +79,7 @@ export default function Sidebar({ user }) {
           <p className="text-sidebar-foreground/40 text-xs font-medium uppercase tracking-widest px-3 mb-2">
             Main
           </p>
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <NavItem key={item.path} item={item} active={location.pathname === item.path} />
           ))}
         </div>
@@ -94,7 +109,7 @@ export default function Sidebar({ user }) {
               {user?.full_name || "User"}
             </p>
             <p className="text-sidebar-foreground/50 text-xs capitalize">
-              {user?.role?.replace("_", " ") || "field worker"}
+              {roleText} · {planText}
             </p>
           </div>
         </div>

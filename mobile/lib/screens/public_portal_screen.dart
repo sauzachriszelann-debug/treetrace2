@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:treetrace_mobile/screens/public_tree_profile_screen.dart';
 import 'package:provider/provider.dart';
 import '../services/api_service.dart';
@@ -8,9 +10,23 @@ import '../services/auth_provider.dart';
 import '../services/theme.dart';
 import '../models/models.dart';
 import '../widgets/widgets.dart';
+import 'ai_identify_screen.dart';
+import 'map_screen.dart';
+import 'scan_qr_screen.dart';
+import 'upgrade_screen.dart';
 
 class PublicPortalScreen extends StatefulWidget {
-  const PublicPortalScreen({super.key});
+  final VoidCallback? onOpenMap;
+  final VoidCallback? onOpenAiScan;
+  final VoidCallback? onOpenQrScan;
+
+  const PublicPortalScreen({
+    super.key,
+    this.onOpenMap,
+    this.onOpenAiScan,
+    this.onOpenQrScan,
+  });
+
   @override
   State<PublicPortalScreen> createState() => _PublicPortalScreenState();
 }
@@ -43,10 +59,16 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
 
   List<TreeModel> get _filtered => _search.isEmpty
       ? _trees
-      : _trees.where((t) =>
-          t.commonName.toLowerCase().contains(_search.toLowerCase()) ||
-          (t.scientificName?.toLowerCase().contains(_search.toLowerCase()) ?? false) ||
-          (t.barangay?.toLowerCase().contains(_search.toLowerCase()) ?? false)).toList();
+      : _trees
+          .where((t) =>
+              t.commonName.toLowerCase().contains(_search.toLowerCase()) ||
+              (t.scientificName
+                      ?.toLowerCase()
+                      .contains(_search.toLowerCase()) ??
+                  false) ||
+              (t.barangay?.toLowerCase().contains(_search.toLowerCase()) ??
+                  false))
+          .toList();
 
   @override
   Widget build(BuildContext context) {
@@ -64,37 +86,41 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
           physics: const BouncingScrollPhysics(),
           slivers: [
             _buildSliverHeader(user),
-
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Primary Dashboard Stats ────────────────────────────────
                     Row(
                       children: [
-                        _StatCard('Total Trees', '$totalTrees', Icons.analytics_outlined, kPrimary),
+                        _StatCard('Total Trees', '$totalTrees',
+                            Icons.analytics_outlined, kPrimary),
                         const SizedBox(width: 12),
-                        _StatCard('Species', '$totalSpecies', Icons.eco_outlined, Colors.teal),
+                        _StatCard('Species', '$totalSpecies',
+                            Icons.eco_outlined, Colors.teal),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    if (endangeredCount > 0) _buildEndangeredAlert(endangeredCount),
-
+                    if (endangeredCount > 0)
+                      _buildEndangeredAlert(endangeredCount),
+                    const SizedBox(height: 22),
+                    _buildQuickActions(),
+                    const SizedBox(height: 28),
+                    _buildSectionHeader('Public Tree Map', 'Open Map',
+                        onTap: _openMap),
+                    const SizedBox(height: 16),
+                    _buildMapCard(height: 220),
                     const SizedBox(height: 32),
                     _buildSearchBar(),
                     const SizedBox(height: 32),
-
-                    // ── Biodiversity Dashboard ────────────────────────────────
                     if (_search.isEmpty) ...[
                       _buildBiodiversityInsights(),
                       const SizedBox(height: 32),
                     ],
-
-                    // ── Featured Collections ──────────────────────────────────
                     if (_search.isEmpty && _trees.isNotEmpty) ...[
-                      _buildSectionHeader('Priority Conservation', 'Map View'),
+                      _buildSectionHeader('Priority Conservation', 'Map View',
+                          onTap: _openMap),
                       const SizedBox(height: 16),
                       SizedBox(
                         height: 200,
@@ -104,24 +130,36 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
                           itemCount: _trees.take(5).length,
                           itemBuilder: (_, i) => _FeaturedTreeCard(
                             tree: _trees[i],
-                            onTap: () => Navigator.push(context, MaterialPageRoute(
-                                builder: (_) => PublicTreeProfileScreen(treeId: _trees[i].id))),
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    PublicTreeProfileScreen(treeId: _trees[i].id),
+                              ),
+                            ),
                           ),
                         ),
                       ),
                       const SizedBox(height: 32),
                     ],
-
-                    // ── Species Inventory ─────────────────────────────────────
-                    _buildSectionHeader(_search.isEmpty ? 'Urban Forest Inventory' : 'Search Results', '${_filtered.length} entries'),
+                    _buildSectionHeader(
+                      _search.isEmpty
+                          ? 'Urban Forest Inventory'
+                          : 'Search Results',
+                      '${_filtered.length} entries',
+                    ),
                     const SizedBox(height: 16),
                   ],
                 ),
               ),
             ),
-
             if (_loading)
-              const SliverToBoxAdapter(child: Padding(padding: EdgeInsets.all(20), child: LoadingList()))
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.all(20),
+                  child: LoadingList(),
+                ),
+              )
             else
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
@@ -129,8 +167,13 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
                   delegate: SliverChildBuilderDelegate(
                     (_, i) => TreeListItem(
                       tree: _filtered[i],
-                      onTap: () => Navigator.push(context, MaterialPageRoute(
-                          builder: (_) => PublicTreeProfileScreen(treeId: _filtered[i].id))),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              PublicTreeProfileScreen(treeId: _filtered[i].id),
+                        ),
+                      ),
                     ),
                     childCount: _filtered.length,
                   ),
@@ -142,19 +185,42 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
     );
   }
 
+  void _openMap() {
+    if (widget.onOpenMap != null) {
+      widget.onOpenMap!();
+      return;
+    }
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const MapScreen()));
+  }
+
+  void _openAiScan() {
+    if (widget.onOpenAiScan != null) {
+      widget.onOpenAiScan!();
+      return;
+    }
+    Navigator.push(
+        context, MaterialPageRoute(builder: (_) => const AIIdentifyScreen()));
+  }
+
+  void _openQrScan() {
+    if (widget.onOpenQrScan != null) {
+      widget.onOpenQrScan!();
+      return;
+    }
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanQRScreen()));
+  }
+
   Widget _buildBiodiversityInsights() {
     if (_stats == null) return const SizedBox.shrink();
-    
+
     final breakdown = _stats!['barangay_breakdown'] as List<dynamic>? ?? [];
     final distribution = _stats!['species_distribution'] as List<dynamic>? ?? [];
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionHeader('Ecosystem Insights', 'Full Report'),
         const SizedBox(height: 16),
-        
-        // Horizontal scroll for Barangay Diversity (Shannon Index)
         SizedBox(
           height: 120,
           child: ListView.builder(
@@ -171,22 +237,22 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
             },
           ),
         ),
-        
         const SizedBox(height: 24),
-        
-        // Species Distribution Progress Bars
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: kCard,
             borderRadius: BorderRadius.circular(24),
             border: Border.all(color: kBorder),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Top Species Distribution', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+              const Text('Top Species Distribution',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
               const SizedBox(height: 20),
               ...distribution.take(3).map((s) {
                 final total = _trees.length;
@@ -200,8 +266,14 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(s['name'], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                          Text('$count trees', style: const TextStyle(fontSize: 11, color: kMutedFg, fontWeight: FontWeight.w600)),
+                          Text(s['name'],
+                              style: const TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.w700)),
+                          Text('$count trees',
+                              style: const TextStyle(
+                                  fontSize: 11,
+                                  color: kMutedFg,
+                                  fontWeight: FontWeight.w600)),
                         ],
                       ),
                       const SizedBox(height: 8),
@@ -227,31 +299,55 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
 
   Widget _buildSliverHeader(dynamic user) {
     return SliverAppBar(
-      expandedHeight: 180,
+      expandedHeight: 145,
       pinned: true,
       backgroundColor: kSidebarBg,
       flexibleSpace: FlexibleSpaceBar(
         background: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              begin: Alignment.topLeft, end: Alignment.bottomRight,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
               colors: [Color(0xFF1a3323), Color(0xFF243d2c)],
             ),
           ),
           child: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              padding: const EdgeInsets.fromLTRB(24, 14, 24, 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  const Text('BIODIVERSITY PORTAL',
-                      style: TextStyle(color: kSidebarPrimary, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'BIODIVERSITY PORTAL',
+                          style: TextStyle(
+                            color: kSidebarPrimary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                      ),
+                      _ProHeaderButton(user: user),
+                    ],
+                  ),
                   const SizedBox(height: 4),
-                  Text('Hello, ${user?.fullName.split(' ').first ?? 'Explorer'}! 🌿',
-                      style: GoogleFonts.inter(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800)),
-                  Text('Panabo City Digital Tree Inventory',
-                      style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13)),
+                  Text(
+                    'Hello, ${user?.fullName.split(' ').first ?? 'Explorer'}!',
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 25,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    'Panabo City Digital Tree Inventory',
+                    style: TextStyle(
+                        color: Colors.white.withOpacity(0.6), fontSize: 13),
+                  ),
                 ],
               ),
             ),
@@ -271,14 +367,53 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+          const Icon(Icons.warning_amber_rounded,
+              color: Colors.orange, size: 20),
           const SizedBox(width: 12),
           Expanded(
-            child: Text('$count Endangered trees identified in the latest survey.',
-                style: const TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.w600)),
+            child: Text(
+              '$count Endangered trees identified in the latest survey.',
+              style: const TextStyle(
+                  color: Colors.orange,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildQuickActions() {
+    return Row(
+      children: [
+        Expanded(
+          child: _QuickActionCard(
+            icon: Icons.camera_alt_rounded,
+            label: 'AI Scan',
+            color: kPrimary,
+            onTap: _openAiScan,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _QuickActionCard(
+            icon: Icons.map_rounded,
+            label: 'Tree Map',
+            color: Colors.teal,
+            onTap: _openMap,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _QuickActionCard(
+            icon: Icons.qr_code_scanner_rounded,
+            label: 'Scan QR',
+            color: Colors.orange,
+            onTap: _openQrScan,
+          ),
+        ),
+      ],
     );
   }
 
@@ -287,29 +422,307 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
       decoration: BoxDecoration(
         color: kCard,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          )
+        ],
       ),
       child: TextField(
         onChanged: (v) => setState(() => _search = v),
-        decoration: InputDecoration(
+        decoration: const InputDecoration(
           hintText: 'Search by species name, location, or tag...',
-          prefixIcon: const Icon(Icons.search_rounded, color: kPrimary),
+          prefixIcon: Icon(Icons.search_rounded, color: kPrimary),
           border: InputBorder.none,
           enabledBorder: InputBorder.none,
           focusedBorder: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 16),
+          contentPadding: EdgeInsets.symmetric(vertical: 16),
         ),
       ),
     );
   }
 
-  Widget _buildSectionHeader(String title, String action) {
+  Widget _buildMapCard({double height = 280}) {
+    final mappedTrees =
+        _trees.where((t) => t.lat != null && t.lng != null).toList();
+
+    return Container(
+      height: height,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          )
+        ],
+        border: Border.all(color: kBorder),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Stack(
+          children: [
+            if (mappedTrees.isNotEmpty)
+              FlutterMap(
+                options: MapOptions(
+                  initialCenter: LatLng(
+                    mappedTrees.first.lat ?? 7.3047,
+                    mappedTrees.first.lng ?? 125.6856,
+                  ),
+                  initialZoom: 13,
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate:
+                        'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+                    userAgentPackageName: 'com.treetrace.mobile',
+                  ),
+                  MarkerLayer(
+                    markers: mappedTrees.take(20).map((tree) {
+                      final color = healthColor(tree.healthStatus);
+                      return Marker(
+                        point: LatLng(tree.lat!, tree.lng!),
+                        width: 32,
+                        height: 32,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: color,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                            boxShadow: [
+                              BoxShadow(
+                                  color: color.withOpacity(0.4), blurRadius: 6)
+                            ],
+                          ),
+                          child: const Icon(Icons.park,
+                              color: Colors.white, size: 14),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              )
+            else
+              Container(
+                color: kBackground,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.location_off_rounded,
+                          size: 40, color: kMutedFg.withOpacity(0.5)),
+                      const SizedBox(height: 8),
+                      Text(
+                        'No GPS data available',
+                        style: TextStyle(
+                            color: kMutedFg.withOpacity(0.6), fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: IgnorePointer(
+                ignoring: true,
+                child: Container(
+                  height: 76,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withOpacity(0.68),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 14,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Interactive Tree Map',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        '${mappedTrees.length} trees with location',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.75),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                  GestureDetector(
+                    onTap: _openMap,
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.22),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.arrow_forward_rounded,
+                          color: Colors.white, size: 18),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, String action, {VoidCallback? onTap}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(title, style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800, color: kForeground)),
-        Text(action, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: kPrimary)),
+        Text(
+          title,
+          style: GoogleFonts.inter(
+              fontSize: 16, fontWeight: FontWeight.w800, color: kForeground),
+        ),
+        GestureDetector(
+          onTap: onTap,
+          child: Text(
+            action,
+            style: const TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w700, color: kPrimary),
+          ),
+        ),
       ],
+    );
+  }
+}
+
+class _QuickActionCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QuickActionCard({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        height: 112,
+        decoration: BoxDecoration(
+          color: kCard,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: kBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: color, size: 28),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: kForeground,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProHeaderButton extends StatelessWidget {
+  final dynamic user;
+  const _ProHeaderButton({required this.user});
+
+  @override
+  Widget build(BuildContext context) {
+    final plan = (user?.subscriptionPlan ?? 'free').toString().toLowerCase();
+    final isPro = plan != 'free';
+
+    return InkWell(
+      onTap: isPro
+          ? null
+          : () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const UpgradeScreen()),
+              ),
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isPro ? kSidebarPrimary.withOpacity(0.18) : kSidebarPrimary,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: Colors.white.withOpacity(0.14)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isPro
+                  ? Icons.workspace_premium_rounded
+                  : Icons.workspace_premium_outlined,
+              color: isPro ? kSidebarPrimary : kSidebarBg,
+              size: 14,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              isPro ? 'Pro Active' : 'Upgrade Pro',
+              style: TextStyle(
+                color: isPro ? kSidebarPrimary : kSidebarBg,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -319,6 +732,7 @@ class _StatCard extends StatelessWidget {
   final IconData icon;
   final Color color;
   const _StatCard(this.label, this.value, this.icon, this.color);
+
   @override
   Widget build(BuildContext context) {
     return Expanded(
@@ -328,19 +742,35 @@ class _StatCard extends StatelessWidget {
           color: kCard,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: kBorder),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 10,
+                offset: const Offset(0, 4))
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+              decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10)),
               child: Icon(icon, color: color, size: 18),
             ),
             const SizedBox(height: 12),
-            Text(value, style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w800, color: kForeground)),
-            Text(label, style: const TextStyle(fontSize: 10, color: kMutedFg, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+            Text(value,
+                style: GoogleFonts.inter(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    color: kForeground)),
+            Text(label,
+                style: const TextStyle(
+                    fontSize: 10,
+                    color: kMutedFg,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5)),
           ],
         ),
       ),
@@ -350,7 +780,8 @@ class _StatCard extends StatelessWidget {
 
 class _BarangayDiversityCard extends StatelessWidget {
   final String name, shannon, count;
-  const _BarangayDiversityCard({required this.name, required this.shannon, required this.count});
+  const _BarangayDiversityCard(
+      {required this.name, required this.shannon, required this.count});
 
   @override
   Widget build(BuildContext context) {
@@ -366,11 +797,23 @@ class _BarangayDiversityCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: kForeground), maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(name,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                  color: kForeground),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
           const Spacer(),
-          const Text('Shannon H\'', style: TextStyle(color: kMutedFg, fontSize: 10, fontWeight: FontWeight.w800)),
-          Text(shannon, style: const TextStyle(color: kPrimary, fontSize: 18, fontWeight: FontWeight.w900)),
-          Text('$count trees', style: const TextStyle(color: kMutedFg, fontSize: 10, fontWeight: FontWeight.w600)),
+          const Text('Shannon H\'',
+              style: TextStyle(
+                  color: kMutedFg, fontSize: 10, fontWeight: FontWeight.w800)),
+          Text(shannon,
+              style: const TextStyle(
+                  color: kPrimary, fontSize: 18, fontWeight: FontWeight.w900)),
+          Text('$count trees',
+              style: const TextStyle(
+                  color: kMutedFg, fontSize: 10, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -381,6 +824,7 @@ class _FeaturedTreeCard extends StatelessWidget {
   final TreeModel tree;
   final VoidCallback onTap;
   const _FeaturedTreeCard({required this.tree, required this.onTap});
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -390,7 +834,12 @@ class _FeaturedTreeCard extends StatelessWidget {
         margin: const EdgeInsets.only(right: 16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(24),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 4))],
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 4))
+          ],
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(24),
@@ -399,19 +848,43 @@ class _FeaturedTreeCard extends StatelessWidget {
             children: [
               tree.photoUrl != null
                   ? CachedNetworkImage(imageUrl: tree.photoUrl!, fit: BoxFit.cover)
-                  : Container(color: kPrimary.withOpacity(0.1), child: const Icon(Icons.park, color: kPrimary, size: 40)),
-              Container(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withOpacity(0.8)]))),
+                  : Container(
+                      color: kPrimary.withOpacity(0.1),
+                      child:
+                          const Icon(Icons.park, color: kPrimary, size: 40)),
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
+                  ),
+                ),
+              ),
               Positioned(
-                bottom: 16, left: 16, right: 16,
+                bottom: 16,
+                left: 16,
+                right: 16,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(tree.commonName, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    Text(tree.barangay ?? 'Panabo', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 10)),
+                    Text(tree.commonName,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                    Text(tree.barangay ?? 'Panabo',
+                        style: TextStyle(
+                            color: Colors.white.withOpacity(0.7), fontSize: 10)),
                   ],
                 ),
               ),
-              Positioned(top: 12, right: 12, child: HealthBadge(tree.healthStatus, small: true)),
+              Positioned(
+                  top: 12,
+                  right: 12,
+                  child: HealthBadge(tree.healthStatus, small: true)),
             ],
           ),
         ),

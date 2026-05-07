@@ -9,7 +9,6 @@ from app.core.security import get_current_user, require_admin
 
 router = APIRouter()
 
-
 @router.get("/", response_model=List[TreeOut])
 def list_trees(
     skip: int = Query(0, ge=0),
@@ -40,6 +39,11 @@ def create_tree(
     current_user: User = Depends(get_current_user),
 ):
     """Create a new tree record."""
+    if current_user.role == "citizen":
+        raise HTTPException(
+            status_code=403,
+            detail="Citizen accounts cannot add official inventory trees. Please submit the species for expert review instead.",
+        )
     tree = Tree(**payload.model_dump(), recorded_by_id=current_user.id)
     db.add(tree)
     db.commit()
@@ -65,9 +69,14 @@ def update_tree(
     tree_id: int,
     payload: TreeUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Update a tree record."""
+    if current_user.role == "citizen":
+        raise HTTPException(
+            status_code=403,
+            detail="Citizen accounts cannot edit official inventory trees.",
+        )
     tree = db.query(Tree).filter(Tree.id == tree_id).first()
     if not tree:
         raise HTTPException(status_code=404, detail="Tree not found")

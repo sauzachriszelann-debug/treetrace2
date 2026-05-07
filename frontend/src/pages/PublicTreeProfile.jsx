@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { publicApiService } from "@/api/publicApi";
 import HealthBadge from "@/components/trees/HealthBadge";
@@ -7,7 +7,8 @@ import { format } from "date-fns";
 import {
   MapPin, Ruler, Leaf, Calendar, TreePine, Droplets,
   Sun, Thermometer, Wind, Shield, BookOpen, Star,
-  HelpCircle, AlertTriangle, Sprout, History, ChevronDown, ChevronUp
+  HelpCircle, AlertTriangle, Sprout, History, ChevronDown, ChevronUp,
+  ArrowLeft
 } from "lucide-react";
 
 // ── AI Wiki Content Generator ─────────────────────────────────────────────────
@@ -54,9 +55,9 @@ function ScoreBar({ label, score }) {
 function InfoRow({ label, value }) {
   if (!value) return null;
   return (
-    <div className="flex justify-between items-start py-2 border-b border-[#f0f4ef] last:border-0">
-      <span className="text-xs text-[#6b8f71] flex-shrink-0 w-32">{label}</span>
-      <span className="text-xs text-[#1a2e1a] text-right font-medium">{value}</span>
+    <div className="flex flex-col gap-1 py-2 border-b border-[#f0f4ef] last:border-0 sm:flex-row sm:justify-between sm:items-start">
+      <span className="text-xs text-[#6b8f71] flex-shrink-0 sm:w-32">{label}</span>
+      <span className="text-xs text-[#1a2e1a] font-medium sm:text-right break-words">{value}</span>
     </div>
   );
 }
@@ -92,6 +93,7 @@ function FAQItem({ q, a }) {
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export default function PublicTreeProfile() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [wiki, setWiki]     = useState(null);
   const [wikiLoading, setWikiLoading] = useState(false);
   const [wikiError, setWikiError]     = useState(false);
@@ -140,29 +142,38 @@ export default function PublicTreeProfile() {
   const tabs = ["overview", "care", "info", "history"];
 
   return (
-    <div className="min-h-screen bg-[#f4f7f3]" style={{ fontFamily: "'Georgia', serif" }}>
+    <div className="min-h-screen bg-[#f4f7f3]">
 
       {/* ── Hero ── */}
-      <div className="relative h-72 overflow-hidden">
+      <div className="px-0 pt-0 sm:px-4 sm:pt-4">
+      <div className="relative h-[340px] overflow-hidden sm:mx-auto sm:h-[420px] sm:max-w-5xl sm:rounded-3xl sm:border sm:border-[#dfe8dc] sm:shadow-sm">
         {tree.photo_url ? (
-          <img src={tree.photo_url} alt={tree.common_name} className="w-full h-full object-cover" />
+          <img src={tree.photo_url} alt={tree.common_name} className="w-full h-full object-cover object-center" />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-[#2d6a4f] to-[#52b788] flex items-center justify-center">
             <TreePine className="w-28 h-28 text-white/20" />
           </div>
         )}
         {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-black/10" />
+
+        <button
+          onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/public"))}
+          className="absolute top-4 left-4 flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-black/25 text-white backdrop-blur-md transition hover:bg-black/40"
+          aria-label="Back"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </button>
 
         {/* Brand badge */}
-        <div className="absolute top-4 left-4 flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/30">
+        <div className="absolute top-4 left-16 flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-3 py-2 rounded-full border border-white/30">
           <Leaf className="w-3.5 h-3.5 text-white" />
           <span className="text-white text-xs font-semibold tracking-wide">TreeTrace</span>
         </div>
 
         {/* Health badge */}
-        <div className="absolute top-4 right-4">
-          <div className={`px-3 py-1 rounded-full text-xs font-bold ${
+        <div className="absolute top-4 right-4 max-w-[48vw] sm:max-w-none">
+          <div className={`px-3 py-2 rounded-full text-[11px] font-bold shadow-sm sm:text-xs ${
             tree.health_status === "Healthy" ? "bg-emerald-500 text-white" :
             tree.health_status === "Fair"    ? "bg-amber-500 text-white" :
             "bg-red-500 text-white"
@@ -173,20 +184,21 @@ export default function PublicTreeProfile() {
         </div>
 
         {/* Tree name overlay */}
-        <div className="absolute bottom-0 left-0 right-0 p-5">
-          <h1 className="text-white text-2xl font-bold leading-tight">{tree.common_name}</h1>
+        <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-8">
+          <h1 className="text-white text-3xl font-bold leading-tight sm:text-5xl">{tree.common_name}</h1>
           {tree.scientific_name && (
-            <p className="text-white/70 text-sm italic mt-0.5">Also known as {tree.scientific_name}</p>
+            <p className="text-white/80 text-sm italic mt-1 sm:text-base">Also known as {tree.scientific_name}</p>
           )}
           {wiki?.tagline && !wikiLoading && (
-            <p className="text-white/60 text-xs mt-1">{wiki.tagline}</p>
+            <p className="text-white/70 text-xs mt-2 max-w-3xl leading-relaxed sm:text-sm">{wiki.tagline}</p>
           )}
         </div>
+      </div>
       </div>
 
       {/* ── Quick stats strip ── */}
       <div className="bg-white border-b border-[#e8ede6] px-4 py-3">
-        <div className="max-w-lg mx-auto flex gap-4 overflow-x-auto">
+        <div className="max-w-5xl mx-auto flex gap-4 overflow-x-auto px-1 sm:justify-center">
           {tree.barangay && (
             <div className="flex items-center gap-1.5 text-xs text-[#6b8f71] flex-shrink-0">
               <MapPin className="w-3.5 h-3.5" />
@@ -216,7 +228,7 @@ export default function PublicTreeProfile() {
 
       {/* ── Tab nav ── */}
       <div className="bg-white border-b border-[#e8ede6] sticky top-0 z-10">
-        <div className="max-w-lg mx-auto flex">
+        <div className="max-w-5xl mx-auto flex">
           {tabs.map(tab => (
             <button
               key={tab}
@@ -234,7 +246,7 @@ export default function PublicTreeProfile() {
       </div>
 
       {/* ── Content ── */}
-      <div className="max-w-lg mx-auto pb-16">
+      <div className="max-w-2xl mx-auto pb-16">
 
         {/* ── Save to Garden CTA ── */}
         <div className="mx-4 mt-4 bg-[#2d6a4f] text-white rounded-2xl px-4 py-3 flex items-center justify-between">

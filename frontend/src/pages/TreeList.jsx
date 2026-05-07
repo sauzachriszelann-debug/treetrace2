@@ -10,10 +10,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Search, Plus, TreePine } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/lib/AuthContext";
 
 export default function TreeList() {
   const [search, setSearch]             = useState("");
   const [healthFilter, setHealthFilter] = useState("all");
+  const { user } = useAuth();
+  const canAddOfficialTree = user?.role !== "citizen";
 
   const { data: trees = [], isLoading } = useQuery({
     queryKey: ["trees"],
@@ -36,12 +39,14 @@ export default function TreeList() {
           <h1 className="font-fraunces text-3xl font-semibold">Tree Inventory</h1>
           <p className="text-muted-foreground mt-1">{trees.length} trees recorded</p>
         </div>
-        <Link to="/add-tree">
-          <Button className="flex items-center gap-2">
-            <Plus className="w-4 h-4" />
-            Add Tree
-          </Button>
-        </Link>
+        {canAddOfficialTree && (
+          <Link to="/add-tree">
+            <Button className="flex items-center gap-2">
+              <Plus className="w-4 h-4" />
+              Add Tree
+            </Button>
+          </Link>
+        )}
       </div>
 
       {/* Filters */}
