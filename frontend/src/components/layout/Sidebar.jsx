@@ -3,7 +3,7 @@ import {
   LayoutDashboard, TreePine, Map, Plus, QrCode,
   Users, BarChart3, LogOut, Leaf, ScanLine, Globe,
   Sparkles, Network, WifiOff,
-  Crown,
+  Crown, FileText, SearchCheck,
 } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
@@ -24,6 +24,8 @@ const navItems = [
 const adminItems = [
   { label: "QR Generator", icon: QrCode,    path: "/qr-manager" },
   { label: "Health Logs",  icon: BarChart3, path: "/health-logs" },
+  { label: "Unknown Review", icon: SearchCheck, path: "/unknown-species" },
+  { label: "Reports & Tools", icon: FileText, path: "/reports" },
   { label: "Users",        icon: Users,     path: "/admin/users" },
 ];
 

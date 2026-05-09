@@ -33,6 +33,11 @@ export const usersApi = {
     return data;
   },
 
+  roleAnalytics: async () => {
+    const { data } = await api.get("/users/analytics/role");
+    return data;
+  },
+
   deactivate: async (userId) => {
     const { data } = await api.put(`/users/${userId}/deactivate`);
     return data;

@@ -23,6 +23,8 @@ import PublicPortal      from "@/pages/PublicPortal";
 import AIIdentify        from "@/pages/AIIdentify";
 import CommunityStructure from "@/pages/CommunityStructure";
 import Upgrade           from "@/pages/Upgrade";
+import UnknownSpeciesReview from "@/pages/UnknownSpeciesReview";
+import ReportsAndTools from "@/pages/ReportsAndTools";
 
 // Public pages (no auth, no sidebar)
 import PublicTreeProfile from "@/pages/PublicTreeProfile";
@@ -56,6 +58,8 @@ export default function App() {
           <Route path="ai-identify" element={<AIIdentify />} />
           <Route path="community"   element={<CommunityStructure />} />
           <Route path="upgrade"     element={<Upgrade />} />
+          <Route path="unknown-species" element={<UnknownSpeciesReview />} />
+          <Route path="reports"     element={<ReportsAndTools />} />
 
           {/* Admin-only (backend enforces, frontend just shows/hides nav) */}
           <Route path="qr-manager"  element={<QRManager />} />

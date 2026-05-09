@@ -70,7 +70,13 @@ const errorToMessage = (error, fallback = "Request failed. Please try again.") =
   return String(detail);
 };
 
-export default function TreeForm({ initial = {}, onSubmit, loading }) {
+export default function TreeForm({
+  initial = {},
+  onSubmit,
+  loading,
+  submitLabel = "Save Tree Record",
+  savingLabel = "Saving…",
+}) {
   const navigate = useNavigate();
   const fileRef = useRef(null);
   const [form, setForm] = useState({
@@ -738,7 +744,7 @@ export default function TreeForm({ initial = {}, onSubmit, loading }) {
         className="w-full flex items-center gap-2"
       >
         {(loading || photoLoading) && <Loader2 className="w-4 h-4 animate-spin" />}
-        {photoLoading ? "Uploading photo…" : loading ? "Saving…" : "Save Tree Record"}
+        {photoLoading ? "Uploading photo…" : loading ? savingLabel : submitLabel}
       </Button>
     </form>
   );

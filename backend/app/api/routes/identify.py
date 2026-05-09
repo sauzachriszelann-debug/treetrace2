@@ -9,7 +9,7 @@ import json
 from app.db.database import get_db
 from app.models.user import User, UserRole
 from app.models.unknown_species import UnknownSpecies
-from app.core.security import get_current_user
+from app.core.security import get_current_user, require_admin
 from app.services.ai_identify import identify_tree_from_url, _pipeline_with_status, measure_dbh_from_base64
 from app.services.species_db import get_all_protected, lookup_species, PHILIPPINE_ENDANGERED_SPECIES
 
@@ -243,6 +243,12 @@ class UnknownSpeciesSubmit(BaseModel):
     submitter_notes: Optional[str] = None
     ai_candidates: Optional[list] = None
 
+
+class UnknownSpeciesReview(BaseModel):
+    reviewed: bool = True
+    identified_as: Optional[str] = None
+    review_notes: Optional[str] = None
+
 @router.post("/unknown-species")
 def submit_unknown_species(
     payload: UnknownSpeciesSubmit,
@@ -269,3 +275,22 @@ def list_unknown_species(
     _: User = Depends(get_current_user),
 ):
     return db.query(UnknownSpecies).order_by(UnknownSpecies.created_at.desc()).all()
+
+
+@router.put("/unknown-species/{entry_id}/review")
+def review_unknown_species(
+    entry_id: int,
+    payload: UnknownSpeciesReview,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    entry = db.query(UnknownSpecies).filter(UnknownSpecies.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Unknown species submission not found")
+
+    entry.reviewed = payload.reviewed
+    entry.identified_as = payload.identified_as
+    entry.review_notes = payload.review_notes
+    db.commit()
+    db.refresh(entry)
+    return entry

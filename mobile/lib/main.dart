@@ -15,7 +15,6 @@ import 'screens/add_tree_screen.dart';
 import 'screens/ai_identify_screen.dart';
 import 'screens/public_portal_screen.dart';
 import 'screens/profile_screen.dart';
-import 'screens/upgrade_screen.dart';
 
 void main() {
   debugPrint("DEBUG: main() started");

@@ -55,4 +55,9 @@ export const aiApi = {
     const { data } = await api.get("/ai/unknown-species");
     return data;
   },
+
+  reviewUnknown: async (id, payload) => {
+    const { data } = await api.put(`/ai/unknown-species/${id}/review`, payload);
+    return data;
+  },
 };

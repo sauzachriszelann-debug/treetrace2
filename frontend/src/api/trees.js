@@ -29,4 +29,21 @@ export const treesApi = {
     const { data } = await api.get("/trees/stats/summary");
     return data;
   },
+
+  qrPrint: async () => {
+    const { data } = await api.get("/trees/qr-print");
+    return data;
+  },
+
+  routePlan: async (params = {}) => {
+    const { data } = await api.get("/trees/route-plan", { params });
+    return data;
+  },
+
+  exportInventoryCsv: async () => {
+    const { data } = await api.get("/trees/reports/inventory.csv", {
+      responseType: "blob",
+    });
+    return data;
+  },
 };

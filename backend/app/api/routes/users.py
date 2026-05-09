@@ -84,6 +84,29 @@ def create_user(
     }
 
 
+@router.get("/analytics/role")
+def role_analytics(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    users = db.query(User).all()
+    by_role = {}
+    by_plan = {}
+    for user in users:
+        role = str(user.role).split(".")[-1]
+        plan = user.subscription_plan or "free"
+        by_role[role] = by_role.get(role, 0) + 1
+        by_plan[plan] = by_plan.get(plan, 0) + 1
+    return {
+        "total_users": len(users),
+        "active_users": sum(1 for user in users if user.is_active),
+        "upgrade_requests": sum(1 for user in users if user.upgrade_requested),
+        "by_role": by_role,
+        "by_plan": by_plan,
+        "ai_identifications_today": sum(user.ai_identifications_today or 0 for user in users),
+    }
+
+
 @router.put("/{user_id}/role")
 def update_role(
     user_id: int,

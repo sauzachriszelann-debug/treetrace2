@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
@@ -65,6 +66,7 @@ class _DBHMeasureScreenState extends State<DBHMeasureScreen> {
   DBHResult? _result;
   String? _error;
   final _distanceCtrl = TextEditingController();
+  final _circumferenceCtrl = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -135,6 +137,17 @@ class _DBHMeasureScreenState extends State<DBHMeasureScreen> {
         description: 'Place any known-size object next to the tree trunk for scale. AI uses it as a reference for much more accurate measurement.',
         badge: 'MORE ACCURATE',
         onTap: () => setState(() { _quickMode = false; _step = 1; }),
+      ),
+      const SizedBox(height: 12),
+      _MethodCard(
+        icon: '📐',
+        title: 'Manual Circumference',
+        subtitle: 'Use tape measure at 1.3m height',
+        accuracy: 'Most accurate field method',
+        accuracyColor: kHealthy,
+        description: 'Enter trunk circumference in centimeters. The app calculates DBH using DBH = circumference / pi.',
+        badge: 'BEST',
+        onTap: _showManualCalculator,
       ),
       const SizedBox(height: 24),
 
@@ -519,6 +532,59 @@ class _DBHMeasureScreenState extends State<DBHMeasureScreen> {
       setState(() => _analyzing = false);
     }
   }
+
+  void _showManualCalculator() {
+    _circumferenceCtrl.clear();
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Manual DBH Calculator'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Measure circumference at 1.3 meters from the ground, then enter the value.',
+              style: TextStyle(fontSize: 13, color: kMutedFg),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _circumferenceCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Circumference (cm)',
+                prefixIcon: Icon(Icons.straighten),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final circumference = double.tryParse(_circumferenceCtrl.text.trim());
+              if (circumference == null || circumference <= 0) return;
+              Navigator.pop(context);
+              setState(() {
+                _result = DBHResult(
+                  dbhCm: circumference / math.pi,
+                  confidence: 'High',
+                  method: 'Manual circumference measurement',
+                  notes: 'Calculated using DBH = circumference / pi. This is the recommended field method.',
+                );
+                _step = 3;
+              });
+            },
+            child: const Text('Calculate'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _tip(String text) => Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
