@@ -21,6 +21,7 @@ class ApiService {
   StreamSubscription? _connectivitySub;
 
   static const _queueKey = 'treetrace_offline_queue';
+  static const _aiHistoryKey = 'treetrace_ai_history';
 
   void init() {
     _dio = Dio(BaseOptions(
@@ -86,6 +87,34 @@ class ApiService {
       'created_at': DateTime.now().toIso8601String(),
     });
     await _writeQueue(queue);
+  }
+
+  Future<List<Map<String, dynamic>>> aiIdentificationHistory() async {
+    final raw = await _storage.read(key: _aiHistoryKey);
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final decoded = jsonDecode(raw) as List;
+      return decoded.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> _recordAiIdentification(Map<String, dynamic> result) async {
+    final history = await aiIdentificationHistory();
+    history.insert(0, {
+      'common_name': result['common_name'] ?? result['possible_name'] ?? 'Unknown species',
+      'scientific_name': result['scientific_name'],
+      'confidence': result['confidence'] ?? 'AI result',
+      'status': result['endangered_status'] ?? result['status'] ?? 'Not Listed',
+      'protected': result['protected'] == true,
+      'not_identified': result['not_identified'] == true,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+    await _storage.write(
+      key: _aiHistoryKey,
+      value: jsonEncode(history.take(30).toList()),
+    );
   }
 
   Future<int> syncOfflineQueue() async {
@@ -203,12 +232,18 @@ class ApiService {
     });
     // Note: Don't set Content-Type header manually, Dio handles boundary automatically for FormData
     final res = await _dio.post('/ai/identify', data: formData);
+    await _recordAiIdentification(res.data);
     return res.data;
   }
 
   Future<Map<String, dynamic>> submitUnknownSpecies(
       Map<String, dynamic> data) async {
     final res = await _dio.post('/ai/unknown-species', data: data);
+    return res.data;
+  }
+
+  Future<List<dynamic>> getMyUnknownSpecies() async {
+    final res = await _dio.get('/ai/my-unknown-species');
     return res.data;
   }
 

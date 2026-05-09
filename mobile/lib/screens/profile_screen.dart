@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../services/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/theme.dart';
+import '../models/models.dart';
 import 'upgrade_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -15,15 +16,33 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   late Future<int> _queuedCount;
+  late Future<List<Map<String, dynamic>>> _aiHistory;
+  late Future<List<UnknownSpeciesModel>> _unknownSubmissions;
 
   @override
   void initState() {
     super.initState();
     _queuedCount = api.queuedCount();
+    _aiHistory = api.aiIdentificationHistory();
+    _unknownSubmissions = _loadUnknownSubmissions();
   }
 
   void _refreshQueue() {
     setState(() => _queuedCount = api.queuedCount());
+  }
+
+  Future<List<UnknownSpeciesModel>> _loadUnknownSubmissions() async {
+    final data = await api.getMyUnknownSpecies();
+    return data
+        .map((j) => UnknownSpeciesModel.fromJson(Map<String, dynamic>.from(j)))
+        .toList();
+  }
+
+  void _refreshActivity() {
+    setState(() {
+      _aiHistory = api.aiIdentificationHistory();
+      _unknownSubmissions = _loadUnknownSubmissions();
+    });
   }
 
   @override
@@ -52,6 +71,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   if (user?.role == 'citizen') ...[
                     _buildSectionTitle('Membership Status'),
                     _buildPlanCard(user),
+                    const SizedBox(height: 24),
+                    _buildSectionTitle('My AI Identification Records'),
+                    _buildAiHistoryCard(user),
+                    const SizedBox(height: 24),
+                    _buildSectionTitle('My Unknown Species Submissions'),
+                    _buildUnknownSubmissionsCard(),
                     const SizedBox(height: 24),
                   ],
                   _buildSettingsSection(auth),
@@ -269,6 +294,214 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Text(text, style: TextStyle(fontSize: 13, color: isLocked ? kMutedFg : kForeground)),
         ],
       ),
+    );
+  }
+
+  Widget _buildAiHistoryCard(dynamic user) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _aiHistory,
+      builder: (context, snap) {
+        final history = snap.data ?? [];
+        return Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: kCard,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: kBorder),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              const Icon(Icons.auto_awesome_outlined, color: kPrimary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'AI scans today: ${user?.aiIdentificationsToday ?? 0}${user?.isPro == true ? ' / unlimited' : ' / 3'}',
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                ),
+              ),
+              IconButton(
+                onPressed: _refreshActivity,
+                icon: const Icon(Icons.refresh, size: 18),
+              ),
+            ]),
+            const SizedBox(height: 8),
+            if (history.isEmpty)
+              const Text(
+                'No AI identification records on this phone yet. Scan a tree to start your history.',
+                style: TextStyle(color: kMutedFg, fontSize: 12, height: 1.35),
+              )
+            else
+              ...history.take(5).map((item) => _buildAiHistoryTile(item)),
+          ]),
+        );
+      },
+    );
+  }
+
+  Widget _buildAiHistoryTile(Map<String, dynamic> item) {
+    final protected = item['protected'] == true;
+    final notIdentified = item['not_identified'] == true;
+    final date = DateTime.tryParse(item['created_at']?.toString() ?? '');
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: kBackground,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: kBorder.withOpacity(0.7)),
+      ),
+      child: Row(children: [
+        Icon(
+          notIdentified
+              ? Icons.help_outline_rounded
+              : protected
+                  ? Icons.warning_amber_rounded
+                  : Icons.eco_outlined,
+          color: protected ? Colors.orange : kPrimary,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(
+              item['common_name']?.toString() ?? 'Unknown species',
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+            ),
+            if (item['scientific_name'] != null)
+              Text(
+                item['scientific_name'].toString(),
+                style: const TextStyle(color: kMutedFg, fontSize: 11, fontStyle: FontStyle.italic),
+              ),
+            Text(
+              '${item['confidence'] ?? 'AI result'} • ${item['status'] ?? 'Not Listed'}${date != null ? ' • ${date.month}/${date.day}/${date.year}' : ''}',
+              style: const TextStyle(color: kMutedFg, fontSize: 11),
+            ),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildUnknownSubmissionsCard() {
+    return FutureBuilder<List<UnknownSpeciesModel>>(
+      future: _unknownSubmissions,
+      builder: (context, snap) {
+        final submissions = snap.data ?? [];
+        return Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: kCard,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: kBorder),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              const Icon(Icons.science_outlined, color: kPrimary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '${submissions.length} submitted for expert review',
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                ),
+              ),
+              IconButton(
+                onPressed: _refreshActivity,
+                icon: const Icon(Icons.refresh, size: 18),
+              ),
+            ]),
+            const SizedBox(height: 8),
+            if (snap.connectionState == ConnectionState.waiting)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: LinearProgressIndicator(color: kPrimary),
+              )
+            else if (submissions.isEmpty)
+              const Text(
+                'No unknown species submissions yet. When AI cannot identify a tree, submit it for expert review and track it here.',
+                style: TextStyle(color: kMutedFg, fontSize: 12, height: 1.35),
+              )
+            else
+              ...submissions.take(5).map(_buildUnknownSubmissionTile),
+          ]),
+        );
+      },
+    );
+  }
+
+  Widget _buildUnknownSubmissionTile(UnknownSpeciesModel item) {
+    final statusColor = item.reviewed ? kHealthy : Colors.orange;
+    final date = item.createdAt;
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: kBackground,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: statusColor.withOpacity(0.25)),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: item.photoUrl?.isNotEmpty == true
+              ? Image.network(
+                  item.photoUrl!,
+                  width: 52,
+                  height: 52,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _unknownPhotoFallback(),
+                )
+              : _unknownPhotoFallback(),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Expanded(
+                child: Text(
+                  item.identifiedAs ?? item.possibleName ?? 'Unknown tree',
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  item.reviewed ? 'REVIEWED' : 'PENDING',
+                  style: TextStyle(color: statusColor, fontSize: 9, fontWeight: FontWeight.w900),
+                ),
+              ),
+            ]),
+            Text(
+              item.reviewed
+                  ? 'Identified as: ${item.identifiedAs ?? 'Reviewed'}'
+                  : 'Waiting for admin/expert review',
+              style: const TextStyle(color: kMutedFg, fontSize: 11),
+            ),
+            if (item.reviewNotes?.isNotEmpty == true)
+              Text(
+                item.reviewNotes!,
+                style: const TextStyle(color: kForeground, fontSize: 11),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            Text(
+              '${item.barangay ?? 'No barangay'}${date != null ? ' • ${date.month}/${date.day}/${date.year}' : ''}',
+              style: const TextStyle(color: kMutedFg, fontSize: 10),
+            ),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  Widget _unknownPhotoFallback() {
+    return Container(
+      width: 52,
+      height: 52,
+      color: kPrimary.withOpacity(0.08),
+      child: const Icon(Icons.eco_outlined, color: kPrimary),
     );
   }
 

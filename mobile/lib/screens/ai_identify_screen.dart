@@ -112,12 +112,20 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: _handleBack,
         ),
-        title: Text('AI Tree Scanner', 
-          style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 18)),
+        title: Text(
+          'AI Tree Scanner',
+          style: GoogleFonts.inter(
+            color: kForeground,
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+          ),
+        ),
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
         foregroundColor: kForeground,
+        iconTheme: const IconThemeData(color: kForeground),
+        surfaceTintColor: Colors.transparent,
       ),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),

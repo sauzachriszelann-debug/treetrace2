@@ -19,14 +19,22 @@ class _MapScreenState extends State<MapScreen> {
   List<TreeModel> _trees = [];
   bool _loading = true;
   String _filter = 'all';
+  String _search = '';
   bool _isSatellite = false;
   final MapController _mapController = MapController();
+  final TextEditingController _searchController = TextEditingController();
   static const _center = LatLng(7.3047, 125.6856);
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -43,9 +51,40 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  List<TreeModel> get _filtered => _filter == 'all'
-      ? _trees
-      : _trees.where((t) => t.healthStatus == _filter).toList();
+  List<TreeModel> get _filtered {
+    Iterable<TreeModel> result = _filter == 'all'
+        ? _trees
+        : _trees.where((t) => t.healthStatus == _filter);
+
+    final query = _search.trim().toLowerCase();
+    if (query.isNotEmpty) {
+      result = result.where((tree) {
+        final values = [
+          tree.commonName,
+          tree.scientificName ?? '',
+          tree.barangay ?? '',
+          tree.city ?? '',
+          tree.healthStatus,
+        ].join(' ').toLowerCase();
+        return values.contains(query);
+      });
+    }
+
+    return result.toList();
+  }
+
+  void _focusFirstSearchResult() {
+    final matches = _filtered.where((tree) => tree.lat != null && tree.lng != null).toList();
+    if (matches.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No mapped tree found for that search.')),
+      );
+      return;
+    }
+
+    final tree = matches.first;
+    _mapController.move(LatLng(tree.lat!, tree.lng!), 17);
+  }
 
   void _handleBack() {
     if (widget.onBack != null) {
@@ -69,6 +108,8 @@ class _MapScreenState extends State<MapScreen> {
                   options: const MapOptions(
                     initialCenter: _center,
                     initialZoom: 14,
+                    minZoom: 11,
+                    maxZoom: 19,
                   ),
                   children: [
                     TileLayer(
@@ -76,6 +117,7 @@ class _MapScreenState extends State<MapScreen> {
                         ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
                         : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
                       userAgentPackageName: 'com.treetrace.mobile',
+                      maxNativeZoom: 19,
                     ),
                     MarkerLayer(
                       markers: _filtered.map((tree) {
@@ -159,8 +201,37 @@ class _MapScreenState extends State<MapScreen> {
                       children: [
                         const Icon(Icons.search, color: kMutedFg, size: 20),
                         const SizedBox(width: 12),
-                        Expanded(child: Text('Search in Panabo City...', style: TextStyle(color: kMutedFg.withOpacity(0.7), fontSize: 14))),
-                        IconButton(icon: const Icon(Icons.refresh, size: 18), onPressed: _load),
+                        Expanded(
+                          child: TextField(
+                            controller: _searchController,
+                            onChanged: (value) => setState(() => _search = value),
+                            onSubmitted: (_) => _focusFirstSearchResult(),
+                            textInputAction: TextInputAction.search,
+                            style: const TextStyle(color: kForeground, fontSize: 14),
+                            decoration: InputDecoration(
+                              isDense: true,
+                              border: InputBorder.none,
+                              hintText: 'Search tree, species, barangay...',
+                              hintStyle: TextStyle(
+                                color: kMutedFg.withOpacity(0.7),
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (_search.isNotEmpty)
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded, size: 18),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _search = '');
+                            },
+                          )
+                        else
+                          IconButton(
+                            icon: const Icon(Icons.refresh, size: 18),
+                            onPressed: _load,
+                          ),
                       ],
                     ),
                   ),

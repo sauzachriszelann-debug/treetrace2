@@ -277,6 +277,19 @@ def list_unknown_species(
     return db.query(UnknownSpecies).order_by(UnknownSpecies.created_at.desc()).all()
 
 
+@router.get("/my-unknown-species")
+def list_my_unknown_species(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return (
+        db.query(UnknownSpecies)
+        .filter(UnknownSpecies.submitted_by_id == current_user.id)
+        .order_by(UnknownSpecies.created_at.desc())
+        .all()
+    )
+
+
 @router.put("/unknown-species/{entry_id}/review")
 def review_unknown_species(
     entry_id: int,

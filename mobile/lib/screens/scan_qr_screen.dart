@@ -222,10 +222,19 @@ class _ScanQRScreenState extends State<ScanQRScreen> with SingleTickerProviderSt
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: _handleBack,
         ),
-        title: Text('Scan Tree Tag', style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 18)),
+        title: Text(
+          'Scan Tree Tag',
+          style: GoogleFonts.inter(
+            color: kForeground,
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+          ),
+        ),
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: kForeground,
+        iconTheme: const IconThemeData(color: kForeground),
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
       ),
       body: Stack(children: [

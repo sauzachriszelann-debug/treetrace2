@@ -473,12 +473,15 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
                     mappedTrees.first.lng ?? 125.6856,
                   ),
                   initialZoom: 13,
+                  minZoom: 11,
+                  maxZoom: 19,
                 ),
                 children: [
                   TileLayer(
                     urlTemplate:
                         'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
                     userAgentPackageName: 'com.treetrace.mobile',
+                    maxNativeZoom: 19,
                   ),
                   MarkerLayer(
                     markers: mappedTrees.take(20).map((tree) {

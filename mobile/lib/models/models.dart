@@ -161,3 +161,41 @@ class UserModel {
   bool get isInstitutional => role == 'admin' || role == 'field_worker';
   bool get isPro => subscriptionPlan == 'pro';
 }
+
+class UnknownSpeciesModel {
+  final int id;
+  final String? photoUrl;
+  final String? barangay;
+  final String? possibleName;
+  final String? identifiedAs;
+  final String? reviewNotes;
+  final String? submitterNotes;
+  final bool reviewed;
+  final DateTime? createdAt;
+
+  UnknownSpeciesModel({
+    required this.id,
+    this.photoUrl,
+    this.barangay,
+    this.possibleName,
+    this.identifiedAs,
+    this.reviewNotes,
+    this.submitterNotes,
+    required this.reviewed,
+    this.createdAt,
+  });
+
+  factory UnknownSpeciesModel.fromJson(Map<String, dynamic> j) =>
+      UnknownSpeciesModel(
+        id: j['id'],
+        photoUrl: j['photo_url'],
+        barangay: j['barangay'],
+        possibleName: j['possible_name'],
+        identifiedAs: j['identified_as'],
+        reviewNotes: j['review_notes'],
+        submitterNotes: j['submitter_notes'],
+        reviewed: j['reviewed'] == true,
+        createdAt:
+            j['created_at'] != null ? DateTime.tryParse(j['created_at']) : null,
+      );
+}
