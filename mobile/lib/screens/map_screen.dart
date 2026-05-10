@@ -108,14 +108,14 @@ class _MapScreenState extends State<MapScreen> {
                   options: const MapOptions(
                     initialCenter: _center,
                     initialZoom: 14,
-                    minZoom: 11,
-                    maxZoom: 19,
+                    minZoom: 2,
+                    maxZoom: 22,
                   ),
                   children: [
                     TileLayer(
                       urlTemplate: _isSatellite 
                         ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-                        : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+                        : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'com.treetrace.mobile',
                       maxNativeZoom: 19,
                     ),

@@ -47,6 +47,7 @@ def sync_subscription_columns():
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_plan VARCHAR(20) NOT NULL DEFAULT 'free'",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS upgrade_requested BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_identifications_today INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS unknown_submissions_today INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_usage_date DATE",
     )
     with engine.begin() as conn:

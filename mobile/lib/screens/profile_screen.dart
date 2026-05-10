@@ -213,8 +213,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildPlanCard(dynamic user) {
     final isPro = user?.isPro == true;
+    final isEnterprise = user?.isEnterprise == true || user?.isInstitutional == true;
     final requested = user?.upgradeRequested == true;
-    final planTitle = isPro
+    final aiLimit = isEnterprise
+        ? 'unlimited'
+        : isPro
+            ? '50'
+            : '10';
+    final unknownLimit = isEnterprise
+        ? 'unlimited'
+        : isPro
+            ? '100'
+            : '15';
+    final planTitle = isEnterprise
+        ? 'Enterprise / Institutional Plan'
+        : isPro
         ? 'Professional Plan'
         : requested
             ? 'Free Tier Plan - Pro Request Pending'
@@ -243,11 +256,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                    color: (isPro ? kHealthy : Colors.orange).withOpacity(0.2),
+                    color: (isPro || isEnterprise ? kHealthy : Colors.orange).withOpacity(0.2),
                     borderRadius: BorderRadius.circular(20)),
-                child: Text(isPro ? 'PRO' : requested ? 'PENDING' : 'UPGRADE',
+                child: Text(isEnterprise ? 'ENTERPRISE' : isPro ? 'PRO' : requested ? 'PENDING' : 'UPGRADE',
                     style: TextStyle(
-                        color: isPro ? kHealthy : Colors.orange,
+                        color: isPro || isEnterprise ? kHealthy : Colors.orange,
                         fontSize: 10,
                         fontWeight: FontWeight.w900)),
               ),
@@ -255,13 +268,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 16),
           _buildFeatureRow(Icons.check_circle_outline, 'Public tree map access'),
-          _buildFeatureRow(Icons.check_circle_outline, 'QR scanner enabled'),
-          _buildFeatureRow(
-              isPro ? Icons.check_circle_outline : Icons.lock_outline,
-              isPro ? 'Unlimited AI scans enabled' : 'Unlimited AI scans (Pro Only)',
-              isLocked: !isPro),
+          _buildFeatureRow(Icons.check_circle_outline, 'Unlimited QR scanner'),
           _buildFeatureRow(Icons.auto_awesome_outlined,
-              'AI scans today: ${user?.aiIdentificationsToday ?? 0}${isPro ? ' / unlimited' : ' / 3'}'),
+              'AI scans today: ${user?.aiIdentificationsToday ?? 0} / $aiLimit'),
+          _buildFeatureRow(Icons.science_outlined,
+              'Expert review submissions: ${user?.unknownSubmissionsToday ?? 0} / $unknownLimit'),
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
@@ -276,7 +287,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 side: const BorderSide(color: kPrimary),
                 elevation: 0,
               ),
-              child: Text(isPro ? 'View Pro Benefits' : 'View All Plans'),
+              child: Text(isPro || isEnterprise ? 'View Plan Benefits' : 'View All Plans'),
             ),
           ),
         ],
@@ -315,7 +326,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'AI scans today: ${user?.aiIdentificationsToday ?? 0}${user?.isPro == true ? ' / unlimited' : ' / 3'}',
+                  'AI scans today: ${user?.aiIdentificationsToday ?? 0}${user?.isEnterprise == true || user?.isInstitutional == true ? ' / unlimited' : user?.isPro == true ? ' / 50' : ' / 10'}',
                   style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
                 ),
               ),

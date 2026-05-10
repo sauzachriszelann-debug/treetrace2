@@ -22,6 +22,42 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
   File? _photo;
   bool _identifying = false;
   Map<String, dynamic>? _result;
+  Map<String, dynamic>? _usage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUsage();
+  }
+
+  Future<void> _loadUsage() async {
+    try {
+      final usage = await api.getAiUsage();
+      if (mounted) setState(() => _usage = usage);
+    } catch (_) {
+      // Usage badges are helpful, but scanning should still work if this call fails.
+    }
+  }
+
+  Map<String, dynamic>? get _aiUsage =>
+      _usage?['ai'] is Map ? Map<String, dynamic>.from(_usage!['ai']) : null;
+
+  Map<String, dynamic>? get _unknownUsage =>
+      _usage?['unknown'] is Map ? Map<String, dynamic>.from(_usage!['unknown']) : null;
+
+  void _incrementUsage(String key) {
+    final current = _usage;
+    if (current == null || current[key] is! Map) return;
+    final bucket = Map<String, dynamic>.from(current[key]);
+    if (bucket['unlimited'] == true) return;
+    final used = (bucket['used_today'] as num?)?.toInt() ?? 0;
+    final limit = (bucket['daily_limit'] as num?)?.toInt();
+    bucket['used_today'] = used + 1;
+    if (limit != null) {
+      bucket['remaining'] = (limit - used - 1).clamp(0, limit);
+    }
+    setState(() => _usage = {...current, key: bucket});
+  }
 
   Future<void> _pick(ImageSource source) async {
     final x = await ImagePicker().pickImage(
@@ -36,6 +72,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
     setState(() => _identifying = true);
     try {
       final r = await api.identifyTree(f);
+      _incrementUsage('ai');
       setState(() => _result = r);
     } catch (e) {
       final isLimit = e is DioException && e.response?.statusCode == 402;
@@ -67,6 +104,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
       if (await api.isOnline()) {
         payload['photo_url'] = await api.uploadPhoto(_photo!) ?? '';
         await api.submitUnknownSpecies(payload);
+        _incrementUsage('unknown');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
               content: Text('Submitted for expert review.'),
@@ -82,8 +120,22 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
       }
     } catch (e) {
       if (mounted) {
+        final isLimit = e is DioException && e.response?.statusCode == 402;
+        final responseData = e is DioException ? e.response?.data : null;
+        final detail = responseData is Map ? responseData['detail'] : null;
+        if (isLimit) {
+          setState(() => _result = {
+                ...?_result,
+                'unknown_limit_reached': true,
+                'unknown_limit_reason': detail ??
+                    'Unknown species submission limit reached. Upgrade for higher daily access.',
+              });
+        }
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Submission failed: $e'), backgroundColor: kPoor));
+            content: Text(isLimit
+                ? (detail?.toString() ?? 'Unknown species submission limit reached.')
+                : 'Submission failed: $e'),
+            backgroundColor: kPoor));
       }
     } finally {
       if (mounted) setState(() => _identifying = false);
@@ -126,13 +178,30 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
         foregroundColor: kForeground,
         iconTheme: const IconThemeData(color: kForeground),
         surfaceTintColor: Colors.transparent,
+        actions: [
+          _UsageBadge(
+            icon: Icons.auto_awesome,
+            usage: _aiUsage,
+            fallback: 'AI',
+            onTap: () => showUpgradeSheet(context),
+          ),
+          _UsageBadge(
+            icon: Icons.science_outlined,
+            usage: _unknownUsage,
+            fallback: 'Review',
+            onTap: () => showUpgradeSheet(context),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 140),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            _buildUsageStrip(),
+            const SizedBox(height: 12),
             // ── Scanner UI / Photo Area ──────────────────────────────────────
             _buildPhotoArea(notIdentified, confidence),
 
@@ -181,6 +250,32 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
                 ? _buildImagePreview(notIdentified, confidence)
                 : _buildEmptyStatePrompt(),
       ),
+    );
+  }
+
+  Widget _buildUsageStrip() {
+    return Row(
+      children: [
+        Expanded(
+          child: _UsagePanel(
+            icon: Icons.auto_awesome,
+            title: 'AI Scan',
+            usage: _aiUsage,
+            fallback: 'Loading',
+            onTap: () => showUpgradeSheet(context),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _UsagePanel(
+            icon: Icons.science_outlined,
+            title: 'Expert Review',
+            usage: _unknownUsage,
+            fallback: 'Loading',
+            onTap: () => showUpgradeSheet(context),
+          ),
+        ),
+      ],
     );
   }
 
@@ -408,6 +503,10 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
                   fontSize: 14)),
         ),
         const SizedBox(height: 20),
+        if (_result?['unknown_limit_reached'] == true) ...[
+          _buildUnknownLimitBanner(),
+          const SizedBox(height: 12),
+        ],
         SizedBox(
           width: double.infinity,
           height: 56,
@@ -527,6 +626,41 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
     );
   }
 
+  Widget _buildUnknownLimitBanner() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.orange.withOpacity(0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.workspace_premium_outlined, color: Colors.orange),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Submission limit reached',
+                  style: TextStyle(fontWeight: FontWeight.w800, color: kForeground)),
+              const SizedBox(height: 4),
+              Text(
+                _result?['unknown_limit_reason']?.toString() ??
+                    'Upgrade for higher unknown species submission limits.',
+                style: const TextStyle(fontSize: 12, color: kMutedFg, height: 1.35),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => showUpgradeSheet(context),
+                child: const Text('View Plans'),
+              ),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildQuickInfoGrid() {
     return Row(
       children: [
@@ -601,8 +735,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: limitReached
-                  ? () => Navigator.push(context,
-                      MaterialPageRoute(builder: (_) => const UpgradeScreen()))
+                  ? () => showUpgradeSheet(context)
                   : _photo == null
                       ? null
                       : _submitUnknown,
@@ -670,6 +803,155 @@ class _MiniBadge extends StatelessWidget {
                   fontSize: 11,
                   fontWeight: FontWeight.w700)),
         ],
+      ),
+    );
+  }
+}
+
+class _UsageBadge extends StatelessWidget {
+  final IconData icon;
+  final Map<String, dynamic>? usage;
+  final String fallback;
+  final VoidCallback onTap;
+
+  const _UsageBadge({
+    required this.icon,
+    required this.usage,
+    required this.fallback,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final data = usage;
+    final unlimited = data?['unlimited'] == true;
+    final remaining = (data?['remaining'] as num?)?.toInt();
+    final limit = (data?['daily_limit'] as num?)?.toInt();
+    final isCritical = !unlimited && remaining != null && remaining <= 2;
+    final color = isCritical ? Colors.orange : kPrimary;
+    final label = data == null
+        ? fallback
+        : unlimited
+            ? '∞'
+            : remaining != null && limit != null
+                ? '$remaining/$limit'
+                : fallback;
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: color.withOpacity(0.24)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UsagePanel extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Map<String, dynamic>? usage;
+  final String fallback;
+  final VoidCallback onTap;
+
+  const _UsagePanel({
+    required this.icon,
+    required this.title,
+    required this.usage,
+    required this.fallback,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final data = usage;
+    final unlimited = data?['unlimited'] == true;
+    final remaining = (data?['remaining'] as num?)?.toInt();
+    final limit = (data?['daily_limit'] as num?)?.toInt();
+    final isCritical = !unlimited && remaining != null && remaining <= 2;
+    final color = isCritical ? Colors.orange : kPrimary;
+    final value = data == null
+        ? fallback
+        : unlimited
+            ? 'Unlimited'
+            : remaining != null && limit != null
+                ? '$remaining / $limit left'
+                : fallback;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withOpacity(0.22)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.14),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, size: 18, color: color),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: kMutedFg,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

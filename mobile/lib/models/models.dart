@@ -117,6 +117,7 @@ class UserModel {
   final String subscriptionPlan;
   final bool upgradeRequested;
   final int aiIdentificationsToday;
+  final int unknownSubmissionsToday;
 
   UserModel({
     required this.id,
@@ -127,6 +128,7 @@ class UserModel {
     required this.subscriptionPlan,
     required this.upgradeRequested,
     required this.aiIdentificationsToday,
+    required this.unknownSubmissionsToday,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> j) => UserModel(
@@ -138,12 +140,14 @@ class UserModel {
         subscriptionPlan: j['subscription_plan'] ?? 'free',
         upgradeRequested: j['upgrade_requested'] ?? false,
         aiIdentificationsToday: j['ai_identifications_today'] ?? 0,
+        unknownSubmissionsToday: j['unknown_submissions_today'] ?? 0,
       );
 
   UserModel copyWith({
     String? subscriptionPlan,
     bool? upgradeRequested,
     int? aiIdentificationsToday,
+    int? unknownSubmissionsToday,
   }) =>
       UserModel(
         id: id,
@@ -155,11 +159,14 @@ class UserModel {
         upgradeRequested: upgradeRequested ?? this.upgradeRequested,
         aiIdentificationsToday:
             aiIdentificationsToday ?? this.aiIdentificationsToday,
+        unknownSubmissionsToday:
+            unknownSubmissionsToday ?? this.unknownSubmissionsToday,
       );
 
   bool get isAdmin => role.toLowerCase().contains('admin');
   bool get isInstitutional => role == 'admin' || role == 'field_worker';
   bool get isPro => subscriptionPlan == 'pro';
+  bool get isEnterprise => subscriptionPlan == 'enterprise';
 }
 
 class UnknownSpeciesModel {

@@ -15,32 +15,135 @@ from app.services.species_db import get_all_protected, lookup_species, PHILIPPIN
 
 router = APIRouter()
 
-FREE_AI_DAILY_LIMIT = 3
+AI_DAILY_LIMITS = {
+    "free": 10,
+    "pro": 50,
+    "professional": 50,
+    "enterprise": None,
+}
+
+UNKNOWN_DAILY_LIMITS = {
+    "free": 15,
+    "pro": 100,
+    "professional": 100,
+    "enterprise": None,
+}
 
 
-def enforce_ai_limit(user: User, db: Session):
-    if user.role in (UserRole.admin, UserRole.field_worker):
-        return
-    if (user.subscription_plan or "free").lower() == "pro":
-        return
+def _normalize_plan(user: User) -> str:
+    return (user.subscription_plan or "free").lower().strip()
 
+
+def _reset_daily_usage_if_needed(user: User, db: Session):
     today = date.today()
     if user.ai_usage_date != today:
         user.ai_usage_date = today
         user.ai_identifications_today = 0
+        user.unknown_submissions_today = 0
+        db.commit()
 
-    if user.ai_identifications_today >= FREE_AI_DAILY_LIMIT:
+
+def _usage_payload(user: User, limits: dict, counter_attr: str):
+    if user.role in (UserRole.admin, UserRole.field_worker):
+        return {
+            "used_today": 0,
+            "daily_limit": None,
+            "remaining": None,
+            "unlimited": True,
+            "plan": "staff",
+        }
+
+    plan = _normalize_plan(user)
+    daily_limit = limits.get(plan, limits["free"])
+    used_today = getattr(user, counter_attr) or 0
+    if daily_limit is None:
+        return {
+            "used_today": used_today,
+            "daily_limit": None,
+            "remaining": None,
+            "unlimited": True,
+            "plan": plan,
+        }
+    return {
+        "used_today": used_today,
+        "daily_limit": daily_limit,
+        "remaining": max(daily_limit - used_today, 0),
+        "unlimited": False,
+        "plan": plan,
+    }
+
+
+def _enforce_limit(
+    user: User,
+    db: Session,
+    *,
+    limits: dict,
+    counter_attr: str,
+    feature_name: str,
+):
+    if user.role in (UserRole.admin, UserRole.field_worker):
+        return
+
+    _reset_daily_usage_if_needed(user, db)
+    plan = _normalize_plan(user)
+    daily_limit = limits.get(plan, limits["free"])
+    if daily_limit is None:
+        return
+
+    used_today = getattr(user, counter_attr) or 0
+    if used_today >= daily_limit:
+        plan_label = (
+            "Starter"
+            if plan == "free"
+            else "Professional"
+            if plan in ("pro", "professional")
+            else "Enterprise"
+        )
         db.commit()
         raise HTTPException(
             status_code=402,
             detail=(
-                "Free AI identification limit reached for today. "
-                "Upgrade to Pro for unlimited AI identification."
+                f"You've used all {daily_limit} {feature_name} for today on the "
+                f"{plan_label} plan. Upgrade for higher daily access."
             ),
         )
 
-    user.ai_identifications_today += 1
+    setattr(user, counter_attr, used_today + 1)
     db.commit()
+
+
+def enforce_ai_limit(user: User, db: Session):
+    _enforce_limit(
+        user,
+        db,
+        limits=AI_DAILY_LIMITS,
+        counter_attr="ai_identifications_today",
+        feature_name="AI identifications",
+    )
+
+
+def enforce_unknown_limit(user: User, db: Session):
+    _enforce_limit(
+        user,
+        db,
+        limits=UNKNOWN_DAILY_LIMITS,
+        counter_attr="unknown_submissions_today",
+        feature_name="unknown species submissions",
+    )
+
+
+@router.get("/usage")
+def ai_usage(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _reset_daily_usage_if_needed(current_user, db)
+    return {
+        "ai": _usage_payload(current_user, AI_DAILY_LIMITS, "ai_identifications_today"),
+        "unknown": _usage_payload(current_user, UNKNOWN_DAILY_LIMITS, "unknown_submissions_today"),
+        "qr_scan": {"unlimited": True},
+        "public_map": {"unlimited": True},
+    }
 
 @router.post("/identify")
 async def identify_tree(
@@ -249,12 +352,45 @@ class UnknownSpeciesReview(BaseModel):
     identified_as: Optional[str] = None
     review_notes: Optional[str] = None
 
+
+def _unknown_species_out(entry: UnknownSpecies):
+    try:
+        candidates = json.loads(entry.ai_candidates or "[]")
+    except json.JSONDecodeError:
+        candidates = []
+
+    return {
+        "id": entry.id,
+        "photo_url": entry.photo_url,
+        "location_description": entry.location_description,
+        "barangay": entry.barangay,
+        "submitter_notes": entry.submitter_notes,
+        "possible_name": entry.possible_name,
+        "ai_candidates": candidates,
+        "reviewed": entry.reviewed,
+        "review_notes": entry.review_notes,
+        "identified_as": entry.identified_as,
+        "submitted_by_id": entry.submitted_by_id,
+        "submitted_by_name": entry.submitted_by.full_name if entry.submitted_by else None,
+        "submitted_by_email": entry.submitted_by.email if entry.submitted_by else None,
+        "created_at": entry.created_at,
+        "updated_at": entry.updated_at,
+        "review_status": (
+            "identified"
+            if entry.reviewed and entry.identified_as
+            else "closed"
+            if entry.reviewed
+            else "pending"
+        ),
+    }
+
 @router.post("/unknown-species")
 def submit_unknown_species(
     payload: UnknownSpeciesSubmit,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    enforce_unknown_limit(current_user, db)
     entry = UnknownSpecies(
         photo_url=payload.photo_url,
         barangay=payload.barangay,
@@ -272,9 +408,10 @@ def submit_unknown_species(
 @router.get("/unknown-species")
 def list_unknown_species(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_admin),
 ):
-    return db.query(UnknownSpecies).order_by(UnknownSpecies.created_at.desc()).all()
+    entries = db.query(UnknownSpecies).order_by(UnknownSpecies.created_at.desc()).all()
+    return [_unknown_species_out(entry) for entry in entries]
 
 
 @router.get("/my-unknown-species")
@@ -282,12 +419,13 @@ def list_my_unknown_species(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return (
+    entries = (
         db.query(UnknownSpecies)
         .filter(UnknownSpecies.submitted_by_id == current_user.id)
         .order_by(UnknownSpecies.created_at.desc())
         .all()
     )
+    return [_unknown_species_out(entry) for entry in entries]
 
 
 @router.put("/unknown-species/{entry_id}/review")
@@ -306,4 +444,4 @@ def review_unknown_species(
     entry.review_notes = payload.review_notes
     db.commit()
     db.refresh(entry)
-    return entry
+    return _unknown_species_out(entry)

@@ -223,6 +223,11 @@ class ApiService {
   }
 
   // ── AI Identify ───────────────────────────────────────────────────────────
+  Future<Map<String, dynamic>> getAiUsage() async {
+    final res = await _dio.get('/ai/usage');
+    return Map<String, dynamic>.from(res.data);
+  }
+
   Future<Map<String, dynamic>> identifyTree(File imageFile) async {
     final formData = FormData.fromMap({
       'file': await MultipartFile.fromFile(

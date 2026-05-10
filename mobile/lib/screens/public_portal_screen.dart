@@ -88,10 +88,12 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
             _buildSliverHeader(user),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _buildSearchBar(),
+                    const SizedBox(height: 18),
                     Row(
                       children: [
                         _StatCard('Total Trees', '$totalTrees',
@@ -104,15 +106,11 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
                     const SizedBox(height: 12),
                     if (endangeredCount > 0)
                       _buildEndangeredAlert(endangeredCount),
-                    const SizedBox(height: 22),
-                    _buildQuickActions(),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 24),
                     _buildSectionHeader('Public Tree Map', 'Open Map',
                         onTap: _openMap),
                     const SizedBox(height: 16),
                     _buildMapCard(height: 220),
-                    const SizedBox(height: 32),
-                    _buildSearchBar(),
                     const SizedBox(height: 32),
                     if (_search.isEmpty) ...[
                       _buildBiodiversityInsights(),
@@ -302,6 +300,20 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
       expandedHeight: 145,
       pinned: true,
       backgroundColor: kSidebarBg,
+      title: const Text(
+        'TreeTrace',
+        style: TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w800,
+          fontSize: 16,
+        ),
+      ),
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: Center(child: _ProHeaderButton(user: user)),
+        ),
+      ],
       flexibleSpace: FlexibleSpaceBar(
         background: Container(
           decoration: const BoxDecoration(
@@ -331,7 +343,6 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
                           ),
                         ),
                       ),
-                      _ProHeaderButton(user: user),
                     ],
                   ),
                   const SizedBox(height: 4),
@@ -381,39 +392,6 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildQuickActions() {
-    return Row(
-      children: [
-        Expanded(
-          child: _QuickActionCard(
-            icon: Icons.camera_alt_rounded,
-            label: 'AI Scan',
-            color: kPrimary,
-            onTap: _openAiScan,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _QuickActionCard(
-            icon: Icons.map_rounded,
-            label: 'Tree Map',
-            color: Colors.teal,
-            onTap: _openMap,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _QuickActionCard(
-            icon: Icons.qr_code_scanner_rounded,
-            label: 'Scan QR',
-            color: Colors.orange,
-            onTap: _openQrScan,
-          ),
-        ),
-      ],
     );
   }
 
@@ -473,13 +451,13 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
                     mappedTrees.first.lng ?? 125.6856,
                   ),
                   initialZoom: 13,
-                  minZoom: 11,
-                  maxZoom: 19,
+                  minZoom: 2,
+                  maxZoom: 22,
                 ),
                 children: [
                   TileLayer(
                     urlTemplate:
-                        'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.treetrace.mobile',
                     maxNativeZoom: 19,
                   ),
@@ -618,68 +596,6 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
   }
 }
 
-class _QuickActionCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _QuickActionCard({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        height: 112,
-        decoration: BoxDecoration(
-          color: kCard,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: kBorder),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(icon, color: color, size: 28),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: kForeground,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _ProHeaderButton extends StatelessWidget {
   final dynamic user;
   const _ProHeaderButton({required this.user});
@@ -687,39 +603,51 @@ class _ProHeaderButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final plan = (user?.subscriptionPlan ?? 'free').toString().toLowerCase();
-    final isPro = plan != 'free';
+    final isEnterprise = plan == 'enterprise' ||
+        user?.role == 'admin' ||
+        user?.role == 'field_worker';
+    final isPro = plan == 'pro' || plan == 'professional';
+    final isPaid = isPro || isEnterprise;
+    final label = isEnterprise ? 'Enterprise' : isPro ? 'Pro' : 'Upgrade to Pro';
 
     return InkWell(
-      onTap: isPro
+      onTap: isPaid
           ? null
-          : () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const UpgradeScreen()),
-              ),
+          : () => showUpgradeSheet(context),
       borderRadius: BorderRadius.circular(999),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isPro ? kSidebarPrimary.withOpacity(0.18) : kSidebarPrimary,
+          color: isPro ? Colors.white.withOpacity(0.14) : Colors.white,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: Colors.white.withOpacity(0.14)),
+          border: Border.all(
+            color: isPro ? Colors.white.withOpacity(0.35) : kSidebarPrimary,
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.14),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              isPro
+              isPaid
                   ? Icons.workspace_premium_rounded
                   : Icons.workspace_premium_outlined,
-              color: isPro ? kSidebarPrimary : kSidebarBg,
-              size: 14,
+              color: isPaid ? kSidebarPrimary : kPrimary,
+              size: 16,
             ),
-            const SizedBox(width: 5),
+            const SizedBox(width: 6),
             Text(
-              isPro ? 'Pro Active' : 'Upgrade Pro',
+              label,
               style: TextStyle(
-                color: isPro ? kSidebarPrimary : kSidebarBg,
-                fontSize: 10,
+                color: isPaid ? kSidebarPrimary : kPrimary,
+                fontSize: 12,
                 fontWeight: FontWeight.w900,
               ),
             ),

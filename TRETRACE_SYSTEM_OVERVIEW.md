@@ -1,80 +1,90 @@
 # TreeTrace System Overview
 
-## 1. What TreeTrace Is
+## 1. System Description
 
-TreeTrace is a geo-spatial tree inventory and conservation system for Panabo City. It helps citizens, field workers, and administrators record, view, identify, monitor, and protect trees using maps, QR codes, AI-assisted identification, and mobile field tools.
+TreeTrace is a geo-spatial tree inventory, monitoring, and conservation system designed for Panabo City. It helps citizens, field workers, and administrators identify trees, record tree data, view tree locations on a map, scan QR tree tags, monitor tree health, and protect endangered or regulated species.
 
-The system is designed for real conservation use:
+The system is composed of:
 
-- Citizens can explore public tree information, scan QR tree tags, view the public tree map, and use limited AI identification.
-- Field workers can add tree records, assess tree health, use AI-assisted measurements, scan QR codes, and collect data in the field.
-- Administrators can manage tree records, users, health logs, subscription access, and community-submitted unknown species.
+- a web dashboard for administrators and staff
+- a Flutter mobile app for citizens and field workers
+- a FastAPI backend connected to a hosted PostgreSQL database
+- AI-assisted tree identification and conservation warning features
+- map-based public tree profiles and QR code access
 
-TreeTrace also supports a technopreneurship model through Free, Professional, and Enterprise access.
+TreeTrace is not only a record management system. It is designed as a conservation and technopreneurship platform that can support LGUs, schools, barangays, DENR-related offices, environmental groups, and citizen scientists.
 
-## 2. Main Goal
+## 2. Main Purpose
 
-The main goal of TreeTrace is to provide a digital, map-based, and AI-assisted tree inventory system that supports:
+The main purpose of TreeTrace is to provide a digital and AI-assisted tree monitoring system that can:
 
-- urban forest monitoring
-- endangered tree protection
-- faster tree identification
-- QR-based public tree profiles
-- field data collection
-- community participation
-- LGU, school, DENR, and barangay-level tree management
+- create a centralized tree inventory
+- map trees using GPS coordinates
+- identify trees using AI image analysis
+- warn users when a tree may be endangered or protected
+- allow citizens to access public tree information
+- help field workers collect tree data in the field
+- support offline field collection and later syncing
+- allow unknown species submissions for expert review
+- support reports, QR labels, and role-based analytics
+- provide a realistic business model through Free, Professional, and Enterprise access
 
-## 3. System Users
+## 3. Target Users
 
 ### Citizen / Public User
 
-Citizens are public users who can access conservation features without managing official records.
+Citizens can use TreeTrace for public conservation awareness and basic tree discovery. They should not manage official inventory records.
 
-Main features:
+Citizen features:
 
-- View the public tree portal
-- View the public tree map
-- Open public tree profiles
-- Scan QR codes attached to trees
-- Use AI tree identification with limits
-- Submit unknown species for expert review
-- Request Pro access
+- view the public portal
+- view the public tree map
+- open public tree profiles
+- scan QR tree tags
+- use limited AI tree identification based on plan
+- submit unknown species for expert review based on plan
+- view their AI identification activity
+- view their unknown species submissions
+- request Professional access
 
-Citizens should not be able to edit official tree records.
+Citizen restriction:
+
+- citizens cannot add, edit, or delete official inventory trees
 
 ### Field Worker
 
 Field workers are operational users who collect and update tree inventory data.
 
-Main features:
+Field worker features:
 
-- Add tree records
-- Upload tree photos
-- Record DBH, height, location, health status, and notes
-- Use AI identification to assist data entry
-- Scan QR tree tags
-- Use map-based navigation
-- Submit health assessments
-- Work with offline/sync support for field collection
+- add official tree records
+- upload tree photos
+- record DBH, height, health status, barangay, and GPS location
+- use AI assistance for tree identification
+- scan QR tree tags
+- use the interactive map
+- submit health logs
+- save actions offline and sync later when internet is available
 
 ### Administrator
 
-Administrators manage the official system.
+Administrators manage the official system, users, reviews, and reports.
 
-Main features:
+Admin features:
 
-- View dashboard analytics
-- Manage tree records
-- Manage users
-- Approve or update user subscription plans
-- Review unknown species submissions
-- Monitor health logs
-- Access reporting and map tools
-- Sign out from Profile
+- view dashboard analytics
+- manage tree records
+- manage users and roles
+- review unknown species submissions
+- update subscription plans
+- view role-specific analytics
+- access reports and QR printing tools
+- monitor health logs
+- sign out from the Profile screen
 
-## 4. Core System Features
+## 4. Core Features
 
-### Tree Inventory
+### 4.1 Tree Inventory
 
 TreeTrace stores official tree records with:
 
@@ -82,37 +92,63 @@ TreeTrace stores official tree records with:
 - scientific name
 - DBH in centimeters
 - height in meters
+- estimated carbon value
 - health status
-- barangay/city
-- GPS location
+- barangay and city
+- GPS latitude and longitude
 - photo URL
 - QR code
 - notes
-- recorded user
-- creation date
+- date recorded
+- assigned or recorded user
 
-### Public Tree Map
+This inventory becomes the official tree database used by the map, public profiles, reports, QR labels, and analytics.
 
-The public map shows tree locations in Panabo City. Users can view tree markers, open tree profiles, and explore the mapped urban forest.
+### 4.2 Public Tree Map
 
-In the Flutter app, the Explore page includes an interactive map preview. The full map page allows users to move, zoom, and inspect tree markers.
+The public tree map shows mapped trees in Panabo City. Users can move around the map, zoom, search, and open tree markers.
 
-### QR Code Scanning
+Current mobile map features:
 
-Each tree can have a QR code that links to its profile. When a user scans the QR code:
+- searchable tree map
+- search by common name, scientific name, barangay, city, or health status
+- map marker filtering by health status
+- satellite/map toggle
+- movable and zoomable map
+- zoom cap to avoid unavailable tile levels
+- tree marker preview popup
 
-1. The camera opens.
-2. The QR code is detected.
-3. The app extracts the tree ID from the URL.
-4. The backend loads the public tree data.
-5. A tree profile preview appears.
-6. The user can open the full tree profile.
+The Flutter Explore page also includes a map preview card. Citizens can open the full map from the Explore screen.
 
-The QR scanner uses the phone camera and now has a transparent scanning window instead of a white camera area.
+### 4.3 QR Code Scanning
 
-### AI Tree Identification
+Each tree can have a QR code that links to its public tree profile.
 
-The AI Scan feature allows users to upload or take a tree photo. The backend sends the image to an AI vision model, which returns:
+QR scan flow:
+
+```text
+User opens Scan QR
+-> Camera scanner opens
+-> User scans the tree tag
+-> App reads the tree profile link or tree ID
+-> Backend loads the public tree record
+-> App shows a tree preview
+-> User opens the full tree profile
+```
+
+The mobile QR scanner includes:
+
+- visible "Scan Tree Tag" title
+- back button
+- transparent scanner window
+- camera-based QR detection
+- tree profile preview after scanning
+
+### 4.4 AI Tree Identification
+
+The AI Scan feature allows users to upload or capture a tree photo. The backend sends the image to an AI vision model and returns structured tree information.
+
+AI result may include:
 
 - possible common name
 - scientific name
@@ -120,59 +156,154 @@ The AI Scan feature allows users to upload or take a tree photo. The backend sen
 - conservation status
 - estimated DBH
 - estimated height
-- description
 - family
 - habitat
+- description
 - distinguishing features
+- uses and ecological value
 - care information
 
-The result is shown in an encyclopedia-style screen so users can learn about the tree after scanning.
+The Flutter app displays the result in an encyclopedia-style output so users can learn about the tree after scanning.
 
-Important note: AI DBH and height estimates are approximate. For accurate DBH, field workers should still measure circumference manually and calculate:
+Important note:
+
+AI DBH and height are only estimates. Accurate DBH should still be measured manually in the field using circumference:
 
 ```text
 DBH = circumference / pi
 ```
 
-### Cannot Cut Warning
+### 4.5 Cannot Cut Warning
 
-If AI or tree data identifies a protected, endangered, or regulated tree, the system shows a warning. This supports conservation and helps prevent accidental cutting of important species.
+TreeTrace shows a warning when a tree is identified as endangered, protected, threatened, vulnerable, or regulated.
 
 Purpose:
 
-- show conservation value during capstone defense
-- support environmental compliance
-- inform citizens and field workers immediately
-- strengthen the system's DENR/LGU relevance
+- prevent accidental cutting of important species
+- support conservation awareness
+- strengthen DENR/LGU relevance
+- show real environmental value during capstone defense
 
-### Unknown Species Submission
+This feature is important because it proves that TreeTrace is not only for storing data. It actively helps protect trees.
 
-When AI cannot confidently identify a tree, citizens and field workers can submit the photo as an unknown species.
+### 4.6 Unknown Species Submission
+
+Unknown species submission allows citizens and field workers to send tree photos for expert review.
 
 Flow:
 
-1. User uploads or scans a tree photo.
-2. AI fails or gives low confidence.
-3. User submits the photo for expert review.
-4. Admin reviews the submission.
-5. The species can be added or corrected in the database.
+```text
+User scans or uploads a tree photo
+-> AI result is unknown or low confidence
+-> User submits the photo as an unknown species
+-> Admin reviews the submission
+-> Admin can approve, reject, or identify the species
+-> The database can improve over time
+```
 
-This supports a retraining/community-learning module. Over time, TreeTrace can improve with more Philippine-specific tree data.
+This supports a community-learning and future retraining module. It is useful for Philippine-specific trees because local users can contribute real field data.
 
-### Offline and Sync
+### 4.7 Offline and Sync
 
-Offline support is important for field workers in remote barangays where internet signal may be weak.
+Offline support is useful for field workers in remote barangays with weak or unavailable signal.
 
 Offline flow:
 
-1. Field worker records a tree or unknown species while offline.
-2. The action is saved locally in the mobile app.
-3. When internet returns, the app syncs queued actions to the backend.
-4. Uploaded photos and records are submitted automatically.
+```text
+Field worker records data while offline
+-> App saves the action locally
+-> User continues field work
+-> Internet returns
+-> App syncs queued actions to the backend
+```
 
-This makes the app more deployable for real field work.
+This makes TreeTrace more realistic for actual deployment because field work cannot always depend on stable internet.
 
-## 5. Monetization and Technopreneurship Model
+### 4.8 Reports, QR Printing, and Tools
+
+TreeTrace includes reporting and utility tools for administrative and institutional use.
+
+Implemented tools:
+
+- CSV inventory export
+- printable inventory report that can be saved as PDF
+- QR label printing layout
+- role-based user analytics
+- business/revenue metrics for Pro and institutional access
+- unknown species review
+- field worker route planning endpoint and web tool
+
+These tools support LGU, school, barangay, and environmental office workflows.
+
+## 5. Mobile App Flow
+
+### Citizen Mobile Flow
+
+```text
+Open app
+-> Login or register
+-> Explore public portal
+-> View tree map
+-> Scan QR tree tag
+-> Open public tree profile
+-> Use limited AI Scan
+-> Submit unknown species if needed
+-> View personal AI and unknown species records in Profile
+-> Request Professional access if needed
+```
+
+### Field Worker Mobile Flow
+
+```text
+Login
+-> Dashboard
+-> Add Tree
+-> Upload or capture photo
+-> Use AI assistance
+-> Enter DBH, height, health, and location
+-> Save official record
+-> Scan QR or update health logs
+-> Sync offline actions later if needed
+```
+
+### Admin Mobile Flow
+
+```text
+Login
+-> Dashboard
+-> View system data
+-> Access profile
+-> Sign out from Profile
+```
+
+The full administrative workflow is mainly handled in the web dashboard.
+
+## 6. Web App Flow
+
+### Admin Web Flow
+
+```text
+Login
+-> Dashboard
+-> Manage trees and users
+-> Review unknown species
+-> View health logs
+-> Generate reports
+-> Print QR labels
+-> Update user access plans
+```
+
+### Public Web Flow
+
+```text
+Open public portal
+-> View public map
+-> Open public tree profile
+-> Use AI identify if logged in
+-> Request Pro access if advanced access is needed
+```
+
+## 7. Monetization and Technopreneurship Model
 
 TreeTrace uses a freemium and institutional subscription model.
 
@@ -184,30 +315,31 @@ Target users:
 - students
 - casual public users
 
-Possible features:
+Included access:
 
-- view public tree map
-- scan QR tree profiles
-- view basic tree information
-- limited AI identification
-- submit unknown species
+- public tree map
+- public tree profiles
+- unlimited QR scanning
+- 10 AI identifications per day
+- 15 unknown species submissions per day
 
 ### Professional / Pro
 
 Target users:
 
 - researchers
-- arborists
 - active citizen scientists
+- arborists
 - small organizations
 
-Possible features:
+Possible access:
 
-- unlimited or higher AI identification limit
-- advanced tree profiles
-- more tree records
-- priority unknown-species review
+- 50 AI identifications per day
+- 100 unknown species submissions per day
+- more advanced tree information
+- priority unknown species review
 - dashboard and analytics access
+- expanded records and monitoring tools
 
 Suggested price:
 
@@ -222,17 +354,18 @@ Target users:
 - LGUs
 - schools
 - barangays
-- DENR offices
+- DENR-related offices
 - environmental organizations
 
-Possible features:
+Possible access:
 
-- unlimited inventory access
+- unlimited AI identification
+- unlimited unknown species submissions
 - field worker accounts
 - reporting tools
 - analytics packages
 - onboarding and training
-- city-wide deployment support
+- city-wide or campus-wide deployment support
 
 Suggested price:
 
@@ -240,86 +373,55 @@ Suggested price:
 PHP 399+ / month
 ```
 
-The strongest profit opportunity is institutional use, not only individual users. LGUs, schools, and environmental offices are more realistic paying customers because they need data, reporting, and monitoring.
+### Additional Revenue Streams
 
-## 6. Main User Flows
+TreeTrace can also earn from:
 
-### Citizen Flow
+- training and onboarding services
+- data analytics and reporting packages
+- QR label setup and printing support
+- institutional deployment packages
+- maintenance and support services
 
-```text
-Open app
--> Login/Register
--> Explore public portal
--> View public map or scan QR
--> Open tree profile
--> Use limited AI Scan
--> Submit unknown species if needed
--> Request Pro if advanced access is needed
-```
+The strongest profit opportunity is institutional use. LGUs, schools, barangays, and environmental offices are more realistic paying customers because they need organized inventory data, reports, monitoring, and compliance support.
 
-### Field Worker Flow
+## 8. Pro Upgrade Flow
+
+Current implemented flow:
 
 ```text
-Login
--> Dashboard
--> Add Tree
--> Upload/take photo
--> AI assists identification
--> Enter DBH, height, health, location
--> Save record
--> Scan QR or update health logs
--> Sync later if offline
-```
-
-### Admin Flow
-
-```text
-Login
--> Dashboard
--> Manage trees/users
--> Review health logs
--> Update subscription plans
--> Review unknown species
--> Monitor map and reports
-```
-
-### AI Scan Flow
-
-```text
-User opens AI Scan
--> Takes photo or selects from gallery
--> Mobile app sends image to backend
--> Backend sends image to AI model
--> AI returns structured tree information
--> App displays encyclopedia-style result
--> User can submit unknown species or add to inventory depending on role
-```
-
-### Pro Upgrade Flow
-
-```text
-Citizen opens Upgrade Pro
--> Views Starter, Professional, and Enterprise plans
--> Requests Pro upgrade
+Citizen opens Upgrade screen
+-> User views Starter, Professional, and Enterprise plans
+-> User requests Professional access
 -> Backend marks upgrade_requested = true
--> Admin sees request in dashboard
--> Admin approves by setting subscription_plan = pro
+-> Admin reviews the request
+-> Admin updates the user's subscription plan
 -> User receives Pro access
 ```
 
-For future payment integration, GCash, Maya, PayMongo, or Stripe can be connected so Pro upgrade becomes automatic after payment verification.
+Payment verification is not yet connected. This is intentional for the current version. The current system demonstrates the monetization flow without requiring real payment processing.
 
-## 7. System Architecture
-
-TreeTrace has three main parts:
+Future payment flow:
 
 ```text
-Frontend Web App
+User chooses plan
+-> User pays through PayMongo, GCash, Maya, or Stripe
+-> Payment provider verifies payment
+-> Backend records payment receipt
+-> User subscription automatically changes to Pro
+```
+
+## 9. System Architecture
+
+TreeTrace has three main components:
+
+```text
+React Web Frontend
 Flutter Mobile App
 FastAPI Backend
 ```
 
-The backend connects to the hosted database and serves both the web app and mobile app.
+The backend connects to a hosted PostgreSQL database and serves both the web and mobile applications.
 
 ### Web Frontend
 
@@ -349,6 +451,8 @@ Main pages:
 - Public Tree Profile
 - Upgrade
 - Admin Users
+- Reports and Tools
+- Unknown Species Review
 
 ### Flutter Mobile App
 
@@ -397,8 +501,9 @@ Technology:
 
 - FastAPI
 - SQLAlchemy
-- PostgreSQL/Aiven
-- Render deployment
+- PostgreSQL
+- Aiven database hosting
+- Render backend deployment
 
 Main route groups:
 
@@ -410,7 +515,7 @@ Main route groups:
 - `/api/public`
 - `/api/ai`
 
-## 8. Database
+## 10. Database
 
 The system uses PostgreSQL hosted on Aiven.
 
@@ -421,16 +526,18 @@ Important tables/models:
 - health_logs
 - unknown_species
 
-Important user subscription fields:
+Important user access fields:
 
+- `role`
 - `subscription_plan`
 - `upgrade_requested`
 - `ai_identifications_today`
+- `unknown_submissions_today`
 - `ai_usage_date`
 
-These support the Free vs Pro feature limits.
+These fields support role-based access, AI usage limits, and the Free vs Pro model.
 
-## 9. Deployment
+## 11. Deployment
 
 ### Backend
 
@@ -442,48 +549,36 @@ Live API base URL:
 https://treetrace-1o7l.onrender.com/api
 ```
 
-Render may sleep when inactive. Opening the backend root or health endpoint can wake it:
+Render may sleep when inactive. To wake the backend, open:
 
 ```text
 https://treetrace-1o7l.onrender.com/
 https://treetrace-1o7l.onrender.com/api/health
 ```
 
-To redeploy after local backend changes:
+If `/api` shows `{"detail":"Not Found"}`, that is normal because `/api` alone is not a route. Use the actual routes such as `/api/health`.
 
-```powershell
-git add .
-git commit -m "Update TreeTrace backend and mobile features"
-git push
-```
-
-Then open Render Dashboard and confirm the backend service redeploys successfully.
-
-### Web Frontend
-
-For local development:
+### Local Web Frontend
 
 ```powershell
 cd frontend
 npm run dev
 ```
 
-Local web URL:
+Local URL:
 
 ```text
 http://localhost:5173
 ```
 
-### Backend Local Development
-
-For local backend testing:
+### Local Backend
 
 ```powershell
 cd backend
 uvicorn app.main:app --reload
 ```
 
-Local backend URL:
+Local URL:
 
 ```text
 http://localhost:8000
@@ -491,60 +586,112 @@ http://localhost:8000
 
 ### Flutter Mobile
 
-For Flutter testing:
-
 ```powershell
 cd mobile
 flutter run
 ```
 
-If testing on a real phone, the app uses the Render backend URL by default.
+When installed on a real phone, the mobile app should use the deployed Render backend so the phone can connect from anywhere with internet access.
 
-## 10. Important Notes for Defense
+## 12. Important Defense Points
 
 ### Conservation Value
 
-TreeTrace is not only a CRUD system. It supports conservation by warning users when a tree may be endangered or protected.
+TreeTrace supports conservation through AI identification, endangered/protected tree warnings, public education, and QR-based access to tree profiles.
 
 ### Field Usefulness
 
-Offline and sync support makes the system usable in barangays or field locations with poor signal.
+The system supports field workers through mobile data collection, map access, QR scanning, DBH workflows, and offline/sync capability.
+
+### Community Participation
+
+Citizens can contribute through AI identification and unknown species submissions, helping the system collect more local tree data.
 
 ### Technopreneurship Value
 
-The system has a realistic revenue model:
+TreeTrace has a realistic business model:
 
-- Free citizen access
-- Professional subscription
-- Enterprise/LGU subscription
-- Training and onboarding
-- Data analytics and reporting packages
+- free citizen access
+- Professional subscriptions
+- Enterprise/LGU packages
+- training and onboarding services
+- reporting and analytics packages
+- QR tag deployment support
 
 ### Scalability
 
-TreeTrace can grow over time because citizens and field workers can submit unknown species, and admins can review and improve the database.
+TreeTrace can expand from Panabo City to schools, barangays, campuses, parks, and other LGU areas.
 
-## 11. Current Known Limitations
+## 13. Current Known Limitations
 
-- AI DBH and height estimates are approximate and should not replace manual measurement.
-- Payment integration is currently represented by a Pro request flow; automatic payment verification can be added later.
-- Live Render backend must be redeployed after backend route changes.
-- Mobile camera features must be tested on real devices because browser/emulator behavior can differ.
+- AI DBH and height estimates are approximate.
+- Manual circumference measurement is still the best DBH method.
+- Payment verification is not yet connected.
+- Automatic Pro activation after payment is not yet implemented.
+- Mobile camera features should be tested on a real Android phone.
+- Render backend may need a few seconds to wake up after inactivity.
 
-## 12. Implemented Improvements and Remaining Future Work
+## 14. Implemented Improvements
 
-Implemented:
+Already implemented:
 
-- Admin review page for unknown species submissions
-- Exportable CSV inventory report
-- QR printing layout for tree tags
-- Expanded DENR/IUCN-style conservation reference list
-- Role-specific analytics for admin users
+- Cannot Cut warning for endangered/protected species
+- Offline and sync support concept/workflow in mobile
+- Unknown species submission
+- Admin unknown species review page
+- CSV inventory export
+- Printable inventory report that can be saved as PDF
+- QR printing layout for tree labels
+- Role-specific analytics
+- Business/revenue metrics for Pro and institutional plans
 - Field worker route planning endpoint and web tool
-- More accurate DBH workflow using manual circumference or reference-object photo measurement
+- AI identification records for citizens
+- Unknown species history for citizens
+- Improved admin unknown species review with submitter details, AI candidates, identified, closed, and pending states
+- Citizen restriction from adding official inventory trees
+- Flutter public portal map card
+- Flutter searchable and movable map
+- Flutter QR scanner screen with visible title
+- Flutter AI scanner screen with visible title
+- Flutter center AI Scan button and quick action cards
+- Profile-based logout
 
-Remaining future work:
+## 15. Remaining Future Improvements
 
-- Add PayMongo, GCash, Maya, or Stripe payment verification
-- Add PDF report formatting
-- Add payment receipt tracking and automatic Pro activation
+These are good future improvements, but they are not required for the current working version unless the project scope expands.
+
+### Payment Verification
+
+Add PayMongo, GCash, Maya, or Stripe so users can pay directly inside the system. After payment, the backend should verify the transaction and automatically activate Pro access.
+
+### Payment Receipt Tracking
+
+Store payment receipts, transaction IDs, payment status, amount, plan type, and payment date. This helps admins audit subscription payments.
+
+### Automatic Pro Activation
+
+After a successful verified payment, the system can automatically change the user's plan from Free to Pro without admin approval.
+
+### More DENR/IUCN References
+
+Expand the conservation reference list using more official sources so the Cannot Cut warning becomes stronger and more defensible.
+
+### Advanced Route Planning
+
+Improve field worker route planning so staff can visit assigned trees in the most efficient order.
+
+### More Accurate DBH Workflow
+
+Improve DBH measurement using manual circumference input, reference-object photo measurement, or future AR/depth-assisted measurement.
+
+## 16. Summary
+
+TreeTrace is a conservation-focused, AI-assisted, map-based tree monitoring system. It supports public awareness, field data collection, QR tree profiles, unknown species review, endangered tree protection, and a realistic subscription-based business model.
+
+For capstone defense, the strongest points are:
+
+- real conservation impact through Cannot Cut warnings
+- field usefulness through mobile and offline/sync workflows
+- community participation through unknown species submissions
+- technopreneurship through Free, Pro, and Enterprise access
+- scalability for LGUs, schools, barangays, and environmental organizations

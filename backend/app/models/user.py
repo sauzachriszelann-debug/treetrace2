@@ -22,6 +22,7 @@ class User(Base):
     subscription_plan = Column(String(20), default="free", nullable=False)
     upgrade_requested = Column(Boolean, default=False, nullable=False)
     ai_identifications_today = Column(Integer, default=0, nullable=False)
+    unknown_submissions_today = Column(Integer, default=0, nullable=False)
     ai_usage_date = Column(Date, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

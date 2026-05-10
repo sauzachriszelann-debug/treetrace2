@@ -18,7 +18,7 @@ const plans = [
     badge: "Citizens",
     icon: Sprout,
     tone: "border-emerald-200",
-    features: ["Up to 10 trees", "3 AI identifications per day", "Public map, QR, and basic profiles"],
+    features: ["Unlimited public map and QR scanning", "10 AI identifications per day", "15 unknown species submissions per day"],
     note: "Ideal for citizens and community contributors.",
   },
   {
@@ -28,7 +28,7 @@ const plans = [
     badge: "Most Popular",
     icon: Crown,
     featured: true,
-    features: ["Unlimited AI identification", "Full dashboard and analytics", "Reports, health history, and priority review"],
+    features: ["50 AI identifications per day", "100 unknown species submissions per day", "Reports, health history, and priority review"],
     note: "For researchers, schools, NGOs, and active field teams.",
   },
   {
@@ -38,7 +38,7 @@ const plans = [
     badge: "LGU / Institution",
     icon: Building2,
     dark: true,
-    features: ["Unlimited trees and users", "Barangay/LGU reporting", "Training, onboarding, and compliance support"],
+    features: ["Unlimited AI and unknown submissions", "Barangay/LGU reporting", "Training, onboarding, and compliance support"],
     note: "For city-wide and institutional deployments.",
   },
 ];

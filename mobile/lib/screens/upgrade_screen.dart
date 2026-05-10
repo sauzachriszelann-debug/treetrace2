@@ -6,8 +6,25 @@ import '../services/api_service.dart';
 import '../services/auth_provider.dart';
 import '../services/theme.dart';
 
+Future<void> showUpgradeSheet(BuildContext context) {
+  return showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => FractionallySizedBox(
+      heightFactor: 0.92,
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        child: UpgradeScreen(asSheet: true),
+      ),
+    ),
+  );
+}
+
 class UpgradeScreen extends StatefulWidget {
-  const UpgradeScreen({super.key});
+  final bool asSheet;
+  const UpgradeScreen({super.key, this.asSheet = false});
 
   @override
   State<UpgradeScreen> createState() => _UpgradeScreenState();
@@ -69,16 +86,35 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().user;
-    final isInstitutional = user?.isInstitutional == true;
+    final isInstitutional = user?.isInstitutional == true || user?.isEnterprise == true;
     final isPro = user?.isPro == true;
     final requested = user?.upgradeRequested == true;
 
     return Scaffold(
       backgroundColor: kBackground,
       appBar: AppBar(
-        title: Text('Upgrade Pro', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
-        backgroundColor: Colors.white,
-        foregroundColor: kForeground,
+        automaticallyImplyLeading: !widget.asSheet,
+        actions: widget.asSheet
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => Navigator.pop(context),
+                ),
+                const SizedBox(width: 8),
+              ]
+            : null,
+        title: Text(
+          'Plans & Pricing',
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontWeight: FontWeight.w900,
+            fontSize: 19,
+          ),
+        ),
+        centerTitle: true,
+        backgroundColor: kSidebarBg,
+        foregroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
       ),
       body: ListView(
@@ -94,9 +130,9 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
             highlighted: !isPro && !isInstitutional,
             features: const [
               'View public tree map',
-              'Scan QR tree profiles',
-              'Up to 10 tree records',
-              '3 AI identifications per day',
+              'Unlimited QR scanning',
+              '10 AI identifications per day',
+              '15 unknown species submissions per day',
             ],
           ),
           const SizedBox(height: 14),
@@ -107,8 +143,8 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
             icon: Icons.workspace_premium_outlined,
             highlighted: isPro,
             features: const [
-              'Unlimited AI identification',
-              'More tree records',
+              '50 AI identifications per day',
+              '100 unknown species submissions per day',
               'Full dashboard and analytics',
               'Priority unknown-species review',
             ],
@@ -121,7 +157,8 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
             icon: Icons.apartment_outlined,
             highlighted: isInstitutional,
             features: const [
-              'Unlimited inventory access',
+              'Unlimited AI identification',
+              'Unlimited unknown species submissions',
               'Field worker accounts',
               'Reports for LGU and DENR use',
               'Training and onboarding services',

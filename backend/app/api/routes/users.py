@@ -97,13 +97,36 @@ def role_analytics(
         plan = user.subscription_plan or "free"
         by_role[role] = by_role.get(role, 0) + 1
         by_plan[plan] = by_plan.get(plan, 0) + 1
+    pro_users = sum(1 for user in users if (user.subscription_plan or "free").lower() == "pro")
+    enterprise_plan_users = sum(
+        1 for user in users if (user.subscription_plan or "free").lower() == "enterprise"
+    )
+    enterprise_users = sum(
+        1
+        for user in users
+        if str(user.role).split(".")[-1] in ("admin", "field_worker")
+    ) + enterprise_plan_users
+    upgrade_requests = sum(1 for user in users if user.upgrade_requested)
+    professional_monthly_php = pro_users * 99
+    enterprise_monthly_php = max(1 if enterprise_users else 0, enterprise_users) * 399 if enterprise_users else 0
+
     return {
         "total_users": len(users),
         "active_users": sum(1 for user in users if user.is_active),
-        "upgrade_requests": sum(1 for user in users if user.upgrade_requested),
+        "upgrade_requests": upgrade_requests,
         "by_role": by_role,
         "by_plan": by_plan,
         "ai_identifications_today": sum(user.ai_identifications_today or 0 for user in users),
+        "business": {
+            "pro_users": pro_users,
+            "institutional_accounts": enterprise_users,
+            "upgrade_requests": upgrade_requests,
+            "professional_monthly_php": professional_monthly_php,
+            "enterprise_monthly_php": enterprise_monthly_php,
+            "estimated_monthly_php": professional_monthly_php + enterprise_monthly_php,
+            "professional_price_php": 99,
+            "enterprise_price_php": 399,
+        },
     }
 
 
@@ -132,8 +155,8 @@ def update_subscription(
 ):
     """Update a user's subscription plan. Admin only."""
     normalized = plan.lower().strip()
-    if normalized not in ("free", "pro"):
-        raise HTTPException(status_code=400, detail="Plan must be free or pro")
+    if normalized not in ("free", "pro", "enterprise"):
+        raise HTTPException(status_code=400, detail="Plan must be free, pro, or enterprise")
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

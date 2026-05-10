@@ -136,7 +136,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: Row(children: [
                     const Icon(Icons.info_outline, color: kPrimary, size: 16),
                     const SizedBox(width: 8),
-                    Expanded(child: Text('Free account: view maps, scan QR, 3 AI identifications/day',
+                    Expanded(child: Text('Free account: maps and QR are unlimited, 10 AI scans/day',
                         style: TextStyle(color: kPrimary, fontSize: 12))),
                   ])),
                 const SizedBox(height: 16),
