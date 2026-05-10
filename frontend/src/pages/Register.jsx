@@ -28,7 +28,7 @@ export default function Register() {
       // Auto-login after register
       await login(form.email, form.password);
       toast.success("Account created successfully!");
-      navigate("/");
+      navigate("/dashboard");
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Registration failed");
     } finally {

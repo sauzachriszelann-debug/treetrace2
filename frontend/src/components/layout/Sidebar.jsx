@@ -10,7 +10,7 @@ import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { label: "Dashboard",      icon: LayoutDashboard, path: "/" },
+  { label: "Dashboard",      icon: LayoutDashboard, path: "/dashboard" },
   { label: "Tree Inventory", icon: TreePine,         path: "/trees" },
   { label: "Tree Map",       icon: Map,              path: "/map" },
   { label: "Add Tree",       icon: Plus,             path: "/add-tree" },

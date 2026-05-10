@@ -19,7 +19,7 @@ export default function Login() {
     setLoading(true);
     try {
       await login(email, password);
-      navigate("/");
+      navigate("/dashboard");
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Invalid email or password");
     } finally {

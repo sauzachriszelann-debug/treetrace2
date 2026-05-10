@@ -5,8 +5,7 @@ import 'services/api_service.dart';
 import 'services/auth_provider.dart';
 import 'services/theme.dart';
 import 'screens/splash_screen.dart';
-import 'screens/login_screen.dart';
-import 'screens/register_screen.dart';
+import 'screens/landing_web_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/tree_list_screen.dart';
 import 'screens/map_screen.dart';
@@ -46,7 +45,7 @@ class TreeTraceApp extends StatelessWidget {
         debugPrint(
             "DEBUG: Consumer Build - Loading: ${auth.loading}, LoggedIn: ${auth.isLoggedIn}");
         if (auth.loading) return const SplashScreen();
-        if (!auth.isLoggedIn) return const LoginScreen();
+        if (!auth.isLoggedIn) return const LandingWebScreen();
         if (auth.user?.role == 'citizen') return const PublicMainShell();
         return const AdminMainShell();
       }),

@@ -1,0 +1,4169 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TreeTrace </title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=DM+Sans:wght@300;400;500;600&family=Space+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="icon" type="image/png" href="images7.png">
+    <style>
+        :root {
+            --green-deep: #0d2e1a;
+            --green-mid: #1a5c34;
+            --green-bright: #2d9e5f;
+            --green-light: #5fd68a;
+            --gold: #c9a84c;
+            --gold-light: #e8c96e;
+            --cream: #f5f0e8;
+            --white: #fafaf7;
+            --bark: #6b4c2a;
+            --text-dark: #0d1f12;
+            --text-muted: #5a7060;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--white);
+            color: var(--text-dark);
+            overflow-x: hidden;
+        }
+
+        /* ── NAVBAR ── */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: #070f0a;
+            border-bottom: 1px solid rgba(93, 214, 138, 0.15);
+            transition: box-shadow 0.3s;
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .nav-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0px 0px;
+            height: 68px;
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            flex-shrink: 0;
+        }
+
+        .nav-logo-img {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            object-fit: cover;
+            display: block;
+        }
+
+        /* Fallback icon if no image */
+        .nav-logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--green-bright), var(--green-light));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .nav-logo-text {
+            font-family: 'Playfair Display', serif;
+            font-weight: 700;
+            font-size: 1.3rem;
+            color: var(--cream);
+            letter-spacing: 0.02em;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: rgba(245, 240, 232, 0.75);
+            font-size: 0.88rem;
+            font-weight: 500;
+            letter-spacing: 0.02em;
+            padding: 8px 14px;
+            border-radius: 6px;
+            transition: all 0.25s;
+            position: relative;
+            white-space: nowrap;
+        }
+
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: 4px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 2px;
+            background: var(--green-light);
+            border-radius: 2px;
+            transition: width 0.25s;
+        }
+
+        .nav-links a:hover {
+            color: var(--green-light);
+            background: rgba(93, 214, 138, 0.08);
+        }
+
+        .nav-links a:hover::after {
+            width: 60%;
+        }
+
+        .nav-cta {
+            background: var(--green-bright) !important;
+            color: white !important;
+            padding: 9px 20px !important;
+            border-radius: 8px !important;
+            margin-left: 10px !important;
+            font-size: 0.88rem !important;
+        }
+
+        .nav-cta:hover {
+            background: var(--green-light) !important;
+            color: var(--green-deep) !important;
+        }
+
+        .nav-links a.nav-active {
+            color: var(--green-light) !important;
+            background: rgba(93, 214, 138, 0.12);
+        }
+
+        .nav-links a.nav-active::after {
+            width: 60%;
+        }
+
+        /* Hamburger */
+        .nav-hamburger {
+            display: none;
+            flex-direction: column;
+            gap: 5px;
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 6px;
+            transition: background 0.2s;
+            background: none;
+            border: none;
+        }
+
+        .nav-hamburger:hover {
+            background: rgba(93, 214, 138, 0.1);
+        }
+
+        .nav-hamburger span {
+            display: block;
+            width: 22px;
+            height: 2px;
+            background: var(--cream);
+            border-radius: 2px;
+            transition: all 0.3s;
+        }
+
+        .nav-hamburger.open span:nth-child(1) {
+            transform: translateY(7px) rotate(45deg);
+        }
+
+        .nav-hamburger.open span:nth-child(2) {
+            opacity: 0;
+        }
+
+        .nav-hamburger.open span:nth-child(3) {
+            transform: translateY(-7px) rotate(-45deg);
+        }
+
+        /* Mobile nav drawer */
+        .nav-mobile {
+            display: none;
+            position: fixed;
+            top: 68px;
+            left: 0;
+            right: 0;
+            background: #070f0a;
+            border-bottom: 1px solid rgba(93, 214, 138, 0.15);
+            z-index: 999;
+            padding: 16px 24px 24px;
+            flex-direction: column;
+            gap: 4px;
+            transform: translateY(-10px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            pointer-events: none;
+        }
+
+        .nav-mobile.open {
+            transform: translateY(0);
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .nav-mobile a {
+            text-decoration: none;
+            color: rgba(245, 240, 232, 0.75);
+            font-size: 0.95rem;
+            font-weight: 500;
+            padding: 12px 16px;
+            border-radius: 8px;
+            display: block;
+            transition: all 0.2s;
+        }
+
+        .nav-mobile a:hover {
+            color: var(--green-light);
+            background: rgba(93, 214, 138, 0.08);
+        }
+
+        .nav-mobile .nav-cta-mobile {
+            background: var(--green-bright);
+            color: white !important;
+            text-align: center;
+            margin-top: 8px;
+            font-weight: 600;
+        }
+
+        /* ── HERO ── */
+        #home {
+            min-height: 100vh;
+            background: var(--green-deep);
+            position: relative;
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+            padding-top: 64px;
+        }
+
+        .hero-bg {
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 80% 60% at 70% 50%, rgba(45, 158, 95, 0.18) 0%, transparent 60%),
+                radial-gradient(ellipse 40% 80% at 10% 80%, rgba(201, 168, 76, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse 60% 40% at 50% 0%, rgba(93, 214, 138, 0.06) 0%, transparent 50%);
+        }
+
+        .hero-grid {
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(93, 214, 138, 0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(93, 214, 138, 0.04) 1px, transparent 1px);
+            background-size: 60px 60px;
+            animation: gridShift 20s linear infinite;
+        }
+
+        @keyframes gridShift {
+            from {
+                background-position: 0 0;
+            }
+
+            to {
+                background-position: 60px 60px;
+            }
+        }
+
+        .leaf {
+            position: absolute;
+            opacity: 0.07;
+            animation: floatLeaf linear infinite;
+            font-size: 3rem;
+            pointer-events: none;
+        }
+
+        @keyframes floatLeaf {
+            0% {
+                transform: translateY(110vh) rotate(0deg);
+                opacity: 0;
+            }
+
+            10% {
+                opacity: 0.07;
+            }
+
+            90% {
+                opacity: 0.07;
+            }
+
+            100% {
+                transform: translateY(-10vh) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 48px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            align-items: center;
+            width: 100%;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(93, 214, 138, 0.12);
+            border: 1px solid rgba(93, 214, 138, 0.3);
+            border-radius: 100px;
+            padding: 6px 16px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--green-light);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 28px;
+            animation: fadeUp 0.8s ease both;
+        }
+
+        .hero-badge-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--green-light);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.5);
+                opacity: 0.5;
+            }
+        }
+
+        .hero-title {
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(2.4rem, 5vw, 4.5rem);
+            font-weight: 900;
+            line-height: 1.05;
+            color: var(--cream);
+            margin-bottom: 24px;
+            animation: fadeUp 0.8s 0.1s ease both;
+        }
+
+        .hero-title em {
+            font-style: italic;
+            color: var(--green-light);
+        }
+
+        .hero-title .gold {
+            color: var(--gold-light);
+        }
+
+        .hero-desc {
+            font-size: 1.05rem;
+            line-height: 1.75;
+            color: rgba(245, 240, 232, 0.65);
+            max-width: 480px;
+            margin-bottom: 40px;
+            font-weight: 300;
+            animation: fadeUp 0.8s 0.2s ease both;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            animation: fadeUp 0.8s 0.3s ease both;
+        }
+
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: linear-gradient(135deg, var(--green-bright), var(--green-light));
+            color: var(--green-deep);
+            font-weight: 700;
+            font-size: 0.9rem;
+            letter-spacing: 0.03em;
+            padding: 14px 28px;
+            border-radius: 10px;
+            text-decoration: none;
+            transition: all 0.3s;
+            box-shadow: 0 8px 32px rgba(45, 158, 95, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(45, 158, 95, 0.5);
+        }
+
+        .btn-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: transparent;
+            border: 1.5px solid rgba(245, 240, 232, 0.2);
+            color: rgba(245, 240, 232, 0.8);
+            font-weight: 500;
+            font-size: 0.9rem;
+            padding: 14px 28px;
+            border-radius: 10px;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--green-light);
+            color: var(--green-light);
+            background: rgba(93, 214, 138, 0.06);
+        }
+
+        .hero-visual {
+            position: relative;
+            animation: fadeUp 0.8s 0.4s ease both;
+        }
+
+        .hero-card {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(93, 214, 138, 0.15);
+            border-radius: 20px;
+            padding: 28px;
+            backdrop-filter: blur(12px);
+        }
+
+        .hero-map-placeholder {
+            background: linear-gradient(135deg, rgba(13, 46, 26, 0.8), rgba(26, 92, 52, 0.5));
+            border-radius: 14px;
+            height: 280px;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 20px;
+            border: 1px solid rgba(93, 214, 138, 0.1);
+        }
+
+        .map-grid {
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(93, 214, 138, 0.08) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(93, 214, 138, 0.08) 1px, transparent 1px);
+            background-size: 30px 30px;
+        }
+
+        .map-dot {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: var(--green-light);
+            border-radius: 50%;
+            animation: mapPulse 2s ease-in-out infinite;
+        }
+
+        .map-dot::before {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: 50%;
+            background: rgba(93, 214, 138, 0.2);
+            animation: mapPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes mapPulse {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(93, 214, 138, 0.4);
+            }
+
+            50% {
+                box-shadow: 0 0 0 10px rgba(93, 214, 138, 0);
+            }
+        }
+
+        .map-dot-gold {
+            background: var(--gold) !important;
+            box-shadow: 0 0 0 0 rgba(201, 168, 76, 0.4) !important;
+        }
+
+        .map-line {
+            position: absolute;
+            background: linear-gradient(90deg, transparent, rgba(93, 214, 138, 0.3), transparent);
+            height: 1px;
+            width: 80%;
+            animation: scanLine 3s linear infinite;
+        }
+
+        @keyframes scanLine {
+            0% {
+                top: 0;
+                opacity: 0;
+            }
+
+            10% {
+                opacity: 1;
+            }
+
+            90% {
+                opacity: 1;
+            }
+
+            100% {
+                top: 100%;
+                opacity: 0;
+            }
+        }
+
+        .hero-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .hero-stat {
+            text-align: center;
+        }
+
+        .hero-stat-num {
+            font-family: 'Space Mono', monospace;
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--green-light);
+        }
+
+        .hero-stat-label {
+            font-size: 0.72rem;
+            color: rgba(245, 240, 232, 0.45);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            margin-top: 2px;
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(24px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .scroll-indicator {
+            position: absolute;
+            bottom: 32px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            color: rgba(245, 240, 232, 0.3);
+            font-size: 0.7rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            animation: fadeUp 1s 1s ease both;
+        }
+
+        .scroll-line {
+            width: 1px;
+            height: 40px;
+            background: linear-gradient(to bottom, transparent, rgba(93, 214, 138, 0.4));
+            animation: scrollBounce 2s ease-in-out infinite;
+        }
+
+        @keyframes scrollBounce {
+
+            0%,
+            100% {
+                transform: scaleY(1);
+                opacity: 0.5;
+            }
+
+            50% {
+                transform: scaleY(1.3);
+                opacity: 1;
+            }
+        }
+
+        /* ── SECTIONS COMMON ── */
+        section {
+            padding: 100px 48px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .section-label {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--green-bright);
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-label::before {
+            content: '';
+            width: 24px;
+            height: 2px;
+            background: var(--green-bright);
+            border-radius: 2px;
+        }
+
+        .section-title {
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(1.8rem, 3.5vw, 3rem);
+            font-weight: 900;
+            line-height: 1.1;
+            color: var(--text-dark);
+            margin-bottom: 20px;
+        }
+
+        .section-title em {
+            color: var(--green-bright);
+            font-style: italic;
+        }
+
+        .section-desc {
+            font-size: 1rem;
+            line-height: 1.75;
+            color: var(--text-muted);
+            max-width: 560px;
+            font-weight: 300;
+        }
+
+        /* ── ABOUT ── */
+        #about {
+            background: var(--cream);
+        }
+
+        .about-wrapper {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 100px 48px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            align-items: center;
+        }
+
+        .about-img {
+            background: var(--green-deep);
+            border-radius: 24px;
+            height: 440px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .about-img-inner {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, #0d2e1a 0%, #1a5c34 50%, #2d9e5f 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Team logo image in about section */
+        .about-logo-img {
+            width: 180px;
+            height: 180px;
+            object-fit: contain;
+            filter: drop-shadow(0 20px 40px rgba(93, 214, 138, 0.4));
+            animation: treeSway 4s ease-in-out infinite;
+        }
+
+        .about-logo-wrapper {
+            position: relative;
+            display: inline-block;
+            overflow: hidden;
+        }
+
+        /* scanning overlay */
+        .about-scan {
+            position: absolute;
+            top: -100%;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+
+            background: linear-gradient(to bottom,
+                    transparent 0%,
+                    rgba(93, 214, 138, 0.15) 40%,
+                    rgba(93, 214, 138, 0.6) 50%,
+                    rgba(93, 214, 138, 0.15) 60%,
+                    transparent 100%);
+
+            animation: aboutScanMove 3s linear infinite;
+            mix-blend-mode: screen;
+        }
+
+        /* animation */
+        @keyframes aboutScanMove {
+            0% {
+                top: -100%;
+                opacity: 0;
+            }
+
+            10% {
+                opacity: 1;
+            }
+
+            90% {
+                opacity: 1;
+            }
+
+            100% {
+                top: 100%;
+                opacity: 0;
+            }
+        }
+
+        .about-scan {
+            filter: blur(6px);
+        }
+
+        .about-logo-wrapper::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border: 2px solid rgba(93, 214, 138, 0.4);
+            border-radius: 12px;
+            animation: pulseBorder 2s infinite;
+        }
+
+        @keyframes pulseBorder {
+
+            0%,
+            100% {
+                opacity: 0.3;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
+
+        /* SCANNER CORNERS */
+        .about-logo-wrapper::before,
+        .about-logo-wrapper::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        /* individual corners using spans (more control) */
+        .about-logo-wrapper .corner {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border: 3px solid #5fd68a;
+            animation: cornerPulse 1.8s infinite ease-in-out;
+        }
+
+        /* top-left */
+        .corner.tl {
+            top: 0;
+            left: 0;
+            border-right: none;
+            border-bottom: none;
+        }
+
+        /* top-right */
+        .corner.tr {
+            top: 0;
+            right: 0;
+            border-left: none;
+            border-bottom: none;
+        }
+
+        /* bottom-left */
+        .corner.bl {
+            bottom: 0;
+            left: 0;
+            border-right: none;
+            border-top: none;
+        }
+
+        /* bottom-right */
+        .corner.br {
+            bottom: 0;
+            right: 0;
+            border-left: none;
+            border-top: none;
+        }
+
+        /* animation */
+        @keyframes cornerPulse {
+
+            0%,
+            100% {
+                opacity: 0.6;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 1;
+                transform: scale(1.15);
+            }
+        }
+
+        /* Fallback tree icon */
+        .about-tree-icon {
+            font-size: 8rem;
+            opacity: 0.5;
+            filter: drop-shadow(0 20px 40px rgba(93, 214, 138, 0.4));
+            animation: treeSway 4s ease-in-out infinite;
+        }
+
+        @keyframes treeSway {
+
+            0%,
+            100% {
+                transform: rotate(-2deg) scale(1);
+            }
+
+            50% {
+                transform: rotate(2deg) scale(1.05);
+            }
+        }
+
+        .about-img-tag {
+            position: absolute;
+            bottom: 24px;
+            left: 24px;
+            background: rgba(13, 46, 26, 0.8);
+            border: 1px solid rgba(93, 214, 138, 0.2);
+            border-radius: 12px;
+            padding: 14px 18px;
+            backdrop-filter: blur(8px);
+        }
+
+        .about-img-tag-title {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.65rem;
+            color: var(--green-light);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .about-img-tag-val {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--cream);
+            font-style: italic;
+            line-height: 1.4;
+        }
+
+        .about-text {
+            padding-top: 20px;
+        }
+
+        .about-points {
+            margin-top: 36px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .about-point {
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+            padding: 20px;
+            background: white;
+            border-radius: 14px;
+            border: 1px solid rgba(45, 158, 95, 0.12);
+            transition: all 0.3s;
+            cursor: default;
+        }
+
+        .about-point:hover {
+            border-color: var(--green-bright);
+            transform: translateX(6px);
+            box-shadow: -4px 0 0 var(--green-bright), 0 8px 32px rgba(45, 158, 95, 0.1);
+        }
+
+        .about-point-icon {
+            width: 42px;
+            height: 42px;
+            background: linear-gradient(135deg, rgba(45, 158, 95, 0.15), rgba(93, 214, 138, 0.1));
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        .about-point-title {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--text-dark);
+            margin-bottom: 4px;
+        }
+
+        .about-point-desc {
+            font-size: 0.83rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        /* ── FEATURES ── */
+        #features {
+            background: white;
+        }
+
+        .features-wrapper {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 100px 48px;
+        }
+
+        .features-header {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            align-items: end;
+            margin-bottom: 64px;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+        }
+
+        .feature-card {
+            background: var(--white);
+            border: 1px solid rgba(45, 158, 95, 0.1);
+            border-radius: 20px;
+            padding: 32px 28px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+            cursor: default;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--green-bright), var(--green-light));
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 0.35s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-8px);
+            border-color: rgba(45, 158, 95, 0.3);
+            box-shadow: 0 20px 60px rgba(45, 158, 95, 0.12);
+        }
+
+        .feature-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .feature-card.gold-accent::before {
+            background: linear-gradient(90deg, var(--gold), var(--gold-light));
+        }
+
+        .feature-card.gold-accent:hover {
+            box-shadow: 0 20px 60px rgba(201, 168, 76, 0.12);
+        }
+
+        .feature-icon {
+            font-size: 2rem;
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        .feature-num {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.65rem;
+            color: var(--green-bright);
+            letter-spacing: 0.15em;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .feature-name {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 10px;
+            line-height: 1.3;
+        }
+
+        .feature-desc {
+            font-size: 0.83rem;
+            color: var(--text-muted);
+            line-height: 1.65;
+        }
+
+        /* ── HOW IT WORKS ── */
+        #how-it-works {
+            background: var(--green-deep);
+        }
+
+        .how-wrapper {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 100px 48px;
+        }
+
+        .how-wrapper .section-title {
+            color: var(--cream);
+        }
+
+        .how-wrapper .section-label {
+            color: var(--green-light);
+        }
+
+        .how-wrapper .section-label::before {
+            background: var(--green-light);
+        }
+
+        .how-wrapper .section-desc {
+            color: rgba(245, 240, 232, 0.55);
+        }
+
+        .how-header {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            align-items: end;
+            margin-bottom: 72px;
+        }
+
+        .steps {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0;
+            position: relative;
+        }
+
+        .steps::before {
+            content: '';
+            position: absolute;
+            top: 36px;
+            left: 10%;
+            right: 10%;
+            height: 2px;
+            background: linear-gradient(90deg, var(--green-bright), var(--green-light), var(--gold));
+            z-index: 0;
+        }
+
+        .step {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+            padding: 0 12px;
+            transition: transform 0.3s;
+        }
+
+        .step:hover {
+            transform: translateY(-6px);
+        }
+
+        .step-num {
+            width: 72px;
+            height: 72px;
+            background: var(--green-mid);
+            border: 2px solid rgba(93, 214, 138, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            font-family: 'Playfair Display', serif;
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--green-light);
+            transition: all 0.3s;
+        }
+
+        .step:hover .step-num {
+            background: var(--green-bright);
+            border-color: var(--green-light);
+            color: white;
+            box-shadow: 0 0 30px rgba(45, 158, 95, 0.5);
+        }
+
+        .step-icon {
+            font-size: 2rem;
+            margin-bottom: 8px;
+        }
+
+        .step-icon i {
+            transition: all 0.3s ease;
+        }
+
+        .step:hover .step-icon i {
+            transform: scale(1.1);
+            text-shadow:
+                0 0 10px rgba(45, 158, 95, 0.9),
+                0 0 20px rgba(45, 158, 95, 0.7),
+                0 0 30px rgba(45, 158, 95, 0.5);
+        }
+
+        .step-title {
+            font-weight: 700;
+            font-size: 0.9rem;
+            color: var(--cream);
+            margin-bottom: 8px;
+        }
+
+        .step-desc {
+            font-size: 0.78rem;
+            color: rgba(245, 240, 232, 0.45);
+            line-height: 1.6;
+        }
+
+        /* ── TECHNOLOGY ── */
+        #technology {
+            background: var(--cream);
+        }
+
+        .tech-wrapper {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 100px 48px;
+        }
+
+        .tech-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 48px;
+            margin-top: 60px;
+            align-items: start;
+        }
+
+        .tech-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .tech-item {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            padding: 18px 22px;
+            background: white;
+            border-radius: 14px;
+            border-left: 3px solid var(--green-bright);
+            transition: all 0.3s;
+        }
+
+        .tech-item:hover {
+            transform: translateX(6px);
+            box-shadow: 0 8px 32px rgba(45, 158, 95, 0.1);
+        }
+
+        .tech-item-icon {
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+
+        .tech-item-name {
+            font-weight: 600;
+            font-size: 0.88rem;
+            color: var(--text-dark);
+            margin-bottom: 2px;
+        }
+
+        .tech-item-desc {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+        }
+
+        .tech-visual {
+            background: var(--green-deep);
+            border-radius: 24px;
+            padding: 36px;
+            color: var(--cream);
+            position: sticky;
+            top: 90px;
+        }
+
+        .tech-visual-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 24px;
+            color: var(--green-light);
+        }
+
+        .algo-block {
+            background: rgba(93, 214, 138, 0.06);
+            border: 1px solid rgba(93, 214, 138, 0.12);
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 14px;
+        }
+
+        .algo-name {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.72rem;
+            color: var(--gold-light);
+            letter-spacing: 0.1em;
+            margin-bottom: 6px;
+        }
+
+        .algo-formula {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--green-light);
+            line-height: 1.5;
+            word-break: break-word;
+        }
+
+        .algo-desc {
+            font-size: 0.75rem;
+            color: rgba(245, 240, 232, 0.45);
+            margin-top: 6px;
+            line-height: 1.5;
+        }
+
+        /* ── IMPACT ── */
+        #impact {
+            background: white;
+        }
+
+        .impact-wrapper {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 100px 48px;
+        }
+
+        .impact-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 28px;
+            margin-top: 60px;
+        }
+
+        .impact-card {
+            border-radius: 20px;
+            padding: 36px 32px;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s;
+            cursor: default;
+        }
+
+        .impact-card:hover {
+            transform: translateY(-4px);
+        }
+
+        .impact-card.green {
+            background: linear-gradient(135deg, var(--green-deep), var(--green-mid));
+            color: white;
+        }
+
+        .impact-card.cream {
+            background: var(--cream);
+            border: 1px solid rgba(45, 158, 95, 0.15);
+        }
+
+        .impact-card.gold {
+            background: linear-gradient(135deg, #3d2c08, #6b4c2a);
+            color: white;
+        }
+
+        .impact-card.light {
+            background: linear-gradient(135deg, rgba(45, 158, 95, 0.08), rgba(93, 214, 138, 0.05));
+            border: 1px solid rgba(45, 158, 95, 0.15);
+        }
+
+        .impact-sector {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.65rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            opacity: 0.6;
+            margin-bottom: 8px;
+        }
+
+        .impact-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            line-height: 1.3;
+        }
+
+        .impact-desc {
+            font-size: 0.82rem;
+            line-height: 1.65;
+            opacity: 0.75;
+        }
+
+        .impact-icon {
+            position: absolute;
+            right: 28px;
+            top: 28px;
+            font-size: 2.5rem;
+            opacity: 0.15;
+        }
+
+        /* ── STATS BAR ── */
+        .stats-bar {
+            background: var(--green-deep);
+            padding: 0;
+            margin: 0;
+            max-width: 100%;
+        }
+
+        .stats-bar-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 60px 48px;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 20px;
+            border-right: 1px solid rgba(93, 214, 138, 0.1);
+            transition: transform 0.3s;
+        }
+
+        .stat-item:last-child {
+            border-right: none;
+        }
+
+        .stat-item:hover {
+            transform: scale(1.05);
+        }
+
+        .stat-num {
+            font-family: 'Playfair Display', serif;
+            font-size: 2.8rem;
+            font-weight: 900;
+            color: var(--green-light);
+            line-height: 1;
+        }
+
+        .stat-unit {
+            font-size: 1.2rem;
+            color: var(--gold-light);
+        }
+
+        .stat-label {
+            font-size: 0.78rem;
+            color: rgba(245, 240, 232, 0.45);
+            margin-top: 6px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        /* ── TEAM ── */
+        #team {
+            background: var(--cream);
+        }
+
+        .team-wrapper {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 100px 48px;
+        }
+
+        .team-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 28px;
+            margin-top: 60px;
+        }
+
+        .team-card {
+            background: white;
+            border-radius: 20px;
+            padding: 36px 28px;
+            text-align: center;
+            border: 1px solid rgba(45, 158, 95, 0.1);
+            transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+            cursor: default;
+        }
+
+        .team-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 24px 60px rgba(45, 158, 95, 0.15);
+            border-color: var(--green-bright);
+        }
+
+        /* Photo avatar */
+        .team-avatar {
+            width: 84px;
+            height: 84px;
+            border-radius: 50%;
+            margin: 0 auto 18px;
+            position: relative;
+            overflow: visible;
+        }
+
+        .team-avatar::after {
+            content: '';
+            position: absolute;
+            inset: -3px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--green-bright), var(--green-light));
+            z-index: -1;
+        }
+
+        .team-avatar-photo {
+            width: 84px;
+            height: 84px;
+            border-radius: 50%;
+            object-fit: cover;
+            object-position: center top;
+            display: block;
+            background: #1a3a5c;
+        }
+
+        /* Fallback avatar (shown if image fails) */
+        .team-avatar-fallback {
+            width: 84px;
+            height: 84px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.2rem;
+        }
+
+        .team-avatar.av1 .team-avatar-fallback {
+            background: linear-gradient(135deg, #1a3a5c, #2d7ab5);
+        }
+
+        .team-avatar.av2 .team-avatar-fallback {
+            background: linear-gradient(135deg, #3a1a5c, #8b2db5);
+        }
+
+        .team-avatar.av3 .team-avatar-fallback {
+            background: linear-gradient(135deg, #1a5c3a, #2db57a);
+        }
+
+        .team-logo {
+            width: 64px;
+            height: 64px;
+            object-fit: contain;
+            margin: 0 auto 18px;
+            display: block;
+            filter: drop-shadow(0 4px 12px rgba(45, 158, 95, 0.3));
+        }
+
+        .team-name {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 4px;
+        }
+
+        .team-role {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--green-bright);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 14px;
+        }
+
+        .team-desc {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        /* ── CONTACT/CTA ── */
+        #contact {
+            background: var(--green-deep);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .contact-bg {
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 60% 80% at 80% 50%, rgba(45, 158, 95, 0.15) 0%, transparent 60%),
+                radial-gradient(ellipse 40% 60% at 20% 50%, rgba(201, 168, 76, 0.08) 0%, transparent 50%);
+        }
+
+        .contact-wrapper {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 100px 48px;
+            position: relative;
+            z-index: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            align-items: center;
+        }
+
+        .contact-wrapper .section-title {
+            color: var(--cream);
+        }
+
+        .contact-wrapper .section-label {
+            color: var(--green-light);
+        }
+
+        .contact-wrapper .section-label::before {
+            background: var(--green-light);
+        }
+
+        .contact-wrapper .section-desc {
+            color: rgba(245, 240, 232, 0.55);
+        }
+
+        .contact-form {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .form-input {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1.5px solid rgba(93, 214, 138, 0.15);
+            border-radius: 10px;
+            padding: 14px 18px;
+            color: var(--cream);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.88rem;
+            outline: none;
+            transition: border-color 0.25s;
+            width: 100%;
+        }
+
+        .form-input::placeholder {
+            color: rgba(245, 240, 232, 0.3);
+        }
+
+        .form-input:focus {
+            border-color: var(--green-bright);
+            background: rgba(45, 158, 95, 0.06);
+        }
+
+        textarea.form-input {
+            resize: vertical;
+            min-height: 110px;
+        }
+
+        .form-submit {
+            background: linear-gradient(135deg, var(--green-bright), var(--green-light));
+            color: var(--green-deep);
+            font-weight: 700;
+            font-size: 0.9rem;
+            padding: 15px 28px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: 'DM Sans', sans-serif;
+            letter-spacing: 0.03em;
+        }
+
+        .form-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(45, 158, 95, 0.5);
+        }
+
+        /* ── TECHNOLOGY TABS ── */
+        .tech-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 36px;
+            background: rgba(45, 158, 95, 0.06);
+            border: 1px solid rgba(45, 158, 95, 0.15);
+            border-radius: 12px;
+            padding: 6px;
+            width: fit-content;
+        }
+
+        .tech-tab {
+            padding: 9px 20px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            font-family: 'DM Sans', sans-serif;
+            transition: all 0.25s;
+        }
+
+        .tech-tab.active {
+            background: white;
+            color: var(--green-bright);
+            box-shadow: 0 2px 12px rgba(45, 158, 95, 0.15);
+        }
+
+        .tech-tab:hover:not(.active) {
+            color: var(--green-bright);
+        }
+
+        .tech-panel {
+            display: none;
+        }
+
+        .tech-panel.active {
+            display: block;
+        }
+
+        /* Outcome cards (stakeholder view) */
+        .outcome-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+
+        .outcome-card {
+            background: white;
+            border: 1px solid rgba(45, 158, 95, 0.1);
+            border-radius: 16px;
+            padding: 24px 20px;
+            transition: all 0.3s;
+            cursor: default;
+        }
+
+        .outcome-card:hover {
+            border-color: var(--green-bright);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(45, 158, 95, 0.1);
+        }
+
+        .outcome-icon {
+            font-size: 1.8rem;
+            margin-bottom: 14px;
+            display: block;
+        }
+
+        .outcome-metric {
+            font-family: 'Space Mono', monospace;
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--green-bright);
+            margin-bottom: 6px;
+        }
+
+        .outcome-label {
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: var(--text-dark);
+            margin-bottom: 6px;
+        }
+
+        .outcome-desc {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        .outcome-powered {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 10px;
+            background: rgba(45, 158, 95, 0.08);
+            border-radius: 100px;
+            padding: 4px 10px;
+            font-size: 0.68rem;
+            font-weight: 600;
+            color: var(--green-bright);
+            letter-spacing: 0.05em;
+        }
+
+        /* Academic / deep-tech view */
+        .deeptech-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 48px;
+            align-items: start;
+        }
+
+        /* Collapsible deep dive */
+        .algo-accordion {
+            border: 1px solid rgba(45, 158, 95, 0.12);
+            border-radius: 14px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .algo-accordion-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            background: white;
+            cursor: pointer;
+            transition: background 0.2s;
+            user-select: none;
+        }
+
+        .algo-accordion-head:hover {
+            background: rgba(45, 158, 95, 0.04);
+        }
+
+        .algo-accordion-head-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .algo-badge {
+            background: rgba(45, 158, 95, 0.1);
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.65rem;
+            color: var(--green-bright);
+            letter-spacing: 0.08em;
+        }
+
+        .algo-head-title {
+            font-weight: 600;
+            font-size: 0.87rem;
+            color: var(--text-dark);
+        }
+
+        .algo-chevron {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            transition: transform 0.25s;
+        }
+
+        .algo-accordion.open .algo-chevron {
+            transform: rotate(180deg);
+        }
+
+        .algo-accordion-body {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.35s ease;
+            background: var(--green-deep);
+        }
+
+        .algo-accordion.open .algo-accordion-body {
+            max-height: 200px;
+        }
+
+        .algo-accordion-inner {
+            padding: 18px 20px;
+        }
+
+        .algo-formula-inline {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--green-light);
+            line-height: 1.6;
+            margin-bottom: 8px;
+            word-break: break-word;
+        }
+
+        .algo-desc-inline {
+            font-size: 0.75rem;
+            color: rgba(245, 240, 232, 0.5);
+            line-height: 1.5;
+        }
+
+        /* ── FOOTER ── */
+        /* ── FOOTER ── */
+        footer {
+            background: #040a06;
+            padding: 0;
+        }
+
+        .footer-main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 56px 48px 48px;
+            display: grid;
+            grid-template-columns: 1.8fr 1fr 1fr 1.6fr;
+            gap: 48px;
+            border-bottom: 1px solid rgba(93, 214, 138, 0.08);
+        }
+
+        /* Brand col */
+        .footer-brand-col {}
+
+        .footer-brand-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            margin-bottom: 14px;
+        }
+
+        .footer-brand-desc {
+            font-size: 0.8rem;
+            color: rgba(245, 240, 232, 0.4);
+            line-height: 1.75;
+            max-width: 240px;
+            margin-bottom: 24px;
+        }
+
+        .footer-social {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .footer-social-link {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: 1px solid rgba(93, 214, 138, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(245, 240, 232, 0.4);
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: all 0.25s;
+        }
+
+        .footer-social-link:hover {
+            border-color: var(--green-bright);
+            color: var(--green-light);
+            background: rgba(45, 158, 95, 0.1);
+        }
+
+        /* Column headings */
+        .footer-col-title {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.62rem;
+            font-weight: 700;
+            color: rgba(245, 240, 232, 0.5);
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+        }
+
+        /* Nav links */
+        .footer-links {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .footer-links a {
+            text-decoration: none;
+            font-size: 0.84rem;
+            color: rgba(245, 240, 232, 0.5);
+            transition: color 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .footer-links a:hover {
+            color: var(--green-light);
+        }
+
+        .footer-links a .link-dot {
+            width: 4px;
+            height: 4px;
+            background: var(--green-bright);
+            border-radius: 50%;
+            opacity: 0;
+            transition: opacity 0.2s;
+            flex-shrink: 0;
+        }
+
+        .footer-links a:hover .link-dot {
+            opacity: 1;
+        }
+
+        /* Stay Updated col */
+        .footer-stay-col {}
+
+        .footer-stay-desc {
+            font-size: 0.8rem;
+            color: rgba(245, 240, 232, 0.4);
+            line-height: 1.7;
+            margin-bottom: 20px;
+        }
+
+        .footer-email-row {
+            display: flex;
+            gap: 0;
+            margin-bottom: 8px;
+        }
+
+        .footer-email-input {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(93, 214, 138, 0.2);
+            border-right: none;
+            border-radius: 8px 0 0 8px;
+            padding: 9px 14px;
+            color: var(--cream);
+            font-size: 0.78rem;
+            outline: none;
+            font-family: 'DM Sans', sans-serif;
+            transition: border-color 0.2s;
+            min-width: 0;
+        }
+
+        .footer-email-input::placeholder {
+            color: rgba(245, 240, 232, 0.25);
+        }
+
+        .footer-email-input:focus {
+            border-color: var(--green-bright);
+        }
+
+        .footer-subscribe-btn {
+            background: var(--green-bright);
+            color: white;
+            border: none;
+            border-radius: 0 8px 8px 0;
+            padding: 9px 16px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'DM Sans', sans-serif;
+            white-space: nowrap;
+            transition: background 0.2s;
+        }
+
+        .footer-subscribe-btn:hover {
+            background: var(--green-light);
+            color: var(--green-deep);
+        }
+
+        .footer-no-spam {
+            font-size: 0.7rem;
+            color: rgba(245, 240, 232, 0.2);
+            margin-bottom: 24px;
+        }
+
+        .footer-contact-label {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.62rem;
+            font-weight: 700;
+            color: rgba(245, 240, 232, 0.5);
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            margin-bottom: 14px;
+        }
+
+        .footer-contact-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .footer-contact-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.8rem;
+            color: rgba(245, 240, 232, 0.45);
+        }
+
+        .footer-contact-item i {
+            font-size: 0.78rem;
+            color: var(--green-bright);
+            width: 14px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .footer-contact-item a {
+            color: rgba(245, 240, 232, 0.45);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .footer-contact-item a:hover {
+            color: var(--green-light);
+        }
+
+        /* Bottom bar */
+        .footer-bottom {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 18px 48px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .footer-copy {
+            font-size: 0.72rem;
+            color: rgba(245, 240, 232, 0.2);
+        }
+
+        .footer-legal {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .footer-legal a {
+            font-size: 0.72rem;
+            color: rgba(245, 240, 232, 0.25);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .footer-legal a:hover {
+            color: var(--green-light);
+        }
+
+        .footer-sdg {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sdg-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 10px;
+            border-radius: 100px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+
+        .sdg-13 {
+            background: rgba(63, 126, 68, 0.2);
+            color: #7fd483;
+            border: 1px solid rgba(63, 126, 68, 0.3);
+        }
+
+        .sdg-15 {
+            background: rgba(86, 192, 43, 0.15);
+            color: #8edb5a;
+            border: 1px solid rgba(86, 192, 43, 0.25);
+        }
+
+        /* ── SCROLL REVEAL ── */
+        .reveal {
+            opacity: 0;
+            transform: translateY(32px);
+            transition: all 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .reveal-delay-1 {
+            transition-delay: 0.1s;
+        }
+
+        .reveal-delay-2 {
+            transition-delay: 0.2s;
+        }
+
+        .reveal-delay-3 {
+            transition-delay: 0.3s;
+        }
+
+        .reveal-delay-4 {
+            transition-delay: 0.4s;
+        }
+
+        .reveal-delay-5 {
+            transition-delay: 0.5s;
+        }
+
+        .section-divider {
+            width: 100%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(45, 158, 95, 0.2), transparent);
+            margin: 0;
+        }
+
+        /* ════════════════════════════════════
+       MOBILE RESPONSIVE
+    ════════════════════════════════════ */
+
+        @media (max-width: 1100px) {
+            nav {
+                padding: 0 24px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .nav-hamburger {
+                display: flex;
+            }
+
+            .nav-mobile {
+                display: flex;
+            }
+
+            .hero-content {
+                grid-template-columns: 1fr;
+                padding: 40px 24px 80px;
+                gap: 40px;
+            }
+
+            .hero-visual {
+                order: -1;
+            }
+
+            .hero-map-placeholder {
+                height: 200px;
+            }
+
+            .about-wrapper {
+                grid-template-columns: 1fr;
+                padding: 60px 24px;
+                gap: 40px;
+            }
+
+            .about-img {
+                height: 320px;
+            }
+
+            .about-logo-img {
+                width: 140px;
+                height: 140px;
+            }
+
+            .about-img-tag {
+                bottom: 16px;
+                left: 16px;
+                right: 16px;
+                padding: 12px 14px;
+            }
+
+            .about-img-tag-val {
+                font-size: 0.85rem;
+            }
+
+            .features-wrapper {
+                padding: 60px 24px;
+            }
+
+            .features-header {
+                grid-template-columns: 1fr;
+                gap: 20px;
+                margin-bottom: 40px;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 16px;
+            }
+
+            .how-wrapper {
+                padding: 60px 24px;
+            }
+
+            .how-header {
+                grid-template-columns: 1fr;
+                gap: 20px;
+                margin-bottom: 48px;
+            }
+
+            .steps {
+                grid-template-columns: 1fr 1fr;
+                gap: 32px;
+            }
+
+            .steps::before {
+                display: none;
+            }
+
+            .tech-wrapper {
+                padding: 60px 24px;
+            }
+
+            .tech-grid {
+                grid-template-columns: 1fr;
+                gap: 32px;
+            }
+
+            .tech-visual {
+                position: static;
+            }
+
+            .tech-tabs {
+                width: 100%;
+                flex-wrap: wrap;
+            }
+
+            .tech-tab {
+                flex: 1;
+                text-align: center;
+                font-size: 0.75rem;
+                padding: 8px 12px;
+            }
+
+            .outcome-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 14px;
+            }
+
+            .impact-wrapper {
+                padding: 60px 24px;
+            }
+
+            .impact-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .stats-bar-inner {
+                grid-template-columns: repeat(2, 1fr);
+                padding: 40px 24px;
+                gap: 0;
+            }
+
+            .stat-item:nth-child(2) {
+                border-right: none;
+            }
+
+            .stat-item:nth-child(3) {
+                border-top: 1px solid rgba(93, 214, 138, 0.1);
+            }
+
+            .stat-item:nth-child(4) {
+                border-top: 1px solid rgba(93, 214, 138, 0.1);
+                border-right: none;
+            }
+
+            .team-wrapper {
+                padding: 60px 24px;
+            }
+
+            .team-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 20px;
+            }
+
+            #pricing>div {
+                padding: 60px 24px !important;
+            }
+
+            .pricing-grid {
+                grid-template-columns: 1fr !important;
+                gap: 20px !important;
+            }
+
+            .pricing-pro {
+                transform: scale(1) !important;
+            }
+
+            .contact-wrapper {
+                grid-template-columns: 1fr;
+                padding: 60px 24px;
+                gap: 48px;
+            }
+
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+
+            .footer-main {
+                grid-template-columns: 1fr 1fr;
+                padding: 48px 24px 36px;
+                gap: 36px;
+            }
+
+            .footer-brand-col {
+                grid-column: 1 / -1;
+            }
+
+            .footer-stay-col {
+                grid-column: 1 / -1;
+            }
+
+            .footer-bottom {
+                padding: 16px 24px;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+
+            .footer-legal {
+                flex-wrap: wrap;
+                gap: 12px;
+            }
+
+            .footer-email-row {
+                max-width: 380px;
+            }
+        }
+
+        @media (max-width: 600px) {
+            nav {
+                padding: 0 20px;
+            }
+
+            .hero-content {
+                padding: 32px 20px 72px;
+            }
+
+            .hero-title {
+                font-size: 2.2rem;
+            }
+
+            .hero-badge {
+                font-size: 0.65rem;
+            }
+
+            .hero-actions {
+                flex-direction: column;
+            }
+
+            .btn-primary,
+            .btn-secondary {
+                justify-content: center;
+                width: 100%;
+            }
+
+            .about-wrapper {
+                padding: 48px 20px;
+            }
+
+            .features-wrapper {
+                padding: 48px 20px;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .how-wrapper {
+                padding: 48px 20px;
+            }
+
+            .steps {
+                grid-template-columns: 1fr;
+            }
+
+            .tech-wrapper {
+                padding: 48px 20px;
+            }
+
+            .outcome-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .impact-wrapper {
+                padding: 48px 20px;
+            }
+
+            .stats-bar-inner {
+                padding: 32px 20px;
+            }
+
+            .stat-num {
+                font-size: 2.2rem;
+            }
+
+            .section-title {
+                font-size: 1.6rem;
+            }
+
+            .team-wrapper {
+                padding: 48px 20px;
+            }
+
+            .team-grid {
+                grid-template-columns: 1fr;
+            }
+
+            #pricing>div {
+                padding: 48px 20px !important;
+            }
+
+            .contact-wrapper {
+                padding: 48px 20px !important;
+                gap: 36px !important;
+            }
+
+            .footer-main {
+                grid-template-columns: 1fr;
+                padding: 36px 20px 28px;
+                gap: 28px;
+            }
+
+            .footer-brand-col,
+            .footer-stay-col {
+                grid-column: auto;
+            }
+
+            .footer-social {
+                flex-wrap: wrap;
+            }
+
+            .footer-email-row {
+                width: 100%;
+            }
+
+            .footer-email-input {
+                min-width: 0;
+            }
+
+            .footer-bottom {
+                padding: 14px 20px;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .footer-legal {
+                gap: 10px;
+            }
+        }
+
+        /* ════════════════════════════════════
+           MODALS (Auth + Pricing)
+        ════════════════════════════════════ */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(7, 15, 10, 0.82);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            z-index: 9000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+
+        .modal-overlay.open {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .modal-box {
+            background: #0d1f12;
+            border: 1px solid rgba(93, 214, 138, 0.18);
+            border-radius: 24px;
+            padding: 44px 44px 40px;
+            width: 100%;
+            max-width: 460px;
+            position: relative;
+            transform: translateY(24px) scale(0.97);
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease;
+            opacity: 0;
+            box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(93, 214, 138, 0.06);
+        }
+
+        .modal-overlay.open .modal-box {
+            transform: translateY(0) scale(1);
+            opacity: 1;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: rgba(93, 214, 138, 0.08);
+            border: none;
+            color: rgba(245, 240, 232, 0.5);
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .modal-close:hover {
+            background: rgba(93, 214, 138, 0.15);
+            color: var(--green-light);
+        }
+
+        .modal-logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 28px;
+        }
+
+        .modal-logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--green-bright), var(--green-light));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+        .modal-logo-text {
+            font-family: 'Playfair Display', serif;
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--cream);
+        }
+
+        .modal-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.65rem;
+            font-weight: 900;
+            color: var(--cream);
+            line-height: 1.2;
+            margin-bottom: 6px;
+        }
+
+        .modal-subtitle {
+            font-size: 0.85rem;
+            color: rgba(245, 240, 232, 0.45);
+            margin-bottom: 28px;
+        }
+
+        .auth-tabs {
+            display: flex;
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: 10px;
+            padding: 4px;
+            margin-bottom: 28px;
+            gap: 4px;
+        }
+
+        .auth-tab {
+            flex: 1;
+            padding: 9px;
+            border-radius: 7px;
+            border: none;
+            background: transparent;
+            color: rgba(245, 240, 232, 0.45);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.88rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .auth-tab.active {
+            background: var(--green-bright);
+            color: white;
+            font-weight: 600;
+        }
+
+        .modal-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+
+        .modal-input-label {
+            font-size: 0.78rem;
+            color: rgba(245, 240, 232, 0.5);
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            display: block;
+        }
+
+        .modal-input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(93, 214, 138, 0.15);
+            border-radius: 10px;
+            padding: 12px 16px;
+            color: var(--cream);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .modal-input:focus {
+            border-color: var(--green-bright);
+            background: rgba(45, 158, 95, 0.06);
+        }
+
+        .modal-input::placeholder {
+            color: rgba(245, 240, 232, 0.2);
+        }
+
+        .modal-btn {
+            width: 100%;
+            background: linear-gradient(135deg, var(--green-bright), var(--green-light));
+            color: var(--green-deep);
+            border: none;
+            border-radius: 10px;
+            padding: 13px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.25s;
+            margin-top: 4px;
+        }
+
+        .modal-btn:hover {
+            filter: brightness(1.08);
+            transform: translateY(-1px);
+            box-shadow: 0 8px 24px rgba(45, 158, 95, 0.35);
+        }
+
+        .modal-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 20px 0;
+            color: rgba(245, 240, 232, 0.2);
+            font-size: 0.8rem;
+        }
+
+        .modal-divider::before,
+        .modal-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: rgba(93, 214, 138, 0.1);
+        }
+
+        .modal-switch {
+            text-align: center;
+            font-size: 0.84rem;
+            color: rgba(245, 240, 232, 0.4);
+            margin-top: 18px;
+        }
+
+        .modal-switch a {
+            color: var(--green-light);
+            text-decoration: none;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .modal-switch a:hover {
+            text-decoration: underline;
+        }
+
+        .modal-forgot {
+            text-align: right;
+            font-size: 0.78rem;
+            margin-top: -6px;
+            margin-bottom: 6px;
+        }
+
+        .modal-forgot a {
+            color: rgba(93, 214, 138, 0.6);
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .modal-forgot a:hover {
+            color: var(--green-light);
+        }
+
+        /* Auth panel switching */
+        .auth-panel {
+            display: none;
+        }
+
+        .auth-panel.active {
+            display: block;
+        }
+
+        /* Pricing Modal */
+        .pricing-modal-box {
+            max-width: 820px;
+            background: #0a1a10;
+        }
+
+        .pricing-modal-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-top: 28px;
+        }
+
+        .pm-card {
+            border-radius: 18px;
+            padding: 28px 22px;
+            text-align: center;
+            border: 1px solid rgba(93, 214, 138, 0.12);
+            background: rgba(255, 255, 255, 0.03);
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .pm-card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(93, 214, 138, 0.25);
+        }
+
+        .pm-card.featured {
+            background: linear-gradient(135deg, var(--green-deep), var(--green-mid));
+            border-color: rgba(93, 214, 138, 0.3);
+            box-shadow: 0 16px 40px rgba(45, 158, 95, 0.2);
+        }
+
+        .pm-card.enterprise {
+            background: linear-gradient(135deg, #3d2c08, #5a3e1e);
+            border-color: rgba(201, 168, 76, 0.2);
+        }
+
+        .pm-badge {
+            display: inline-block;
+            background: var(--gold);
+            color: var(--green-deep);
+            font-family: 'Space Mono', monospace;
+            font-size: 0.58rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            padding: 3px 9px;
+            border-radius: 100px;
+            margin-bottom: 12px;
+        }
+
+        .pm-label {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.62rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: rgba(245, 240, 232, 0.4);
+            margin-bottom: 10px;
+        }
+
+        .pm-price {
+            font-family: 'Playfair Display', serif;
+            font-size: 2.4rem;
+            font-weight: 900;
+            line-height: 1;
+            color: var(--cream);
+        }
+
+        .pm-card.featured .pm-price {
+            color: var(--green-light);
+        }
+
+        .pm-card.enterprise .pm-price {
+            color: var(--gold-light);
+        }
+
+        .pm-period {
+            font-size: 0.75rem;
+            color: rgba(245, 240, 232, 0.35);
+            margin-top: 4px;
+            margin-bottom: 18px;
+        }
+
+        .pm-features {
+            list-style: none;
+            text-align: left;
+            margin-bottom: 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .pm-features li {
+            font-size: 0.82rem;
+            color: rgba(245, 240, 232, 0.6);
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .pm-features li::before {
+            content: '✓';
+            color: var(--green-light);
+            font-weight: 700;
+            flex-shrink: 0;
+            font-size: 0.78rem;
+            margin-top: 1px;
+        }
+
+        .pm-card.enterprise .pm-features li::before {
+            color: var(--gold-light);
+        }
+
+        .pm-btn {
+            display: block;
+            width: 100%;
+            padding: 11px;
+            border-radius: 10px;
+            border: 1.5px solid rgba(93, 214, 138, 0.3);
+            background: transparent;
+            color: var(--green-light);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .pm-btn:hover {
+            background: rgba(93, 214, 138, 0.1);
+            border-color: var(--green-light);
+        }
+
+        .pm-btn.featured-btn {
+            background: linear-gradient(135deg, var(--green-bright), var(--green-light));
+            border: none;
+            color: var(--green-deep);
+            font-weight: 700;
+        }
+
+        .pm-btn.featured-btn:hover {
+            filter: brightness(1.08);
+            transform: translateY(-1px);
+        }
+
+        .pm-btn.enterprise-btn {
+            border-color: rgba(201, 168, 76, 0.35);
+            color: var(--gold-light);
+        }
+
+        .pm-btn.enterprise-btn:hover {
+            background: rgba(201, 168, 76, 0.08);
+            border-color: var(--gold-light);
+        }
+
+        /* Nav auth buttons */
+        .nav-auth-btns {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: 14px;
+        }
+
+        .btn-login {
+            background: transparent;
+            border: 1.5px solid rgba(93, 214, 138, 0.35);
+            color: rgba(245, 240, 232, 0.8);
+            padding: 7px 16px;
+            border-radius: 8px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-login:hover {
+            border-color: var(--green-light);
+            color: var(--green-light);
+        }
+
+        .btn-signup {
+            background: var(--green-bright);
+            border: none;
+            color: white;
+            padding: 8px 18px;
+            border-radius: 8px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-signup:hover {
+            background: var(--green-light);
+            color: var(--green-deep);
+        }
+
+        @media (max-width: 1100px) {
+            .nav-auth-btns {
+                display: none;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .modal-box {
+                padding: 32px 24px 28px;
+            }
+
+            .pricing-modal-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .pricing-modal-box {
+                max-width: 380px;
+                max-height: 85vh;
+                overflow-y: auto;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ══════════════════════════════════════
+         AUTH MODAL (Login / Sign Up)
+    ══════════════════════════════════════ -->
+    <div class="modal-overlay" id="authModal" onclick="handleOverlayClick(event, 'authModal')">
+        <div class="modal-box">
+            <button class="modal-close" onclick="closeModal('authModal')" aria-label="Close">✕</button>
+
+            <div class="modal-logo">
+                <div class="modal-logo-icon">🌿</div>
+                <span class="modal-logo-text">TreeTrace</span>
+            </div>
+
+            <!-- Tab switcher -->
+            <div class="auth-tabs">
+                <button class="auth-tab active" id="tabLogin" onclick="switchAuthTab('login')">Log In</button>
+                <button class="auth-tab" id="tabSignup" onclick="switchAuthTab('signup')">Sign Up</button>
+            </div>
+
+            <!-- LOGIN PANEL -->
+            <div class="auth-panel active" id="panelLogin">
+                <div class="modal-title">Welcome back</div>
+                <div class="modal-subtitle">Sign in to your TreeTrace account.</div>
+                <div class="modal-input-group">
+                    <div>
+                        <label class="modal-input-label">Email</label>
+                        <input id="loginEmail" class="modal-input" type="email" placeholder="your@email.com" autocomplete="email">
+                    </div>
+                    <div>
+                        <label class="modal-input-label">Password</label>
+                        <input id="loginPassword" class="modal-input" type="password" placeholder="••••••••"
+                            autocomplete="current-password">
+                    </div>
+                </div>
+                <div class="modal-forgot"><a href="#">Forgot password?</a></div>
+                <button id="loginSubmitBtn" class="modal-btn"
+                    onclick="submitLandingLogin()">Log In
+                    →</button>
+                <div class="modal-switch">Don't have an account? <a onclick="switchAuthTab('signup')">Sign up free</a>
+                </div>
+            </div>
+
+            <!-- SIGNUP PANEL -->
+            <div class="auth-panel" id="panelSignup">
+                <div class="modal-title">Create account</div>
+                <div class="modal-subtitle">Join TreeTrace and start protecting forests.</div>
+                <div class="modal-input-group">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <div>
+                            <label class="modal-input-label">First Name</label>
+                            <input id="signupFirstName" class="modal-input" type="text" placeholder="Juan" autocomplete="given-name">
+                        </div>
+                        <div>
+                            <label class="modal-input-label">Last Name</label>
+                            <input id="signupLastName" class="modal-input" type="text" placeholder="Dela Cruz" autocomplete="family-name">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="modal-input-label">Email</label>
+                        <input id="signupEmail" class="modal-input" type="email" placeholder="your@email.com" autocomplete="email">
+                    </div>
+                    <div>
+                        <label class="modal-input-label">Password</label>
+                        <input id="signupPassword" class="modal-input" type="password" placeholder="Min. 8 characters"
+                            autocomplete="new-password">
+                    </div>
+                    <div>
+                        <label class="modal-input-label">Organization <span
+                                style="opacity:0.4;font-size:0.72rem;">(Optional)</span></label>
+                        <input id="signupOrganization" class="modal-input" type="text" placeholder="LGU / University / NGO">
+                    </div>
+                </div>
+                <button id="signupSubmitBtn" class="modal-btn"
+                    onclick="submitLandingSignup()">Create
+                    Account →</button>
+                <div class="modal-switch">Already have an account? <a onclick="switchAuthTab('login')">Log in</a></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         PRICING MODAL
+    ══════════════════════════════════════ -->
+    <div class="modal-overlay" id="pricingModal" onclick="handleOverlayClick(event, 'pricingModal')">
+        <div class="modal-box pricing-modal-box">
+            <button class="modal-close" onclick="closeModal('pricingModal')" aria-label="Close">✕</button>
+
+            <div class="modal-logo">
+                <div class="modal-logo-icon">🌿</div>
+                <span class="modal-logo-text">TreeTrace</span>
+            </div>
+
+            <div class="modal-title">Simple, <em style="color:var(--green-light);font-style:italic;">Transparent</em>
+                Plans</div>
+            <div class="modal-subtitle">Choose the plan that fits your organization's scale and conservation goals.
+            </div>
+
+            <div class="pricing-modal-grid">
+                <!-- Free -->
+                <div class="pm-card">
+                    <div class="pm-label">Free</div>
+                    <div class="pm-price">₱0</div>
+                    <div class="pm-period">Forever free</div>
+                    <ul class="pm-features">
+                        <li>Up to 50 tree records</li>
+                        <li>Basic species ID (top-3)</li>
+                        <li>Map view — barangay level</li>
+                        <li>Community access</li>
+                        <li>PNG export</li>
+                    </ul>
+                    <button class="pm-btn" onclick="closeModal('pricingModal'); openAuthModal('signup')">Get Started
+                        Free</button>
+                </div>
+
+                <!-- Pro -->
+                <div class="pm-card featured">
+                    <div class="pm-badge">POPULAR</div>
+                    <div class="pm-label" style="color:rgba(245,240,232,0.45);">Pro</div>
+                    <div class="pm-price">₱199</div>
+                    <div class="pm-period">per month</div>
+                    <ul class="pm-features">
+                        <li>Unlimited tree records</li>
+                        <li>Full AI species ID + confidence</li>
+                        <li>Geo-spatial heatmaps</li>
+                        <li>Biomass & carbon estimates</li>
+                        <li>CSV / PDF / GeoJSON export</li>
+                        <li>Priority email support</li>
+                    </ul>
+                    <button class="pm-btn featured-btn"
+                        onclick="closeModal('pricingModal'); openAuthModal('signup')">Start Pro Plan →</button>
+                </div>
+
+                <!-- Enterprise -->
+                <div class="pm-card enterprise">
+                    <div class="pm-label" style="color:rgba(232,201,110,0.5);">Enterprise</div>
+                    <div class="pm-price">₱499</div>
+                    <div class="pm-period">per month</div>
+                    <ul class="pm-features">
+                        <li>Everything in Pro</li>
+                        <li>Multi-site / LGU dashboard</li>
+                        <li>API access + webhooks</li>
+                        <li>Custom model fine-tuning</li>
+                        <li>Dedicated account manager</li>
+                        <li>SLA + on-site training</li>
+                    </ul>
+                    <button class="pm-btn enterprise-btn" onclick="closeModal('pricingModal'); scrollToSection(event, 'contact')">Contact Sales</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NAVBAR -->
+    <nav>
+        <div class="nav-inner">
+            <a href="#home" class="nav-logo">
+                <!-- Team Logo in navbar: replace src with your actual logo image path -->
+                <img class="nav-logo-img" src="images7.png" alt="TreeTrace Logo"
+                    onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+                <div class="nav-logo-icon" style="display:none;">🌿</div>
+                <span class="nav-logo-text">TreeTrace</span>
+            </a>
+
+            <!-- Desktop nav -->
+            <ul class="nav-links">
+                <li><a href="#about" onclick="scrollToSection(event, 'about')">About</a></li>
+                <li><a href="#features" onclick="scrollToSection(event, 'features')">Features</a></li>
+                <li><a href="#how-it-works" onclick="scrollToSection(event, 'how-it-works')">How It Works</a></li>
+                <li><a href="#technology" onclick="scrollToSection(event, 'technology')">Technology</a></li>
+
+                <li><a href="#team" onclick="scrollToSection(event, 'team')">Team</a></li>
+                <li><a href="#" onclick="openPricingModal(event)">Pricing</a></li>
+                <li><a href="#contact" onclick="scrollToSection(event, 'contact')" class="nav-cta">Contact Us</a></li>
+            </ul>
+
+            <!-- Auth Buttons -->
+            <div class="nav-auth-btns">
+                <button class="btn-login" onclick="openAuthModal('login')">Log In</button>
+                <button class="btn-signup" onclick="openAuthModal('signup')">Sign Up</button>
+            </div>
+
+            <!-- Hamburger button -->
+            <button class="nav-hamburger" id="hamburger" aria-label="Open menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Mobile Nav Drawer -->
+    <nav class="nav-mobile" id="mobileNav">
+        <a href="#about" class="mobile-link" onclick="scrollToSection(event, 'about')">About</a>
+        <a href="#features" class="mobile-link" onclick="scrollToSection(event, 'features')">Features</a>
+        <a href="#how-it-works" class="mobile-link" onclick="scrollToSection(event, 'how-it-works')">How It Works</a>
+        <a href="#technology" class="mobile-link" onclick="scrollToSection(event, 'technology')">Technology</a>
+
+        <a href="#team" class="mobile-link" onclick="scrollToSection(event, 'team')">Team</a>
+        <a href="#" class="mobile-link"
+            onclick="openPricingModal(event); hamburger.classList.remove('open'); mobileNav.classList.remove('open');">Pricing</a>
+        <a href="#contact" class="mobile-link nav-cta-mobile" onclick="scrollToSection(event, 'contact')">Contact Us</a>
+        <div style="display:flex;gap:8px;margin-top:8px;padding-top:12px;border-top:1px solid rgba(93,214,138,0.1);">
+            <button
+                onclick="openAuthModal('login'); hamburger.classList.remove('open'); mobileNav.classList.remove('open');"
+                style="flex:1;background:transparent;border:1.5px solid rgba(93,214,138,0.35);color:rgba(245,240,232,0.8);padding:9px;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.88rem;font-weight:500;cursor:pointer;">Log
+                In</button>
+            <button
+                onclick="openAuthModal('signup'); hamburger.classList.remove('open'); mobileNav.classList.remove('open');"
+                style="flex:1;background:var(--green-bright);border:none;color:white;padding:9px;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:0.88rem;font-weight:600;cursor:pointer;">Sign
+                Up</button>
+        </div>
+    </nav>
+
+    <!-- HERO -->
+    <div id="home" style="position:relative;">
+        <div class="hero-bg"></div>
+        <div class="hero-grid"></div>
+
+        <div class="leaf" style="left:8%;animation-duration:12s;animation-delay:0s;font-size:2rem;">🍃</div>
+        <div class="leaf" style="left:22%;animation-duration:18s;animation-delay:3s;font-size:1.5rem;">🌿</div>
+        <div class="leaf" style="left:55%;animation-duration:14s;animation-delay:7s;font-size:2.5rem;">🍃</div>
+        <div class="leaf" style="left:75%;animation-duration:16s;animation-delay:1s;font-size:1.8rem;">🌿</div>
+        <div class="leaf" style="left:90%;animation-duration:11s;animation-delay:5s;font-size:2rem;">🍃</div>
+
+        <div class="hero-content">
+            <div class="hero-left">
+                <div class="hero-badge">
+                    <div class="hero-badge-dot"></div>
+                    AI-Powered · Geo-Spatial · Conservation
+                </div>
+                <h1 class="hero-title">
+                    Know Every<br>
+                    <em>Tree.</em> Guard<br>
+                    Every <span class="gold">Forest.</span>
+                </h1>
+                <p class="hero-desc">TreeTrace is an integrated AI-powered geo-spatial system for tree species
+                    identification,
+                    conservation awareness, and agroforestry monitoring across Davao del Norte, Philippines.</p>
+                <div class="hero-actions">
+                    <a href="/public" class="btn-primary">
+                        <span>Map</span> Open Public Portal
+                    </a>
+                    <a href="#features" class="btn-primary" onclick="scrollToSection(event, 'features')">
+                        <span>🌳</span> Explore Features
+                    </a>
+                    <a href="#how-it-works" class="btn-secondary" onclick="scrollToSection(event, 'how-it-works')">
+                        <span>▶</span> How It Works
+                    </a>
+                </div>
+            </div>
+
+            <div class="hero-visual">
+                <div class="hero-card">
+                    <div class="hero-map-placeholder">
+                        <div class="map-grid"></div>
+                        <div class="map-line"></div>
+                        <div class="map-dot" style="top:30%;left:25%"></div>
+                        <div class="map-dot" style="top:50%;left:60%"></div>
+                        <div class="map-dot" style="top:65%;left:35%"></div>
+                        <div class="map-dot map-dot-gold" style="top:20%;left:55%"></div>
+                        <div class="map-dot" style="top:75%;left:70%"></div>
+                        <div class="map-dot map-dot-gold" style="top:40%;left:80%"></div>
+                        <div
+                            style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;">
+                            <div style="font-size:2.5rem;opacity:0.4;">🗺️</div>
+                            <div
+                                style="font-family:'Space Mono',monospace;font-size:0.65rem;color:rgba(93,214,138,0.5);letter-spacing:0.1em;margin-top:6px;">
+                                PANABO CITY · DAVAO DEL NORTE</div>
+                        </div>
+                    </div>
+                    <div class="hero-stats">
+                        <div class="hero-stat">
+                            <div class="hero-stat-num">90<span style="font-size:0.9rem">%+</span></div>
+                            <div class="hero-stat-label">ID Accuracy</div>
+                        </div>
+                        <div class="hero-stat">
+                            <div class="hero-stat-num">&lt;5<span style="font-size:0.9rem">m</span></div>
+                            <div class="hero-stat-label">GPS Precision</div>
+                        </div>
+                        <div class="hero-stat">
+                            <div class="hero-stat-num">24/7</div>
+                            <div class="hero-stat-label">Monitoring</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="scroll-indicator">
+            <div class="scroll-line"></div>
+            Scroll
+        </div>
+    </div>
+
+    <!-- ABOUT -->
+    <div id="about" style="background:var(--cream);">
+        <div class="about-wrapper">
+            <div class="about-img reveal">
+                <div class="about-img-inner">
+                    <!--
+            TEAM LOGO IN ABOUT SECTION
+            Replace the src below with your actual team/project logo image path.
+            Example: src="images/treetrace-logo.png"
+            The logo will display centered with a gentle sway animation.
+          -->
+                    <div class="about-logo-wrapper">
+                        <img class="about-logo-img" src="images10.png" alt="TreeTrace Team Logo"
+                            onerror="this.style.display='none';this.nextElementSibling.style.display='block';">
+                        <div class="about-tree-icon" style="display:none;">🌳</div>
+
+                        <!-- scanning effect -->
+                        <div class="corner tl"></div>
+                        <div class="corner tr"></div>
+                        <div class="corner bl"></div>
+                        <div class="corner br"></div>
+                        <div class="about-scan"></div>
+                    </div>
+                </div>
+                <div class="about-img-tag">
+                    <div class="about-img-tag-title">TreeTrace</div>
+                    <div class="about-img-tag-val">"Trace Every Tree. Guard Every Forest."</div>
+                </div>
+            </div>
+            <div class="about-text">
+                <div class="section-label reveal">About TreeTrace</div>
+                <h2 class="section-title reveal reveal-delay-1">Bridging <em>Technology</em> & Forest Conservation</h2>
+                <p class="section-desc reveal reveal-delay-2">TreeTrace was born from a critical need to replace
+                    fragmented,
+                    paper-based tree management with a unified digital system. It empowers LGUs, agroforestry
+                    organizations, and
+                    researchers with precision tools to monitor, identify, and protect Philippine forest resources.</p>
+                <div class="about-points">
+                    <div class="about-point reveal reveal-delay-2">
+                        <div class="about-point-icon">🌐</div>
+                        <div>
+                            <div class="about-point-title">SDG-Aligned Mission</div>
+                            <div class="about-point-desc">Supports UN SDG 13 (Climate Action) and SDG 15 (Life on Land)
+                                through
+                                nature-based digital monitoring solutions.</div>
+                        </div>
+                    </div>
+                    <div class="about-point reveal reveal-delay-3">
+                        <div class="about-point-icon">🤖</div>
+                        <div>
+                            <div class="about-point-title">AI-Driven at Its Core</div>
+                            <div class="about-point-desc">Deep learning models process real-time tree images to identify
+                                species,
+                                estimate biomass, and classify conservation status automatically.</div>
+                        </div>
+                    </div>
+                    <div class="about-point reveal reveal-delay-4">
+                        <div class="about-point-icon">📡</div>
+                        <div>
+                            <div class="about-point-title">Offline-First Design</div>
+                            <div class="about-point-desc">Captures and stores data locally in areas without
+                                connectivity, then
+                                auto-syncs to the cloud — built for Philippine rural realities.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- FEATURES -->
+    <div id="features" style="background:white;">
+        <div class="features-wrapper">
+            <div class="features-header">
+                <div>
+                    <div class="section-label reveal">Core Features</div>
+                    <h2 class="section-title reveal reveal-delay-1">Everything a Forest Needs to <em>Thrive</em></h2>
+                </div>
+                <p class="section-desc reveal reveal-delay-2">Six integrated capabilities working in unison — from the
+                    field
+                    worker's camera to the LGU admin's dashboard — making tree management smarter, faster, and
+                    accessible.</p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card reveal">
+                    <span class="feature-icon">
+                        <i class="bi bi-camera" style=" color:#2d9e5f;"></i>
+                    </span>
+                    <span class="feature-num">01 — IDENTIFY</span>
+                    <div class="feature-name">AI Species Identification</div>
+                    <p class="feature-desc">Point your camera at any tree. The semantic segmentation engine identifies
+                        the species
+                        in real time, displaying the common name, scientific name, and key information instantly.</p>
+                </div>
+                <div class="feature-card reveal reveal-delay-1">
+                    <span class="feature-icon">
+                        <i class="bi bi-shield-check" style=" color:#2d9e5f;"></i>
+                    </span>
+                    <span class="feature-num">02 — PROTECT</span>
+                    <div class="feature-name">Conservation Status Alerts</div>
+                    <p class="feature-desc">Cross-references DENR DAO 2017-11 and the IUCN Red List to flag endangered
+                        or
+                        protected trees with do-not-cut alerts — safeguarding biodiversity in the field.</p>
+                </div>
+                <div class="feature-card gold-accent reveal reveal-delay-2">
+                    <span class="feature-icon">
+                        <i class="bi bi-geo-alt" style=" color:#2d9e5f;"></i>
+                    </span>
+                    <span class="feature-num">03 — MAP</span>
+                    <div class="feature-name">Geo-Spatial GPS Mapping</div>
+                    <p class="feature-desc">Every tree is tagged with precision GPS coordinates (under 5m accuracy) and
+                        plotted on
+                        an interactive map — building a living digital twin of agroforestry sites.</p>
+                </div>
+                <div class="feature-card reveal reveal-delay-1">
+                    <span class="feature-icon">
+                        <i class="bi bi-tree" style=" color:#2d9e5f;"></i>
+                    </span>
+                    <span class="feature-num">04 — MEASURE</span>
+                    <div class="feature-name">Biomass & Carbon Estimation</div>
+                    <p class="feature-desc">Automated allometric models calculate aboveground biomass and carbon
+                        sequestration
+                        potential from AI-estimated DBH — enabling carbon market participation for smallholders.</p>
+                </div>
+                <div class="feature-card reveal reveal-delay-2">
+                    <span class="feature-icon">
+                        <i class="bi bi-wifi" style=" color:#2d9e5f;"></i>
+                    </span>
+                    <span class="feature-num">05 — SYNC</span>
+                    <div class="feature-name">Offline-First Architecture</div>
+                    <p class="feature-desc">Record tree data deep in remote forests without internet. All entries are
+                        stored
+                        locally and automatically synchronized to the cloud the moment connectivity is detected.</p>
+                </div>
+                <div class="feature-card gold-accent reveal reveal-delay-3">
+                    <span class="feature-icon">
+                        <i class="fa-solid fa-brain" style="color:transparent; -webkit-text-stroke:1.5px #2d9e5f;"></i>
+                    </span>
+                    <span class="feature-num">06 — GROW</span>
+                    <div class="feature-name">Crowdsourced AI Retraining</div>
+                    <p class="feature-desc">Unknown species? Submit a labeled photo. The community-driven retraining
+                        module
+                        continuously expands the AI model database — making TreeTrace smarter with every field
+                        encounter.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HOW IT WORKS -->
+    <div id="how-it-works" style="background:var(--green-deep);">
+        <div class="how-wrapper">
+            <div class="how-header">
+                <div>
+                    <div class="section-label reveal">Process</div>
+                    <h2 class="section-title reveal reveal-delay-1">From Forest Floor to <em>Digital Record</em></h2>
+                </div>
+                <p class="section-desc reveal reveal-delay-2">A seamless four-step journey transforms a single tree
+                    encounter
+                    into verified, actionable conservation data — accessible by LGUs, researchers, and organizations
+                    across Davao
+                    del Norte.</p>
+            </div>
+            <div class="steps">
+                <div class="step reveal">
+                    <div class="step-num">01</div>
+                    <div class="step-icon">
+                        <i class="bi bi-phone" style=" color:#2d9e5f;"></i>
+                    </div>
+                    <div class="step-title">Capture in the Field</div>
+                    <p class="step-desc">Field workers use the mobile app to photograph a tree. GPS coordinates are
+                        auto-captured.
+                        Data is saved locally even without signal.</p>
+                </div>
+                <div class="step reveal reveal-delay-1">
+                    <div class="step-num">02</div>
+                    <div class="step-icon">
+                        <i class="bi bi-cpu" style=" color:#2d9e5f;"></i>
+                    </div>
+                    <div class="step-title">AI Analysis</div>
+                    <p class="step-desc">The ML engine identifies the species via semantic segmentation, estimates DBH,
+                        classifies
+                        conservation status, and calculates carbon data.</p>
+                </div>
+                <div class="step reveal reveal-delay-2">
+                    <div class="step-num">03</div>
+                    <div class="step-icon">
+                        <i class="bi bi-cloud-check" style=" color:#2d9e5f;"></i>
+                    </div>
+                    <div class="step-title">Cloud Sync & QR Tag</div>
+                    <p class="step-desc">Records sync automatically. A unique QR code is generated per tree — linking
+                        the physical
+                        tree to its complete digital profile.</p>
+                </div>
+                <div class="step reveal reveal-delay-3">
+                    <div class="step-num">04</div>
+                    <div class="step-icon">
+                        <i class="bi bi-bar-chart" style=" color:#2d9e5f;"></i>
+                    </div>
+                    <div class="step-title">Dashboard & Reports</div>
+                    <p class="step-desc">Admins monitor species maps, community structure, carbon reports, and
+                        conservation alerts
+                        through the web dashboard in real time.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TECHNOLOGY -->
+    <div id="technology" style="background:var(--cream);">
+        <div class="tech-wrapper">
+            <div class="section-label reveal">Under the Hood</div>
+            <h2 class="section-title reveal reveal-delay-1">Science You Can <em>Trust.</em> Technology That <span
+                    style="color:var(--gold);">Works.</span></h2>
+            <p class="section-desc reveal reveal-delay-2" style="margin-bottom:32px;">
+                TreeTrace is grounded in peer-reviewed ecological science and purpose-built for Philippine field
+                conditions.
+                Whether you're an LGU director, an environmental scientist, or a software evaluator — explore the layer
+                that matters most to you.
+            </p>
+
+            <!-- Tab switcher -->
+            <div class="tech-tabs reveal reveal-delay-2">
+                <button class="tech-tab active" onclick="switchTab('outcomes', this)">📊 Impact & Outcomes</button>
+                <button class="tech-tab" onclick="switchTab('stack', this)">⚙️ System Architecture</button>
+            </div>
+
+            <!-- PANEL 1: Outcomes (for NGOs, LGUs, ESG directors) -->
+            <div style="margin-bottom:28px;padding:20px 24px;background:rgba(45,158,95,0.06);border-left:3px solid var(--green-bright);border-radius:0 12px 12px 0;"
+                class="reveal">
+                <p style="font-size:0.88rem;color:var(--text-muted);line-height:1.75;margin:0;">
+                    <strong style="color:var(--green-bright);">For LGU Directors, ESG Investors &amp; NGO
+                        Partners:</strong>
+                    TreeTrace turns a smartphone into a field-ready forestry instrument. Below are the six measurable
+                    outcomes it delivers — each backed by internationally recognized science.
+                </p>
+            </div>
+            <div class="tech-panel active" id="panel-outcomes">
+                <div class="outcome-grid">
+                    <div class="outcome-card reveal">
+                        <span class="outcome-icon">🎯</span>
+                        <div class="outcome-metric">90%+</div>
+                        <div class="outcome-label">Species Identified Correctly</div>
+                        <p class="outcome-desc">Point your camera at any tree — the system returns the species name,
+                            conservation
+                            status, and ecological data in seconds, without requiring field expertise.</p>
+                        <span class="outcome-powered">⚡ Powered by CNN image recognition</span>
+                    </div>
+                    <div class="outcome-card reveal reveal-delay-1">
+                        <span class="outcome-icon">🌿</span>
+                        <div class="outcome-metric">kg C / tree</div>
+                        <div class="outcome-label">Verified Carbon Storage Data</div>
+                        <p class="outcome-desc">Every tree record automatically generates a carbon sequestration
+                            estimate using
+                            peer-reviewed tropical biomass models — ready for NDC and ESG reporting.</p>
+                        <span class="outcome-powered">⚡ Powered by Chave et al. allometric equations</span>
+                    </div>
+                    <div class="outcome-card reveal reveal-delay-2">
+                        <span class="outcome-icon">🛡️</span>
+                        <div class="outcome-metric">Real-time</div>
+                        <div class="outcome-label">Endangered Species Alerts</div>
+                        <p class="outcome-desc">The system flags protected trees the moment they are scanned —
+                            cross-referenced
+                            against DENR DAO 2017-11 and the IUCN Red List — preventing illegal cutting on-site.</p>
+                        <span class="outcome-powered">⚡ Powered by DENR + IUCN database integration</span>
+                    </div>
+                    <div class="outcome-card reveal reveal-delay-1">
+                        <span class="outcome-icon">📍</span>
+                        <div class="outcome-metric">&lt; 5m</div>
+                        <div class="outcome-label">GPS Mapping Precision</div>
+                        <p class="outcome-desc">Every tree is geo-tagged with sub-5-meter accuracy and plotted on an
+                            interactive GIS
+                            map, giving LGUs a live, auditable view of their forest assets at any time.</p>
+                        <span class="outcome-powered">⚡ Powered by Haversine + mobile GPS</span>
+                    </div>
+                    <div class="outcome-card reveal reveal-delay-2">
+                        <span class="outcome-icon">📶</span>
+                        <div class="outcome-metric">0% data loss</div>
+                        <div class="outcome-label">Works Without Internet</div>
+                        <p class="outcome-desc">Field teams in remote forests capture full tree records offline. All
+                            data is
+                            encrypted locally and auto-synced to the cloud the moment connectivity is restored — nothing
+                            is lost.</p>
+                        <span class="outcome-powered">⚡ Powered by offline-first architecture</span>
+                    </div>
+                    <div class="outcome-card reveal reveal-delay-3">
+                        <span class="outcome-icon">🧠</span>
+                        <div class="outcome-metric">↑ Always</div>
+                        <div class="outcome-label">Self-Improving AI Model</div>
+                        <p class="outcome-desc">Unknown species submitted by community members are reviewed and added to
+                            the
+                            training pipeline — the identification engine grows more accurate with every field
+                            encounter.</p>
+                        <span class="outcome-powered">⚡ Powered by crowdsourced SMOTE retraining</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PANEL 2: Tech stack (for IT evaluators, developers) -->
+            <div class="tech-panel" id="panel-stack">
+                <div class="tech-grid">
+                    <div class="tech-list">
+                        <div class="tech-item reveal">
+                            <div class="tech-item-icon">🧬</div>
+                            <div>
+                                <div class="tech-item-name">Semantic Segmentation (CNN)</div>
+                                <div class="tech-item-desc">Isolates tree trunk regions from photos for non-contact DBH
+                                    measurement with
+                                    90%+ accuracy.</div>
+                            </div>
+                        </div>
+                        <div class="tech-item reveal reveal-delay-1">
+                            <div class="tech-item-icon">📏</div>
+                            <div>
+                                <div class="tech-item-name">Allometric Equations (Chave et al., 2014)</div>
+                                <div class="tech-item-desc">Tropical biomass models linking DBH, wood density, and
+                                    height to verified
+                                    aboveground carbon.</div>
+                            </div>
+                        </div>
+                        <div class="tech-item reveal reveal-delay-2">
+                            <div class="tech-item-icon">🗺️</div>
+                            <div>
+                                <div class="tech-item-name">GIS + Haversine Formula</div>
+                                <div class="tech-item-desc">Spherical-Earth distance calculations for precise
+                                    tree-to-tree spatial
+                                    mapping across agroforestry sites.</div>
+                            </div>
+                        </div>
+                        <div class="tech-item reveal reveal-delay-3">
+                            <div class="tech-item-icon">🔲</div>
+                            <div>
+                                <div class="tech-item-name">QR Code Integration</div>
+                                <div class="tech-item-desc">Each tree gets a permanent scannable identifier — enabling
+                                    70% faster data
+                                    retrieval vs. manual lookup.</div>
+                            </div>
+                        </div>
+                        <div class="tech-item reveal reveal-delay-4">
+                            <div class="tech-item-icon">🌿</div>
+                            <div>
+                                <div class="tech-item-name">DENR DAO 2017-11 + IUCN Red List API</div>
+                                <div class="tech-item-desc">Real-time conservation status queries against Philippine and
+                                    international
+                                    endangered species databases.</div>
+                            </div>
+                        </div>
+                        <div class="tech-item reveal reveal-delay-5">
+                            <div class="tech-item-icon">☁️</div>
+                            <div>
+                                <div class="tech-item-name">FastAPI + SQL Cloud Backend</div>
+                                <div class="tech-item-desc">RESTful API serving mobile and web clients with real-time
+                                    sync, role-based
+                                    access control, and SMOTE-balanced retraining pipeline.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="tech-visual reveal reveal-delay-2">
+                        <div class="tech-visual-title">🏗️ System Architecture</div>
+                        <div style="font-size:0.78rem;color:rgba(245,240,232,0.5);line-height:1.7;margin-bottom:18px;">
+                            TreeTrace
+                            uses a three-tier client-server architecture with a mobile field app, a web dashboard, and a
+                            cloud-hosted
+                            FastAPI + SQL backend. An offline-first local storage layer handles connectivity gaps in
+                            remote sites.
+                        </div>
+                        <div class="algo-block">
+                            <div class="algo-name">MOBILE APP (FIELD)</div>
+                            <div class="algo-formula">GPS Capture → AI Identify → QR Tag → Offline Queue</div>
+                            <div class="algo-desc">Android mobile app with local SQLite for offline data capture and
+                                auto-sync.</div>
+                        </div>
+                        <div class="algo-block">
+                            <div class="algo-name">AI / ML PIPELINE (FastAPI)</div>
+                            <div class="algo-formula">Image → CNN Segment → DBH → Allometric → Carbon → DENR Check</div>
+                            <div class="algo-desc">Python FastAPI microservice with SMOTE-balanced training and IUCN Red
+                                List
+                                integration.</div>
+                        </div>
+                        <div class="algo-block">
+                            <div class="algo-name">WEB DASHBOARD (ADMIN)</div>
+                            <div class="algo-formula">Species Map · Carbon Reports · Conservation Alerts · QR Generator
+                            </div>
+                            <div class="algo-desc">Real-time web dashboard with GIS map, community structure analysis,
+                                and report
+                                exports.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- TEAM -->
+    <div id="team" style="background:var(--cream);">
+        <div class="team-wrapper">
+            <div style="text-align:center;max-width:560px;margin:0 auto;">
+                <div class="section-label reveal" style="justify-content:center;">Our Team</div>
+                <h2 class="section-title reveal reveal-delay-1" style="text-align:center;">The People Behind
+                    <em>TreeTrace</em>
+                </h2>
+                <p class="section-desc reveal reveal-delay-2" style="margin:0 auto;text-align:center;">A dedicated team
+                    of
+                    technologists united by a mission to protect Philippine forests through innovation.</p>
+            </div>
+
+            <div class="team-grid">
+
+                <!-- TEAM MEMBER 1 -->
+                <div class="team-card reveal">
+                    <div class="team-avatar av1">
+                        <!--
+                  AVATAR PHOTO — Arabella P. Gella
+                  Replace src with the actual photo path, e.g.: src="photos/arabella.jpg"
+                  The image will be cropped to a circle automatically.
+                  If the image fails to load, the emoji fallback below will show instead.
+                -->
+                        <img class="team-avatar-photo" src="https://placehold.co/84x84/1a3a5c/ffffff?text=AG"
+                            alt="Arabella P. Gella"
+                            onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+                        <div class="team-avatar-fallback" style="display:none;">👩‍💻</div>
+                    </div>
+                    <div class="team-name">Arabella P. Gella</div>
+                    <div class="team-role">Research & Documentation Lead</div>
+                    <p class="team-desc">Drives research strategy, technical documentation, and stakeholder
+                        coordination. Ensures
+                        TreeTrace aligns with Philippine ecological standards and regulatory frameworks.</p>
+                </div>
+
+                <!-- TEAM MEMBER 2 -->
+                <div class="team-card reveal reveal-delay-1">
+                    <div class="team-avatar av2">
+                        <!--
+                  AVATAR PHOTO — Shaina L. Ma-ano
+                  Replace src with: src="photos/shaina.jpg"
+                -->
+                        <img class="team-avatar-photo" src="https://placehold.co/84x84/3a1a5c/ffffff?text=SM"
+                            alt="Shaina L. Ma-ano"
+                            onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+                        <div class="team-avatar-fallback" style="display:none;">👩‍🎨</div>
+                    </div>
+                    <div class="team-name">Shaina L. Ma-ano</div>
+                    <div class="team-role">Systems Analyst</div>
+                    <p class="team-desc">Leads requirements engineering and system architecture design. Defines
+                        functional and
+                        non-functional specifications that drive TreeTrace's technical blueprint.</p>
+                </div>
+
+                <!-- TEAM MEMBER 3 -->
+                <div class="team-card reveal reveal-delay-2">
+                    <div class="team-avatar av3">
+                        <!--
+                  AVATAR PHOTO — Chriszel Ann D. Sauza
+                  Replace src with: src="photos/chriszel.jpg"
+                -->
+                        <img class="team-avatar-photo" src="me2.png" alt="Chriszel Ann D. Sauza"
+                            onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+                        <div class="team-avatar-fallback" style="display:none;">👩‍🔬</div>
+                    </div>
+                    <div class="team-name">Chriszel Ann D. Sauza</div>
+                    <div class="team-role">Lead Software Engineer</div>
+                    <p class="team-desc">Architects and builds the full-stack platform — integrating AI inference, GPS
+                        tracking,
+                        QR identification, and real-time cloud synchronization infrastructure.</p>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+
+    <!-- CONTACT -->
+    <div id="contact" style="position:relative;background:var(--green-deep);">
+        <div class="contact-bg"></div>
+        <div class="contact-wrapper">
+            <div>
+                <div class="section-label reveal">Get In Touch</div>
+                <h2 class="section-title reveal reveal-delay-1">Partner with <em>TreeTrace</em></h2>
+                <p class="section-desc reveal reveal-delay-2">Interested in deploying TreeTrace for your LGU,
+                    agroforestry site,
+                    or research program? Reach out to the proponents for collaboration, demo access, or academic
+                    inquiries.</p>
+
+                <div style="margin-top:40px;display:flex;flex-direction:column;gap:16px;" class="reveal reveal-delay-3">
+                    <div style="display:flex;align-items:center;gap:14px;">
+                        <div
+                            style="width:36px;height:36px;background:rgba(93,214,138,0.1);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;">
+                            🏫</div>
+                        <div>
+                            <div
+                                style="font-size:0.75rem;color:rgba(245,240,232,0.4);letter-spacing:0.05em;text-transform:uppercase;">
+                                Institution</div>
+                            <div style="color:var(--cream);font-size:0.9rem;font-weight:500;">Davao del Norte State
+                                College, Institute
+                                of Computing</div>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:14px;">
+                        <div
+                            style="width:36px;height:36px;background:rgba(93,214,138,0.1);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;">
+                            📍</div>
+                        <div>
+                            <div
+                                style="font-size:0.75rem;color:rgba(245,240,232,0.4);letter-spacing:0.05em;text-transform:uppercase;">
+                                Location</div>
+                            <div style="color:var(--cream);font-size:0.9rem;font-weight:500;">New Visayas, Panabo City,
+                                Davao del
+                                Norte, Philippines</div>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:14px;">
+                        <div
+                            style="width:36px;height:36px;background:rgba(93,214,138,0.1);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;">
+                            ✉️</div>
+                        <div>
+                            <div
+                                style="font-size:0.75rem;color:rgba(245,240,232,0.4);letter-spacing:0.05em;text-transform:uppercase;">
+                                Email</div>
+                            <a href="mailto:treetrace@gmail.com"
+                                style="color:var(--green-light);font-size:0.9rem;font-weight:500;text-decoration:none;">treetrace@gmail.com</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="reveal reveal-delay-2">
+                <div
+                    style="background:rgba(255,255,255,0.04);border:1px solid rgba(93,214,138,0.12);border-radius:20px;padding:36px;">
+                    <div
+                        style="font-family:'Playfair Display',serif;font-weight:700;font-size:1.1rem;color:var(--cream);margin-bottom:24px;">
+                        Send a Message</div>
+                    <div class="contact-form">
+                        <div class="form-row">
+                            <input class="form-input" type="text" placeholder="Your Name">
+                            <input class="form-input" type="email" placeholder="Email Address">
+                        </div>
+                        <input class="form-input" type="text" placeholder="Organization / Institution">
+                        <select class="form-input" style="cursor:pointer;">
+                            <option value="" style="background:#0d2e1a;">Purpose of Inquiry</option>
+                            <option style="background:#0d2e1a;">LGU Deployment Partnership</option>
+                            <option style="background:#0d2e1a;">Research Collaboration</option>
+                            <option style="background:#0d2e1a;">Academic / Capstone Reference</option>
+                            <option style="background:#0d2e1a;">Demo Request</option>
+                            <option style="background:#0d2e1a;">Other</option>
+                        </select>
+                        <textarea class="form-input" placeholder="Tell us about your project or inquiry..."></textarea>
+                        <button class="form-submit">Send Message 🌿</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer>
+
+        <!-- Main footer grid: Brand · Product · Resources · Stay Updated -->
+        <div class="footer-main">
+
+            <!-- Brand column -->
+            <div class="footer-brand-col">
+                <a href="#home" class="footer-brand-logo nav-logo">
+                    <img class="nav-logo-img" src="images7.png" alt="TreeTrace Logo"
+                        onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+                    <div class="nav-logo-icon" style="display:none;">🌿</div>
+                    <span class="nav-logo-text">TreeTrace</span>
+                </a>
+                <p class="footer-brand-desc">An AI-powered geo-spatial tree species identification and conservation
+                    awareness system for agroforestry and urban forestry across Davao del Norte, Philippines.</p>
+                <div class="footer-social">
+                    <a href="#" class="footer-social-link" title="X / Twitter" aria-label="X">
+                        <i class="fa-brands fa-x-twitter"></i>
+                    </a>
+                    <a href="#" class="footer-social-link" title="Facebook" aria-label="Facebook">
+                        <i class="fa-brands fa-facebook-f"></i>
+                    </a>
+                    <a href="#" class="footer-social-link" title="Instagram" aria-label="Instagram">
+                        <i class="fa-brands fa-instagram"></i>
+                    </a>
+                    <a href="#" class="footer-social-link" title="LinkedIn" aria-label="LinkedIn">
+                        <i class="fa-brands fa-linkedin-in"></i>
+                    </a>
+                    <a href="#" class="footer-social-link" title="GitHub" aria-label="GitHub">
+                        <i class="fa-brands fa-github"></i>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Product column -->
+            <div>
+                <div class="footer-col-title">Product</div>
+                <ul class="footer-links">
+                    <li><a href="#features"><span class="link-dot"></span>Features</a></li>
+                    <li><a href="#how-it-works"><span class="link-dot"></span>How It Works</a></li>
+                    <li><a href="#pricing"><span class="link-dot"></span>Pricing</a></li>
+                    <li><a href="#technology"><span class="link-dot"></span>Technology</a></li>
+                    <li><a href="#"><span class="link-dot"></span>Roadmap <span
+                                style="display:inline-block;background:rgba(93,214,138,0.15);color:var(--green-light);font-size:0.6rem;font-weight:700;letter-spacing:0.05em;padding:1px 6px;border-radius:4px;margin-left:4px;font-family:'Space Mono',monospace;">Soon</span></a>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Resources column -->
+            <div>
+                <div class="footer-col-title">Resources</div>
+                <ul class="footer-links">
+                    <li><a href="#about"><span class="link-dot"></span>About</a></li>
+                    <li><a href="#team"><span class="link-dot"></span>Team</a></li>
+                    <li><a href="#"><span class="link-dot"></span>DNSC Institute of Computing</a></li>
+                    <li><a href="#"><span class="link-dot"></span>Trinova Venture</a></li>
+                </ul>
+            </div>
+
+            <!-- Stay Updated column -->
+            <div class="footer-stay-col">
+                <div class="footer-col-title">Stay Updated</div>
+                <p class="footer-stay-desc">Get the latest on TreeTrace's deployment, field reports, and research
+                    updates — right in your inbox.</p>
+                <div class="footer-email-row">
+                    <input class="footer-email-input" type="email" placeholder="your@school.edu">
+                    <button class="footer-subscribe-btn"
+                        onclick="this.textContent='✓ Done!';this.style.background='var(--green-mid)';">Subscribe</button>
+                </div>
+                <p class="footer-no-spam">No spam, ever. Unsubscribe anytime.</p>
+
+                <div class="footer-contact-label">Contact</div>
+                <div class="footer-contact-list">
+                    <div class="footer-contact-item">
+                        <i class="fa-solid fa-envelope"></i>
+                        <a href="mailto:treetrace@gmail.com">treetrace@gmail.com</a>
+                    </div>
+                    <div class="footer-contact-item">
+                        <i class="fa-solid fa-location-dot"></i>
+                        <span>Panabo City, Philippines</span>
+                    </div>
+                    <div class="footer-contact-item">
+                        <i class="fa-solid fa-circle-info"></i>
+                        <a href="#about">About Us</a>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Bottom bar -->
+        <div class="footer-bottom">
+            <div class="footer-copy">© 2026 TreeTrace by Gella · Ma-ano · Sauza · Trinova. All rights reserved.</div>
+            <div class="footer-legal">
+                <a href="#">Privacy Policy</a>
+                <a href="#">Terms of Use</a>
+                <a href="#">Ethics Statement</a>
+                <a href="#">Open Data License</a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // ── Hamburger / Mobile Nav ──
+        const hamburger = document.getElementById('hamburger');
+        const mobileNav = document.getElementById('mobileNav');
+
+        hamburger.addEventListener('click', () => {
+            hamburger.classList.toggle('open');
+            mobileNav.classList.toggle('open');
+        });
+
+        // Close mobile nav when a link is clicked
+        document.querySelectorAll('.mobile-link').forEach(link => {
+            link.addEventListener('click', () => {
+                hamburger.classList.remove('open');
+                mobileNav.classList.remove('open');
+            });
+        });
+
+        // ── Scroll reveal ──
+        const revealEls = document.querySelectorAll('.reveal');
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) entry.target.classList.add('visible');
+            });
+        }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+        revealEls.forEach(el => observer.observe(el));
+
+        // ── Navbar scroll effect — always fully opaque for visibility on all sections ──
+        const nav = document.querySelector('nav');
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 60) {
+                nav.style.boxShadow = '0 4px 32px rgba(0,0,0,0.6)';
+                nav.style.borderBottomColor = 'rgba(93,214,138,0.2)';
+            } else {
+                nav.style.boxShadow = '0 2px 20px rgba(0,0,0,0.4)';
+                nav.style.borderBottomColor = 'rgba(93,214,138,0.15)';
+            }
+        });
+
+        // ── Active nav link highlight ──
+        const navLinks = document.querySelectorAll('.nav-links a:not(.nav-cta)');
+        const sectionIds = ['home', 'about', 'features', 'how-it-works', 'technology', 'pricing', 'team', 'contact'];
+
+        const sectionObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const id = entry.target.id;
+                    navLinks.forEach(link => {
+                        link.classList.remove('nav-active');
+                        if (link.getAttribute('href') === '#' + id) {
+                            link.classList.add('nav-active');
+                        }
+                    });
+                }
+            });
+        }, { threshold: 0.3, rootMargin: '-64px 0px -30% 0px' });
+
+        sectionIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) sectionObserver.observe(el);
+        });
+
+        // ── Animated counter on scroll ──
+        function animateCounter(el, target, suffix = '') {
+            let start = 0;
+            const duration = 1800;
+            const step = timestamp => {
+                if (!start) start = timestamp;
+                const progress = Math.min((timestamp - start) / duration, 1);
+                const eased = 1 - Math.pow(1 - progress, 3);
+                el.textContent = Math.floor(eased * target) + suffix;
+                if (progress < 1) requestAnimationFrame(step);
+            };
+            requestAnimationFrame(step);
+        }
+
+        const statNums = document.querySelectorAll('.stat-num');
+        const statObs = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const el = entry.target;
+                    const text = el.textContent;
+                    if (text.includes('90')) animateCounter(el, 90, '%+');
+                    else if (text.includes('60')) animateCounter(el, 60, '%');
+                    else if (text.includes('70')) animateCounter(el, 70, '%');
+                    statObs.unobserve(el);
+                }
+            });
+        }, { threshold: 0.5 });
+        statNums.forEach(el => statObs.observe(el));
+        // ── Tech Tab Switcher ──
+        function switchTab(panelId, btn) {
+            document.querySelectorAll('.tech-panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.tech-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('panel-' + panelId).classList.add('active');
+            btn.classList.add('active');
+        }
+
+        // ── Algo Accordion ──
+        function toggleAccordion(el) {
+            const isOpen = el.classList.contains('open');
+            document.querySelectorAll('.algo-accordion').forEach(a => a.classList.remove('open'));
+            if (!isOpen) el.classList.add('open');
+        }
+
+        // ══════════════════════════════════════
+        // MODAL SYSTEM
+        // ══════════════════════════════════════
+        function openModal(id) {
+            document.getElementById(id).classList.add('open');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('open');
+            document.body.style.overflow = '';
+        }
+
+        function handleOverlayClick(e, id) {
+            if (e.target === document.getElementById(id)) closeModal(id);
+        }
+
+        // Close on Escape key
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') {
+                closeModal('authModal');
+                closeModal('pricingModal');
+            }
+        });
+
+        function openAuthModal(tab) {
+            switchAuthTab(tab || 'login');
+            openModal('authModal');
+        }
+
+        function goToApp(path) {
+            window.location.href = path;
+        }
+
+        function scrollToSection(e, id) {
+            if (e) e.preventDefault();
+            const target = document.getElementById(id);
+            if (!target) return;
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            if (typeof hamburger !== 'undefined' && typeof mobileNav !== 'undefined') {
+                hamburger.classList.remove('open');
+                mobileNav.classList.remove('open');
+            }
+        }
+
+        function setButtonState(button, text, disabled) {
+            if (!button) return;
+            button.textContent = text;
+            button.disabled = disabled;
+            button.style.opacity = disabled ? '0.7' : '';
+            button.style.cursor = disabled ? 'wait' : 'pointer';
+        }
+
+        async function submitLandingLogin() {
+            const button = document.getElementById('loginSubmitBtn');
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            if (!email || !password) {
+                alert('Please enter your email and password.');
+                return;
+            }
+
+            setButtonState(button, 'Signing in...', true);
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password }),
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'Invalid email or password.');
+                localStorage.setItem('treetrace_token', data.access_token);
+                goToApp('/dashboard');
+            } catch (error) {
+                alert(error.message || 'Login failed. Please try again.');
+                setButtonState(button, 'Log In →', false);
+            }
+        }
+
+        async function submitLandingSignup() {
+            const button = document.getElementById('signupSubmitBtn');
+            const firstName = document.getElementById('signupFirstName').value.trim();
+            const lastName = document.getElementById('signupLastName').value.trim();
+            const email = document.getElementById('signupEmail').value.trim();
+            const password = document.getElementById('signupPassword').value;
+            const fullName = `${firstName} ${lastName}`.trim();
+
+            if (!fullName || !email || !password) {
+                alert('Please complete your name, email, and password.');
+                return;
+            }
+
+            setButtonState(button, 'Creating account...', true);
+            try {
+                const registerResponse = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        full_name: fullName,
+                        email,
+                        password,
+                        role: 'citizen',
+                    }),
+                });
+                const registerData = await registerResponse.json();
+                if (!registerResponse.ok) throw new Error(registerData.detail || 'Registration failed.');
+
+                const loginResponse = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password }),
+                });
+                const loginData = await loginResponse.json();
+                if (!loginResponse.ok) throw new Error(loginData.detail || 'Account created, but login failed.');
+                localStorage.setItem('treetrace_token', loginData.access_token);
+                goToApp('/dashboard');
+            } catch (error) {
+                alert(error.message || 'Registration failed. Please try again.');
+                setButtonState(button, 'Create Account →', false);
+            }
+        }
+
+        function openPricingModal(e) {
+            if (e) e.preventDefault();
+            openModal('pricingModal');
+        }
+
+        function switchAuthTab(tab) {
+            const panels = { login: 'panelLogin', signup: 'panelSignup' };
+            const tabs = { login: 'tabLogin', signup: 'tabSignup' };
+            Object.keys(panels).forEach(k => {
+                document.getElementById(panels[k]).classList.toggle('active', k === tab);
+                document.getElementById(tabs[k]).classList.toggle('active', k === tab);
+            });
+        }
+
+    </script>
+</body>
+
+</html>

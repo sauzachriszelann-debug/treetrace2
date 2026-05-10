@@ -25,6 +25,7 @@ import CommunityStructure from "@/pages/CommunityStructure";
 import Upgrade           from "@/pages/Upgrade";
 import UnknownSpeciesReview from "@/pages/UnknownSpeciesReview";
 import ReportsAndTools from "@/pages/ReportsAndTools";
+import SystemHome from "@/pages/SystemHome";
 
 // Public pages (no auth, no sidebar)
 import PublicTreeProfile from "@/pages/PublicTreeProfile";
@@ -38,6 +39,9 @@ export default function App() {
         {/* ── Public (no auth required) ── */}
         <Route path="/login"    element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/"         element={<SystemHome />} />
+        <Route path="/landing/index.html" element={<SystemHome />} />
+        <Route path="/public"   element={<PublicPortal />} />
         <Route path="/public/tree/:id" element={<PublicTreeProfile />} />
 
         {/* ── Protected app shell ── */}
@@ -48,13 +52,12 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route index              element={<Dashboard />} />
+          <Route path="dashboard"   element={<Dashboard />} />
           <Route path="trees"       element={<TreeList />} />
           <Route path="trees/:id"   element={<TreeDetail />} />
           <Route path="add-tree"    element={<AddTree />} />
           <Route path="map"         element={<TreeMapPage />} />
           <Route path="scan"        element={<ScanQR />} />
-          <Route path="public"      element={<PublicPortal />} />
           <Route path="ai-identify" element={<AIIdentify />} />
           <Route path="community"   element={<CommunityStructure />} />
           <Route path="upgrade"     element={<Upgrade />} />
