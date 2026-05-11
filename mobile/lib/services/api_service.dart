@@ -178,6 +178,11 @@ class ApiService {
     return res.data;
   }
 
+  Future<List<dynamic>> getUsers() async {
+    final res = await _dio.get('/users/');
+    return res.data;
+  }
+
   // ── Trees ─────────────────────────────────────────────────────────────────
   Future<List<dynamic>> getTrees({int limit = 200}) async {
     final res = await _dio.get('/trees/', queryParameters: {'limit': limit});

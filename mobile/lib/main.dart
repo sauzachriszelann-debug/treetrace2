@@ -64,9 +64,8 @@ class _NavItem {
 const _adminNavItems = [
   _NavItem('Dashboard', Icons.dashboard_outlined, Icons.dashboard),
   _NavItem('Trees', Icons.forest_outlined, Icons.forest),
-  _NavItem('Map', Icons.map_outlined, Icons.map),
   _NavItem('AI Identify', Icons.auto_awesome_outlined, Icons.auto_awesome),
-  _NavItem('Scan QR', Icons.qr_code_scanner_outlined, Icons.qr_code_scanner),
+  _NavItem('Map', Icons.map_outlined, Icons.map),
   _NavItem('Profile', Icons.person_outline, Icons.person),
 ];
 
@@ -86,13 +85,13 @@ class _AdminMainShellState extends State<AdminMainShell> {
     final screens = [
       const DashboardScreen(),
       const TreeListScreen(),
-      MapScreen(onBack: _goHome),
       AIIdentifyScreen(onBack: _goHome),
-      ScanQRScreen(onBack: _goHome),
+      MapScreen(onBack: _goHome),
       const ProfileScreen(),
     ];
 
     return Scaffold(
+      extendBody: true,
       body: IndexedStack(index: _index, children: screens),
       floatingActionButton: _index == 1
           ? FloatingActionButton(
@@ -108,24 +107,12 @@ class _AdminMainShellState extends State<AdminMainShell> {
               child: const Icon(Icons.add),
             )
           : null,
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: kBorder, width: 1)),
-        ),
-        child: NavigationBar(
-          selectedIndex: _index,
-          onDestinationSelected: (i) => setState(() => _index = i),
-          backgroundColor: kCard,
-          indicatorColor: kPrimary.withOpacity(0.12),
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: _adminNavItems
-              .map((item) => NavigationDestination(
-                    icon: Icon(item.icon, color: kMutedFg),
-                    selectedIcon: Icon(item.activeIcon, color: kPrimary),
-                    label: item.label,
-                  ))
-              .toList(),
-        ),
+      bottomNavigationBar: _TreeTraceBottomNav(
+        items: _adminNavItems,
+        selectedIndex: _index,
+        emphasizedIndex: 2,
+        emphasizedLabel: 'AI Scan',
+        onSelected: (i) => setState(() => _index = i),
       ),
     );
   }
@@ -168,19 +155,28 @@ class _PublicMainShellState extends State<PublicMainShell> {
     return Scaffold(
       extendBody: true,
       body: IndexedStack(index: _index, children: screens),
-      bottomNavigationBar: _PublicBottomNav(
+      bottomNavigationBar: _TreeTraceBottomNav(
+        items: _publicNavItems,
         selectedIndex: _index,
+        emphasizedIndex: 2,
+        emphasizedLabel: 'AI Scan',
         onSelected: (i) => setState(() => _index = i),
       ),
     );
   }
 }
 
-class _PublicBottomNav extends StatelessWidget {
+class _TreeTraceBottomNav extends StatelessWidget {
+  final List<_NavItem> items;
   final int selectedIndex;
+  final int emphasizedIndex;
+  final String emphasizedLabel;
   final ValueChanged<int> onSelected;
-  const _PublicBottomNav({
+  const _TreeTraceBottomNav({
+    required this.items,
     required this.selectedIndex,
+    required this.emphasizedIndex,
+    required this.emphasizedLabel,
     required this.onSelected,
   });
 
@@ -203,8 +199,8 @@ class _PublicBottomNav extends StatelessWidget {
           ],
         ),
         child: Row(
-          children: List.generate(_publicNavItems.length, (index) {
-            if (index == 2) {
+          children: List.generate(items.length, (index) {
+            if (index == emphasizedIndex) {
               return Expanded(
                 child: GestureDetector(
                   onTap: () => onSelected(index),
@@ -217,31 +213,31 @@ class _PublicBottomNav extends StatelessWidget {
                         Positioned(
                           top: -24,
                           child: Container(
-                          width: 68,
-                          height: 68,
-                          decoration: BoxDecoration(
-                            color: kPrimary,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: kCard, width: 5),
-                            boxShadow: [
-                              BoxShadow(
-                                color: kPrimary.withOpacity(0.35),
-                                blurRadius: 18,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
+                            width: 68,
+                            height: 68,
+                            decoration: BoxDecoration(
+                              color: kPrimary,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: kCard, width: 5),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: kPrimary.withOpacity(0.35),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.camera_alt_rounded,
+                              color: Colors.white,
+                              size: 32,
+                            ),
                           ),
-                          child: const Icon(
-                            Icons.camera_alt_rounded,
-                            color: Colors.white,
-                            size: 32,
-                          ),
-                        ),
                         ),
                         Positioned(
                           bottom: 4,
                           child: Text(
-                            'AI Scan',
+                            emphasizedLabel,
                             maxLines: 1,
                             style: TextStyle(
                               color: selectedIndex == index
@@ -259,7 +255,7 @@ class _PublicBottomNav extends StatelessWidget {
               );
             }
 
-            final item = _publicNavItems[index];
+            final item = items[index];
             final selected = selectedIndex == index;
             return Expanded(
               child: InkWell(

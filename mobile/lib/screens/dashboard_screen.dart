@@ -15,6 +15,10 @@ import '../models/models.dart';
 import '../widgets/widgets.dart';
 
 import 'tree_detail_screen.dart';
+import 'scan_qr_screen.dart';
+import 'upgrade_screen.dart';
+import 'community_structure_screen.dart';
+import 'users_screen.dart';
 
 
 
@@ -36,6 +40,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   List<HealthLogModel> _logs = [];
 
+  Map<String, dynamic>? _community;
+
   bool _loading = true;
 
 
@@ -54,11 +60,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       final l = await api.getHealthLogs(limit: 50);
 
+      final c = await api.getCommunityStructure();
+
       setState(() {
 
         _trees = t.map((j) => TreeModel.fromJson(j)).toList();
 
         _logs = l.map((j) => HealthLogModel.fromJson(j)).toList();
+
+        _community = c;
 
         _loading = false;
 
@@ -108,6 +118,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             backgroundColor: kSidebarBg,
 
+            title: const Text(
+              'TreeTrace',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+              ),
+            ),
+
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Center(
+                  child: _RoleBadge(
+                    role: user?.role ?? 'field_worker',
+                    onTap: () => showUpgradeSheet(context),
+                  ),
+                ),
+              ),
+            ],
+
             flexibleSpace: FlexibleSpaceBar(
 
               background: Container(
@@ -125,25 +156,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   children: [
 
                     Text(
-
                       'Welcome back, ${user?.fullName.split(' ').first ?? 'User'}',
-
                       style: TextStyle(
-
                           color: kSidebarText.withOpacity(0.7),
-
                           fontSize: 13),
-
                     ),
 
                     const SizedBox(height: 2),
 
                     Text('TreeTrace Geo-Spatial Inventory',
-
                         style: GoogleFonts.inter(
-
                             color: Colors.white, fontSize: 18,
-
                             fontWeight: FontWeight.w700)),
 
                   ],
@@ -170,6 +193,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                 children: [
 
+                  Row(
+                    children: [
+                      const Spacer(),
+                      _DashboardActionButton(
+                        label: 'Scan QR',
+                        icon: Icons.qr_code_scanner_rounded,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ScanQRScreen(
+                              onBack: () => Navigator.pop(context),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _DashboardActionButton(
+                        label: 'Community',
+                        icon: Icons.diversity_3_rounded,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const CommunityStructureScreen(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _DashboardActionButton(
+                        label: 'Users',
+                        icon: Icons.people_alt_rounded,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const UsersScreen(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 12),
+
 // ── Stats grid (2x2) ─────────────────────────────────────
 
                   GridView.count(
@@ -177,6 +242,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     crossAxisCount: 2, shrinkWrap: true,
 
                     physics: const NeverScrollableScrollPhysics(),
+
+                    padding: EdgeInsets.zero,
 
                     crossAxisSpacing: 10, mainAxisSpacing: 10,
 
@@ -216,6 +283,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                     ],
 
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  _CommunityDashboardCards(
+                    data: _community,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const CommunityStructureScreen(),
+                      ),
+                    ),
                   ),
 
 
@@ -409,6 +488,431 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
 }
+
+
+
+class _RoleBadge extends StatelessWidget {
+  final String role;
+  final VoidCallback onTap;
+  const _RoleBadge({required this.role, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = role == 'admin' ? 'Admin' : 'Field Worker';
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: Colors.white.withOpacity(0.18)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.workspace_premium_rounded,
+                color: kPrimary, size: 14),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: const TextStyle(
+                color: kPrimary,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DashboardActionButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  const _DashboardActionButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: kPrimary,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white, size: 16),
+            SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+
+class _CommunityDashboardCards extends StatelessWidget {
+  final Map<String, dynamic>? data;
+  final VoidCallback onTap;
+  const _CommunityDashboardCards({required this.data, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final distribution = data?['species_distribution'] as List<dynamic>? ?? [];
+    final barangays = data?['barangay_breakdown'] as List<dynamic>? ?? [];
+    final endangered = data?['endangered_trees'] as List<dynamic>? ?? [];
+
+    if (data == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (endangered.isNotEmpty) ...[
+          _CannotCutWarning(count: endangered.length, onTap: onTap),
+          const SizedBox(height: 14),
+        ],
+        _SpeciesDistributionCard(distribution: distribution, onTap: onTap),
+        const SizedBox(height: 14),
+        _BarangayBarCard(barangays: barangays, onTap: onTap),
+        const SizedBox(height: 18),
+      ],
+    );
+  }
+}
+
+class _CannotCutWarning extends StatelessWidget {
+  final int count;
+  final VoidCallback onTap;
+  const _CannotCutWarning({required this.count, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.red.shade100),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: Colors.red.shade100,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(Icons.warning_amber_rounded,
+                color: Colors.red.shade700, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('$count endangered trees identified',
+                    style: TextStyle(
+                        color: Colors.red.shade800,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13)),
+                Text('Cannot Cut warning active for protected species',
+                    style: TextStyle(color: Colors.red.shade700, fontSize: 11)),
+              ],
+            ),
+          ),
+        ],
+      ),
+      ),
+    );
+  }
+}
+
+class _SpeciesDistributionCard extends StatelessWidget {
+  final List<dynamic> distribution;
+  final VoidCallback onTap;
+  const _SpeciesDistributionCard({
+    required this.distribution,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final top = distribution.take(5).toList();
+    final total = top.fold<int>(
+        0, (sum, item) => sum + ((item['count'] as int?) ?? 0));
+
+    return _DashboardChartCard(
+      title: 'Species Distribution',
+      subtitle: 'Top species share',
+      onTap: onTap,
+      child: top.isEmpty
+          ? const _ChartEmptyText('No species data yet.')
+          : Row(
+              children: [
+                SizedBox(
+                  width: 104,
+                  height: 104,
+                  child: CustomPaint(
+                    painter: _PieChartPainter(
+                      values: top
+                          .map((e) => ((e['count'] as int?) ?? 0).toDouble())
+                          .toList(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    children: top.map((item) {
+                      final index = top.indexOf(item);
+                      final count = (item['count'] as int?) ?? 0;
+                      final percent =
+                          total == 0 ? 0 : ((count / total) * 100).round();
+                      return _LegendRow(
+                        color: _chartColors[index % _chartColors.length],
+                        label: '${item['name'] ?? 'Unknown'}',
+                        value: '$percent%',
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+class _BarangayBarCard extends StatelessWidget {
+  final List<dynamic> barangays;
+  final VoidCallback onTap;
+  const _BarangayBarCard({
+    required this.barangays,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final top = barangays.take(6).toList();
+    final maxTrees = top.fold<int>(0, (max, row) {
+      final count = (row['total_trees'] as int?) ?? 0;
+      return count > max ? count : max;
+    });
+
+    return _DashboardChartCard(
+      title: 'Trees per Barangay',
+      subtitle: 'Mapped inventory count',
+      onTap: onTap,
+      child: top.isEmpty
+          ? const _ChartEmptyText('No barangay data yet.')
+          : Column(
+              children: top.map((row) {
+                final count = (row['total_trees'] as int?) ?? 0;
+                final ratio = maxTrees == 0 ? 0.0 : count / maxTrees;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 88,
+                        child: Text(
+                          '${row['barangay'] ?? 'Unknown'}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 11, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(999),
+                          child: LinearProgressIndicator(
+                            value: ratio,
+                            minHeight: 12,
+                            color: kPrimary,
+                            backgroundColor: kMuted,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 28,
+                        child: Text('$count',
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(
+                                fontSize: 11,
+                                color: kMutedFg,
+                                fontWeight: FontWeight.w800)),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+    );
+  }
+}
+
+class _DashboardChartCard extends StatelessWidget {
+  final String title, subtitle;
+  final Widget child;
+  final VoidCallback onTap;
+  const _DashboardChartCard({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: kCard,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: kBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title,
+                style:
+                    const TextStyle(fontSize: 15, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 2),
+            Text(subtitle,
+                style: const TextStyle(color: kMutedFg, fontSize: 11)),
+            const SizedBox(height: 14),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LegendRow extends StatelessWidget {
+  final Color color;
+  final String label, value;
+  const _LegendRow({
+    required this.color,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: Row(
+        children: [
+          Container(
+              width: 9,
+              height: 9,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style:
+                    const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+          ),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 11, color: kMutedFg, fontWeight: FontWeight.w800)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChartEmptyText extends StatelessWidget {
+  final String text;
+  const _ChartEmptyText(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Center(
+          child:
+              Text(text, style: const TextStyle(color: kMutedFg, fontSize: 12))),
+    );
+  }
+}
+
+class _PieChartPainter extends CustomPainter {
+  final List<double> values;
+  _PieChartPainter({required this.values});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final total = values.fold<double>(0, (sum, value) => sum + value);
+    final rect = Offset.zero & size;
+    final paint = Paint()..style = PaintingStyle.fill;
+    var start = -1.5708;
+
+    if (total <= 0) {
+      paint.color = kMuted;
+      canvas.drawCircle(size.center(Offset.zero), size.width / 2, paint);
+      return;
+    }
+
+    for (var i = 0; i < values.length; i++) {
+      final sweep = (values[i] / total) * 6.28318;
+      paint.color = _chartColors[i % _chartColors.length];
+      canvas.drawArc(rect, start, sweep, true, paint);
+      start += sweep;
+    }
+
+    paint.color = kCard;
+    canvas.drawCircle(size.center(Offset.zero), size.width * 0.28, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _PieChartPainter oldDelegate) =>
+      oldDelegate.values != values;
+}
+
+const _chartColors = [
+  kPrimary,
+  kHealthy,
+  kFair,
+  Color(0xFF2563EB),
+  Color(0xFF9333EA),
+  Color(0xFF0891B2),
+];
 
 
 

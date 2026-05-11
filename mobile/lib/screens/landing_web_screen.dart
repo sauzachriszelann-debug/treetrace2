@@ -8,6 +8,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import '../services/api_service.dart';
 import '../services/auth_provider.dart';
 import '../services/theme.dart';
+import 'map_screen.dart';
 
 class LandingWebScreen extends StatefulWidget {
   const LandingWebScreen({super.key});
@@ -32,7 +33,7 @@ class _LandingWebScreenState extends State<LandingWebScreen> {
           onNavigationRequest: (request) {
             final url = request.url;
             if (url.endsWith('/public') || url == '/public') {
-              _showPublicPortalNotice();
+              _openPublicMap();
               return NavigationDecision.prevent;
             }
             return NavigationDecision.navigate;
@@ -128,7 +129,7 @@ class _LandingWebScreenState extends State<LandingWebScreen> {
     if (type == 'navigate') {
       final path = data['path'] as String?;
       if (path == '/public') {
-        _showPublicPortalNotice();
+        _openPublicMap();
       }
       return;
     }
@@ -169,10 +170,10 @@ class _LandingWebScreenState extends State<LandingWebScreen> {
     }
   }
 
-  void _showPublicPortalNotice() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Public portal opens after login in the mobile app.'),
+  void _openPublicMap() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const MapScreen(),
       ),
     );
   }

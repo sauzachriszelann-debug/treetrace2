@@ -611,14 +611,12 @@ class _ProHeaderButton extends StatelessWidget {
     final label = isEnterprise ? 'Enterprise' : isPro ? 'Pro' : 'Upgrade to Pro';
 
     return InkWell(
-      onTap: isPaid
-          ? null
-          : () => showUpgradeSheet(context),
+      onTap: () => showUpgradeSheet(context),
       borderRadius: BorderRadius.circular(999),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isPro ? Colors.white.withOpacity(0.14) : Colors.white,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
             color: isPro ? Colors.white.withOpacity(0.35) : kSidebarPrimary,
@@ -639,14 +637,14 @@ class _ProHeaderButton extends StatelessWidget {
               isPaid
                   ? Icons.workspace_premium_rounded
                   : Icons.workspace_premium_outlined,
-              color: isPaid ? kSidebarPrimary : kPrimary,
+              color: kPrimary,
               size: 16,
             ),
             const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
-                color: isPaid ? kSidebarPrimary : kPrimary,
+                color: kPrimary,
                 fontSize: 12,
                 fontWeight: FontWeight.w900,
               ),
