@@ -34,6 +34,8 @@ class PublicPortalScreen extends StatefulWidget {
 class _PublicPortalScreenState extends State<PublicPortalScreen> {
   List<TreeModel> _trees = [];
   Map<String, dynamic>? _stats;
+  List<dynamic> _reviewedUnknown = [];
+  bool _reviewNotificationSeen = false;
   bool _loading = true;
   String _search = '';
 
@@ -47,9 +49,16 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
     try {
       final treeData = await api.getPublicTrees();
       final statsData = await api.getCommunityStructure();
+      List<dynamic> reviewedUnknown = [];
+      try {
+        final mine = await api.getMyUnknownSpecies();
+        reviewedUnknown =
+            mine.where((item) => item['reviewed'] == true).toList();
+      } catch (_) {}
       setState(() {
         _trees = treeData.map((j) => TreeModel.fromJson(j)).toList();
         _stats = statsData;
+        _reviewedUnknown = reviewedUnknown;
         _loading = false;
       });
     } catch (_) {
@@ -69,6 +78,49 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
               (t.barangay?.toLowerCase().contains(_search.toLowerCase()) ??
                   false))
           .toList();
+
+  void _showReviewedUnknownSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: const EdgeInsets.all(16),
+        decoration: const BoxDecoration(
+          color: kCard,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Reviewed Submissions',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 10),
+              ..._reviewedUnknown.take(5).map((item) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const CircleAvatar(
+                      backgroundColor: kMuted,
+                      child: Icon(Icons.check_circle_outline, color: kPrimary),
+                    ),
+                    title: Text(
+                      '${item['identified_as'] ?? item['possible_name'] ?? 'Unknown species'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: const Text('Expert review completed'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      setState(() => _reviewNotificationSeen = true);
+                    },
+                  )),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -311,7 +363,20 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
       actions: [
         Padding(
           padding: const EdgeInsets.only(right: 12),
-          child: Center(child: _ProHeaderButton(user: user)),
+          child: Center(
+            child: Row(
+              children: [
+                if (_reviewedUnknown.isNotEmpty && !_reviewNotificationSeen)
+                  _CitizenNotificationButton(
+                    count: _reviewedUnknown.length,
+                    onTap: _showReviewedUnknownSheet,
+                  ),
+                if (_reviewedUnknown.isNotEmpty && !_reviewNotificationSeen)
+                  const SizedBox(width: 8),
+                _ProHeaderButton(user: user),
+              ],
+            ),
+          ),
         ),
       ],
       flexibleSpace: FlexibleSpaceBar(
@@ -651,6 +716,39 @@ class _ProHeaderButton extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _CitizenNotificationButton extends StatelessWidget {
+  final int count;
+  final VoidCallback onTap;
+  const _CitizenNotificationButton({
+    required this.count,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.notifications_active_rounded,
+              color: kSidebarPrimary, size: 18),
+          const SizedBox(width: 3),
+          Text(
+            '$count',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
       ),
     );
   }

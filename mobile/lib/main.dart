@@ -185,8 +185,8 @@ class _TreeTraceBottomNav extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Container(
-        height: 92,
-        padding: const EdgeInsets.fromLTRB(6, 8, 6, 6),
+        height: 78,
+        padding: const EdgeInsets.fromLTRB(6, 5, 6, 4),
         decoration: BoxDecoration(
           color: kCard,
           border: const Border(top: BorderSide(color: kBorder, width: 1)),
@@ -211,10 +211,10 @@ class _TreeTraceBottomNav extends StatelessWidget {
                       alignment: Alignment.topCenter,
                       children: [
                         Positioned(
-                          top: -24,
+                          top: -18,
                           child: Container(
-                            width: 68,
-                            height: 68,
+                            width: 58,
+                            height: 58,
                             decoration: BoxDecoration(
                               color: kPrimary,
                               shape: BoxShape.circle,
@@ -230,12 +230,12 @@ class _TreeTraceBottomNav extends StatelessWidget {
                             child: const Icon(
                               Icons.camera_alt_rounded,
                               color: Colors.white,
-                              size: 32,
+                              size: 28,
                             ),
                           ),
                         ),
                         Positioned(
-                          bottom: 4,
+                          bottom: 2,
                           child: Text(
                             emphasizedLabel,
                             maxLines: 1,
@@ -243,7 +243,7 @@ class _TreeTraceBottomNav extends StatelessWidget {
                               color: selectedIndex == index
                                   ? kPrimary
                                   : kMutedFg,
-                              fontSize: 10,
+                              fontSize: 9,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -268,16 +268,16 @@ class _TreeTraceBottomNav extends StatelessWidget {
                     Icon(
                       selected ? item.activeIcon : item.icon,
                       color: selected ? kPrimary : kMutedFg,
-                      size: 23,
+                      size: 21,
                     ),
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 3),
                     Text(
                       item.label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: selected ? kPrimary : kMutedFg,
-                        fontSize: 10,
+                        fontSize: 9,
                         fontWeight:
                             selected ? FontWeight.w800 : FontWeight.w600,
                       ),

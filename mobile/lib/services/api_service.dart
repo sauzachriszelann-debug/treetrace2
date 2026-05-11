@@ -183,6 +183,17 @@ class ApiService {
     return res.data;
   }
 
+  Future<List<dynamic>> getUnknownSpeciesReview() async {
+    final res = await _dio.get('/ai/unknown-species');
+    return res.data;
+  }
+
+  Future<Map<String, dynamic>> reviewUnknownSpecies(
+      int id, Map<String, dynamic> data) async {
+    final res = await _dio.put('/ai/unknown-species/$id/review', data: data);
+    return Map<String, dynamic>.from(res.data);
+  }
+
   // ── Trees ─────────────────────────────────────────────────────────────────
   Future<List<dynamic>> getTrees({int limit = 200}) async {
     final res = await _dio.get('/trees/', queryParameters: {'limit': limit});

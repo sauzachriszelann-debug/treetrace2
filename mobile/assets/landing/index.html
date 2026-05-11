@@ -10,7 +10,7 @@
         rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-    <link rel="icon" type="image/png" href="images7.png">
+    <link rel="icon" type="image/png" href="logo.png">
     <style>
         :root {
             --green-deep: #0d2e1a;
@@ -76,8 +76,8 @@
         }
 
         .nav-logo-img {
-            width: 36px;
-            height: 36px;
+            width: 45px;
+            height: 45px;
             border-radius: 8px;
             object-fit: cover;
             display: block;
@@ -146,7 +146,7 @@
         }
 
         .nav-cta {
-            background: var(--green-bright) !important;
+           # background: var(--green-bright) !important;
             color: white !important;
             padding: 9px 20px !important;
             border-radius: 8px !important;
@@ -939,6 +939,7 @@
             justify-content: center;
             font-size: 1.2rem;
             flex-shrink: 0;
+            color: #2d9e5f;
         }
 
         .about-point-title {
@@ -1214,6 +1215,8 @@
         .tech-item-icon {
             font-size: 1.5rem;
             flex-shrink: 0;
+                color: #2d9e5f;
+
         }
 
         .tech-item-name {
@@ -1623,7 +1626,23 @@
             transition: all 0.3s;
             font-family: 'DM Sans', sans-serif;
             letter-spacing: 0.03em;
+                display: inline-flex;
+             align-items: center;
+             justify-content: center;
+            gap: 10px;
         }
+
+        /* Logo image inside button */
+.form-logo-img {
+    width: 25px;
+    height: 25px;
+    object-fit: contain;
+}
+/* Fallback emoji */
+.form-logo-icon {
+    font-size: 18px;
+    line-height: 1;
+}
 
         .form-submit:hover {
             transform: translateY(-2px);
@@ -1701,6 +1720,7 @@
             font-size: 1.8rem;
             margin-bottom: 14px;
             display: block;
+            color : #2d9e5f;
         }
 
         .outcome-metric {
@@ -2660,6 +2680,38 @@
             color: rgba(245, 240, 232, 0.2);
         }
 
+        .password-field {
+            position: relative;
+        }
+
+        .password-field .modal-input {
+            padding-right: 48px;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 34px;
+            height: 34px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(93, 214, 138, 0.1);
+            color: rgba(245, 240, 232, 0.72);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+        }
+
+        .password-toggle:hover {
+            background: rgba(93, 214, 138, 0.18);
+            color: var(--green-light);
+        }
+
         .modal-btn {
             width: 100%;
             background: linear-gradient(135deg, var(--green-bright), var(--green-light));
@@ -2999,8 +3051,13 @@
                     </div>
                     <div>
                         <label class="modal-input-label">Password</label>
-                        <input id="loginPassword" class="modal-input" type="password" placeholder="••••••••"
-                            autocomplete="current-password">
+                        <div class="password-field">
+                            <input id="loginPassword" class="modal-input" type="password" placeholder="••••••••"
+                                autocomplete="current-password">
+                            <button type="button" class="password-toggle" onclick="togglePassword('loginPassword', this)" aria-label="Show password">
+                                <i class="fa-regular fa-eye"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-forgot"><a href="#">Forgot password?</a></div>
@@ -3032,8 +3089,13 @@
                     </div>
                     <div>
                         <label class="modal-input-label">Password</label>
-                        <input id="signupPassword" class="modal-input" type="password" placeholder="Min. 8 characters"
-                            autocomplete="new-password">
+                        <div class="password-field">
+                            <input id="signupPassword" class="modal-input" type="password" placeholder="Min. 8 characters"
+                                autocomplete="new-password">
+                            <button type="button" class="password-toggle" onclick="togglePassword('signupPassword', this)" aria-label="Show password">
+                                <i class="fa-regular fa-eye"></i>
+                            </button>
+                        </div>
                     </div>
                     <div>
                         <label class="modal-input-label">Organization <span
@@ -3125,11 +3187,12 @@
         <div class="nav-inner">
             <a href="#home" class="nav-logo">
                 <!-- Team Logo in navbar: replace src with your actual logo image path -->
-                <img class="nav-logo-img" src="images7.png" alt="TreeTrace Logo"
-                    onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+                <img class="nav-logo-img" src="logo.png" alt="TreeTrace Logo"
+                     onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
                 <div class="nav-logo-icon" style="display:none;">🌿</div>
                 <span class="nav-logo-text">TreeTrace</span>
             </a>
+
 
             <!-- Desktop nav -->
             <ul class="nav-links">
@@ -3301,30 +3364,46 @@
                     researchers with precision tools to monitor, identify, and protect Philippine forest resources.</p>
                 <div class="about-points">
                     <div class="about-point reveal reveal-delay-2">
-                        <div class="about-point-icon">🌐</div>
+                        <div class="about-point-icon">
+                            <i class="bi bi-globe2"></i>
+                        </div>
+
                         <div>
                             <div class="about-point-title">SDG-Aligned Mission</div>
-                            <div class="about-point-desc">Supports UN SDG 13 (Climate Action) and SDG 15 (Life on Land)
-                                through
-                                nature-based digital monitoring solutions.</div>
+                            <div class="about-point-desc">
+                                Supports UN SDG 13 (Climate Action) and SDG 15 (Life on Land)
+                                through nature-based digital monitoring solutions.
+                            </div>
                         </div>
                     </div>
+                    <!-- AI -->
                     <div class="about-point reveal reveal-delay-3">
-                        <div class="about-point-icon">🤖</div>
+                        <div class="about-point-icon">
+                            <i class="bi bi-cpu"></i>
+                        </div>
+
                         <div>
                             <div class="about-point-title">AI-Driven at Its Core</div>
-                            <div class="about-point-desc">Deep learning models process real-time tree images to identify
-                                species,
-                                estimate biomass, and classify conservation status automatically.</div>
+                            <div class="about-point-desc">
+                                Deep learning models process real-time tree images
+                                to identify species, estimate biomass, and classify
+                                conservation status automatically.
+                            </div>
                         </div>
                     </div>
+                    <!-- Offline -->
                     <div class="about-point reveal reveal-delay-4">
-                        <div class="about-point-icon">📡</div>
+                        <div class="about-point-icon">
+                            <i class="bi bi-wifi-off"></i>
+                        </div>
+
                         <div>
                             <div class="about-point-title">Offline-First Design</div>
-                            <div class="about-point-desc">Captures and stores data locally in areas without
-                                connectivity, then
-                                auto-syncs to the cloud — built for Philippine rural realities.</div>
+                            <div class="about-point-desc">
+                                Captures and stores data locally in areas without
+                                connectivity, then auto-syncs to the cloud — built
+                                for Philippine rural realities.
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -3487,8 +3566,19 @@
 
             <!-- Tab switcher -->
             <div class="tech-tabs reveal reveal-delay-2">
-                <button class="tech-tab active" onclick="switchTab('outcomes', this)">📊 Impact & Outcomes</button>
-                <button class="tech-tab" onclick="switchTab('stack', this)">⚙️ System Architecture</button>
+
+                <button class="tech-tab active"
+                        onclick="switchTab('outcomes', this)">
+                    <i class="bi bi-bar-chart"></i>
+                    Impact & Outcomes
+                </button>
+
+                <button class="tech-tab"
+                        onclick="switchTab('stack', this)">
+                    <i class="bi bi-gear"></i>
+                    System Architecture
+                </button>
+
             </div>
 
             <!-- PANEL 1: Outcomes (for NGOs, LGUs, ESG directors) -->
@@ -3504,59 +3594,129 @@
             <div class="tech-panel active" id="panel-outcomes">
                 <div class="outcome-grid">
                     <div class="outcome-card reveal">
-                        <span class="outcome-icon">🎯</span>
+
+    <span class="outcome-icon">
+        <i class="bi bi-bullseye"></i>
+    </span>
+
                         <div class="outcome-metric">90%+</div>
-                        <div class="outcome-label">Species Identified Correctly</div>
-                        <p class="outcome-desc">Point your camera at any tree — the system returns the species name,
-                            conservation
-                            status, and ecological data in seconds, without requiring field expertise.</p>
-                        <span class="outcome-powered">⚡ Powered by CNN image recognition</span>
+
+                        <div class="outcome-label">
+                            Species Identified Correctly
+                        </div>
+
+                        <p class="outcome-desc">
+                            Point your camera at any tree — the system returns
+                            the species name, conservation status, and ecological
+                            data in seconds, without requiring field expertise.
+                        </p>
+
+                        <span class="outcome-powered">
+        ⚡ Powered by CNN image recognition
+    </span>
+
                     </div>
                     <div class="outcome-card reveal reveal-delay-1">
-                        <span class="outcome-icon">🌿</span>
+
+    <span class="outcome-icon">
+        <i class="bi bi-tree"></i>
+    </span>
+
                         <div class="outcome-metric">kg C / tree</div>
-                        <div class="outcome-label">Verified Carbon Storage Data</div>
-                        <p class="outcome-desc">Every tree record automatically generates a carbon sequestration
-                            estimate using
-                            peer-reviewed tropical biomass models — ready for NDC and ESG reporting.</p>
-                        <span class="outcome-powered">⚡ Powered by Chave et al. allometric equations</span>
+
+                        <div class="outcome-label">
+                            Verified Carbon Storage Data
+                        </div>
+
+                        <p class="outcome-desc">
+                            Every tree record automatically generates a carbon
+                            sequestration estimate using peer-reviewed tropical
+                            biomass models — ready for NDC and ESG reporting.
+                        </p>
+
+                        <span class="outcome-powered">
+        ⚡ Powered by Chave et al. allometric equations
+    </span>
+
                     </div>
                     <div class="outcome-card reveal reveal-delay-2">
-                        <span class="outcome-icon">🛡️</span>
+
+    <span class="outcome-icon">
+        <i class="bi bi-shield-check"></i>
+    </span>
+
                         <div class="outcome-metric">Real-time</div>
-                        <div class="outcome-label">Endangered Species Alerts</div>
-                        <p class="outcome-desc">The system flags protected trees the moment they are scanned —
-                            cross-referenced
-                            against DENR DAO 2017-11 and the IUCN Red List — preventing illegal cutting on-site.</p>
-                        <span class="outcome-powered">⚡ Powered by DENR + IUCN database integration</span>
+
+                        <div class="outcome-label">
+                            Endangered Species Alerts
+                        </div>
+
+                        <p class="outcome-desc">
+                            The system flags protected trees the moment they are scanned —
+                            cross-referenced against DENR DAO 2017-11 and the IUCN Red List —
+                            preventing illegal cutting on-site.
+                        </p>
+
+                        <span class="outcome-powered">
+        ⚡ Powered by DENR + IUCN database integration
+    </span>
+
                     </div>
                     <div class="outcome-card reveal reveal-delay-1">
-                        <span class="outcome-icon">📍</span>
+
+    <span class="outcome-icon">
+        <i class="bi bi-geo-alt"></i>
+    </span>
+
                         <div class="outcome-metric">&lt; 5m</div>
-                        <div class="outcome-label">GPS Mapping Precision</div>
-                        <p class="outcome-desc">Every tree is geo-tagged with sub-5-meter accuracy and plotted on an
-                            interactive GIS
-                            map, giving LGUs a live, auditable view of their forest assets at any time.</p>
-                        <span class="outcome-powered">⚡ Powered by Haversine + mobile GPS</span>
+
+                        <div class="outcome-label">
+                            GPS Mapping Precision
+                        </div>
+
+                        <p class="outcome-desc">
+                            Every tree is geo-tagged with sub-5-meter accuracy and plotted
+                            on an interactive GIS map, giving LGUs a live, auditable view
+                            of their forest assets at any time.
+                        </p>
+
+                        <span class="outcome-powered">
+        ⚡ Powered by Haversine + mobile GPS
+    </span>
+
                     </div>
                     <div class="outcome-card reveal reveal-delay-2">
-                        <span class="outcome-icon">📶</span>
+    <span class="outcome-icon">
+        <i class="bi bi-geo"></i>
+    </span>
+
                         <div class="outcome-metric">0% data loss</div>
+
                         <div class="outcome-label">Works Without Internet</div>
-                        <p class="outcome-desc">Field teams in remote forests capture full tree records offline. All
-                            data is
+
+                        <p class="outcome-desc">
+                            Field teams in remote forests capture full tree records offline. All data is
                             encrypted locally and auto-synced to the cloud the moment connectivity is restored — nothing
-                            is lost.</p>
+                            is lost.
+                        </p>
+
                         <span class="outcome-powered">⚡ Powered by offline-first architecture</span>
                     </div>
                     <div class="outcome-card reveal reveal-delay-3">
-                        <span class="outcome-icon">🧠</span>
+    <span class="outcome-icon">
+        <i class="bi bi-brain"></i>
+    </span>
+
                         <div class="outcome-metric">↑ Always</div>
+
                         <div class="outcome-label">Self-Improving AI Model</div>
-                        <p class="outcome-desc">Unknown species submitted by community members are reviewed and added to
-                            the
-                            training pipeline — the identification engine grows more accurate with every field
-                            encounter.</p>
+
+                        <p class="outcome-desc">
+                            Unknown species submitted by community members are reviewed and added to
+                            the training pipeline — the identification engine grows more accurate with every field
+                            encounter.
+                        </p>
+
                         <span class="outcome-powered">⚡ Powered by crowdsourced SMOTE retraining</span>
                     </div>
                 </div>
@@ -3567,67 +3727,92 @@
                 <div class="tech-grid">
                     <div class="tech-list">
                         <div class="tech-item reveal">
-                            <div class="tech-item-icon">🧬</div>
+                            <div class="tech-item-icon">
+                                <i class="bi bi-activity"></i>
+                            </div>
+
                             <div>
                                 <div class="tech-item-name">Semantic Segmentation (CNN)</div>
-                                <div class="tech-item-desc">Isolates tree trunk regions from photos for non-contact DBH
-                                    measurement with
-                                    90%+ accuracy.</div>
+                                <div class="tech-item-desc">
+                                    Isolates tree trunk regions from photos for non-contact DBH measurement with
+                                    90%+ accuracy.
+                                </div>
                             </div>
                         </div>
                         <div class="tech-item reveal reveal-delay-1">
-                            <div class="tech-item-icon">📏</div>
+                            <div class="tech-item-icon">
+                                <i class="bi bi-rulers"></i>
+                            </div>
+
                             <div>
                                 <div class="tech-item-name">Allometric Equations (Chave et al., 2014)</div>
-                                <div class="tech-item-desc">Tropical biomass models linking DBH, wood density, and
-                                    height to verified
-                                    aboveground carbon.</div>
+                                <div class="tech-item-desc">
+                                    Tropical biomass models linking DBH, wood density, and height to verified
+                                    aboveground carbon.
+                                </div>
                             </div>
                         </div>
                         <div class="tech-item reveal reveal-delay-2">
-                            <div class="tech-item-icon">🗺️</div>
+                            <div class="tech-item-icon">
+                                <i class="bi bi-map"></i>
+                            </div>
+
                             <div>
                                 <div class="tech-item-name">GIS + Haversine Formula</div>
-                                <div class="tech-item-desc">Spherical-Earth distance calculations for precise
-                                    tree-to-tree spatial
-                                    mapping across agroforestry sites.</div>
+                                <div class="tech-item-desc">
+                                    Spherical-Earth distance calculations for precise tree-to-tree spatial
+                                    mapping across agroforestry sites.
+                                </div>
                             </div>
                         </div>
                         <div class="tech-item reveal reveal-delay-3">
-                            <div class="tech-item-icon">🔲</div>
+                            <div class="tech-item-icon">
+                                <i class="bi bi-qr-code"></i>
+                            </div>
+
                             <div>
                                 <div class="tech-item-name">QR Code Integration</div>
-                                <div class="tech-item-desc">Each tree gets a permanent scannable identifier — enabling
-                                    70% faster data
-                                    retrieval vs. manual lookup.</div>
+                                <div class="tech-item-desc">
+                                    Each tree gets a permanent scannable identifier — enabling
+                                    70% faster data retrieval vs. manual lookup.
+                                </div>
                             </div>
                         </div>
                         <div class="tech-item reveal reveal-delay-4">
-                            <div class="tech-item-icon">🌿</div>
+                            <div class="tech-item-icon">
+                                <i class="bi bi-tree"></i>
+                            </div>
+
                             <div>
                                 <div class="tech-item-name">DENR DAO 2017-11 + IUCN Red List API</div>
-                                <div class="tech-item-desc">Real-time conservation status queries against Philippine and
-                                    international
-                                    endangered species databases.</div>
+                                <div class="tech-item-desc">
+                                    Real-time conservation status queries against Philippine and international
+                                    endangered species databases.
+                                </div>
                             </div>
                         </div>
                         <div class="tech-item reveal reveal-delay-5">
-                            <div class="tech-item-icon">☁️</div>
+                            <div class="tech-item-icon">
+                                <i class="bi bi-cloud"></i>
+                            </div>
+
                             <div>
                                 <div class="tech-item-name">FastAPI + SQL Cloud Backend</div>
-                                <div class="tech-item-desc">RESTful API serving mobile and web clients with real-time
-                                    sync, role-based
-                                    access control, and SMOTE-balanced retraining pipeline.</div>
+                                <div class="tech-item-desc">
+                                    RESTful API serving mobile and web clients with real-time sync, role-based
+                                    access control, and SMOTE-balanced retraining pipeline.
+                                </div>
                             </div>
                         </div>
                     </div>
                     <div class="tech-visual reveal reveal-delay-2">
-                        <div class="tech-visual-title">🏗️ System Architecture</div>
+                        <div class="tech-visual-title">
+                            <i class="bi bi-diagram-3-fill"></i> System Architecture
+                        </div>
+
                         <div style="font-size:0.78rem;color:rgba(245,240,232,0.5);line-height:1.7;margin-bottom:18px;">
-                            TreeTrace
-                            uses a three-tier client-server architecture with a mobile field app, a web dashboard, and a
-                            cloud-hosted
-                            FastAPI + SQL backend. An offline-first local storage layer handles connectivity gaps in
+                            TreeTrace uses a three-tier client-server architecture with a mobile field app, a web dashboard, and a
+                            cloud-hosted FastAPI + SQL backend. An offline-first local storage layer handles connectivity gaps in
                             remote sites.
                         </div>
                         <div class="algo-block">
@@ -3812,7 +3997,15 @@
                             <option style="background:#0d2e1a;">Other</option>
                         </select>
                         <textarea class="form-input" placeholder="Tell us about your project or inquiry..."></textarea>
-                        <button class="form-submit">Send Message 🌿</button>
+                        <button class="form-submit">
+                            Send Message
+                            <img class="form-logo-img" src="logo.png" alt="TreeTrace Logo"
+                                 onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex';">
+
+                            <span class="form-logo-icon" style="display:none;">🌿</span>
+
+
+                        </button>
                     </div>
                 </div>
             </div>
@@ -3828,8 +4021,8 @@
             <!-- Brand column -->
             <div class="footer-brand-col">
                 <a href="#home" class="footer-brand-logo nav-logo">
-                    <img class="nav-logo-img" src="images7.png" alt="TreeTrace Logo"
-                        onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+                    <img class="nav-logo-img" src="logo.png" alt="TreeTrace Logo"
+                         onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
                     <div class="nav-logo-icon" style="display:none;">🌿</div>
                     <span class="nav-logo-text">TreeTrace</span>
                 </a>
@@ -4078,6 +4271,17 @@
             button.disabled = disabled;
             button.style.opacity = disabled ? '0.7' : '';
             button.style.cursor = disabled ? 'wait' : 'pointer';
+        }
+
+        function togglePassword(inputId, button) {
+            const input = document.getElementById(inputId);
+            if (!input) return;
+            const shouldShow = input.type === 'password';
+            input.type = shouldShow ? 'text' : 'password';
+            button.setAttribute('aria-label', shouldShow ? 'Hide password' : 'Show password');
+            button.innerHTML = shouldShow
+                ? '<i class="fa-regular fa-eye-slash"></i>'
+                : '<i class="fa-regular fa-eye"></i>';
         }
 
         async function submitLandingLogin() {

@@ -16,9 +16,11 @@ import '../widgets/widgets.dart';
 
 import 'tree_detail_screen.dart';
 import 'scan_qr_screen.dart';
-import 'upgrade_screen.dart';
 import 'community_structure_screen.dart';
 import 'users_screen.dart';
+import 'unknown_review_screen.dart';
+import 'qr_labels_screen.dart';
+import 'health_logs_screen.dart';
 
 
 
@@ -41,6 +43,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<HealthLogModel> _logs = [];
 
   Map<String, dynamic>? _community;
+  int _pendingReviews = 0;
+  String _search = '';
+  bool _reviewNotificationSeen = false;
 
   bool _loading = true;
 
@@ -61,6 +66,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final l = await api.getHealthLogs(limit: 50);
 
       final c = await api.getCommunityStructure();
+      List<dynamic> unknown = [];
+      try {
+        unknown = await api.getUnknownSpeciesReview();
+      } catch (_) {}
 
       setState(() {
 
@@ -69,6 +78,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _logs = l.map((j) => HealthLogModel.fromJson(j)).toList();
 
         _community = c;
+        _pendingReviews = unknown.where((e) => e['reviewed'] != true).length;
 
         _loading = false;
 
@@ -95,6 +105,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final carbon = _trees.fold<double>(0, (s, t) => s + (t.carbonKg ?? 0));
 
     final gps = _trees.where((t) => t.lat != null).length;
+    final query = _search.trim().toLowerCase();
+    final recentTrees = query.isEmpty
+        ? _trees
+        : _trees.where((tree) {
+            final text = [
+              tree.commonName,
+              tree.scientificName ?? '',
+              tree.barangay ?? '',
+              tree.healthStatus,
+            ].join(' ').toLowerCase();
+            return text.contains(query);
+          }).toList();
 
 
 
@@ -131,9 +153,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Padding(
                 padding: const EdgeInsets.only(right: 12),
                 child: Center(
-                  child: _RoleBadge(
-                    role: user?.role ?? 'field_worker',
-                    onTap: () => showUpgradeSheet(context),
+                  child: Row(
+                    children: [
+                      if (_pendingReviews > 0 && !_reviewNotificationSeen)
+                        _ReviewNotificationBadge(
+                          count: _pendingReviews,
+                          onTap: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const UnknownReviewScreen(),
+                              ),
+                            );
+                            if (mounted) {
+                              setState(() {
+                                _pendingReviews = 0;
+                                _reviewNotificationSeen = true;
+                              });
+                            }
+                          },
+                        ),
+                      const SizedBox(width: 8),
+                      const _RoleIconBadge(),
+                    ],
                   ),
                 ),
               ),
@@ -161,8 +203,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           color: kSidebarText.withOpacity(0.7),
                           fontSize: 13),
                     ),
-
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 4),
 
                     Text('TreeTrace Geo-Spatial Inventory',
                         style: GoogleFonts.inter(
@@ -193,44 +234,91 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                 children: [
 
-                  Row(
+                  GridView.count(
+                    crossAxisCount: 3,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    padding: EdgeInsets.zero,
+                    crossAxisSpacing: 6,
+                    mainAxisSpacing: 6,
+                    childAspectRatio: 3.2,
                     children: [
-                      const Spacer(),
                       _DashboardActionButton(
-                        label: 'Scan QR',
-                        icon: Icons.qr_code_scanner_rounded,
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ScanQRScreen(
-                              onBack: () => Navigator.pop(context),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
+                          label: 'Scan QR',
+                          icon: Icons.qr_code_scanner_rounded,
+                          onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ScanQRScreen(
+                                    onBack: () => Navigator.pop(context),
+                                  ),
+                                ),
+                              )),
                       _DashboardActionButton(
-                        label: 'Community',
-                        icon: Icons.diversity_3_rounded,
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const CommunityStructureScreen(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
+                          label: 'Community',
+                          icon: Icons.diversity_3_rounded,
+                          onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const CommunityStructureScreen(),
+                                ),
+                              )),
                       _DashboardActionButton(
-                        label: 'Users',
-                        icon: Icons.people_alt_rounded,
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const UsersScreen(),
-                          ),
-                        ),
-                      ),
+                          label: 'Users',
+                          icon: Icons.people_alt_rounded,
+                          onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const UsersScreen(),
+                                ),
+                              )),
+                      _DashboardActionButton(
+                          label: 'Unknown',
+                          icon: Icons.help_outline_rounded,
+                          onTap: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const UnknownReviewScreen(),
+                              ),
+                            );
+                            if (mounted) {
+                              setState(() {
+                                _pendingReviews = 0;
+                                _reviewNotificationSeen = true;
+                              });
+                            }
+                          }),
+                      _DashboardActionButton(
+                          label: 'QR Labels',
+                          icon: Icons.qr_code_2_rounded,
+                          onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const QrLabelsScreen(),
+                                ),
+                              )),
+                      _DashboardActionButton(
+                          label: 'Health',
+                          icon: Icons.health_and_safety_outlined,
+                          onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const HealthLogsScreen(),
+                                ),
+                              )),
                     ],
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  TextField(
+                    onChanged: (value) => setState(() => _search = value),
+                    decoration: const InputDecoration(
+                      hintText: 'Search trees...',
+                      prefixIcon: Icon(Icons.search_rounded, color: kPrimary),
+                    ),
                   ),
 
                   const SizedBox(height: 12),
@@ -391,7 +479,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   else
 
-                    ..._trees.take(5).map((t) => Padding(
+                    ...recentTrees.take(5).map((t) => Padding(
 
                       padding: const EdgeInsets.only(bottom: 0),
 
@@ -491,40 +579,89 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 
 
-class _RoleBadge extends StatelessWidget {
-  final String role;
+class _ReviewNotificationBadge extends StatelessWidget {
+  final int count;
   final VoidCallback onTap;
-  const _RoleBadge({required this.role, required this.onTap});
+  const _ReviewNotificationBadge({required this.count, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final label = role == 'admin' ? 'Admin' : 'Field Worker';
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(999),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: Colors.white.withOpacity(0.18)),
-        ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.workspace_premium_rounded,
-                color: kPrimary, size: 14),
-            const SizedBox(width: 5),
+            Icon(Icons.notifications_active_rounded,
+                color: Colors.orange.shade300, size: 18),
+            if (count > 0) ...[
+              const SizedBox(width: 3),
+              Text(
+                '$count',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RoleIconBadge extends StatelessWidget {
+  const _RoleIconBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white.withOpacity(0.18)),
+      ),
+      child: const Icon(
+        Icons.workspace_premium_rounded,
+        color: kPrimary,
+        size: 17,
+      ),
+    );
+  }
+}
+
+class _CitizenReviewNotification extends StatelessWidget {
+  final int count;
+  final VoidCallback onTap;
+  const _CitizenReviewNotification({required this.count, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.notifications_active_rounded,
+              color: kSidebarPrimary, size: 18),
+          if (count > 0) ...[
+            const SizedBox(width: 3),
             Text(
-              label,
+              '$count',
               style: const TextStyle(
-                color: kPrimary,
+                color: Colors.white,
                 fontSize: 11,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w900,
               ),
             ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -544,24 +681,29 @@ class _DashboardActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
         decoration: BoxDecoration(
           color: kPrimary,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: Colors.white, size: 16),
-            SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
+            Icon(icon, color: Colors.white, size: 14),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           ],
@@ -639,12 +781,16 @@ class _CannotCutWarning extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('$count endangered trees identified',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                         color: Colors.red.shade800,
                         fontWeight: FontWeight.w900,
-                        fontSize: 13)),
+                        fontSize: 12)),
                 Text('Cannot Cut warning active for protected species',
-                    style: TextStyle(color: Colors.red.shade700, fontSize: 11)),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.red.shade700, fontSize: 10)),
               ],
             ),
           ),

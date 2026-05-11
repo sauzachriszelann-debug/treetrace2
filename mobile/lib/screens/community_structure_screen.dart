@@ -83,6 +83,10 @@ class _CommunityStructureScreenState extends State<CommunityStructureScreen> {
                           Icons.location_on_outlined, Colors.blue.shade600),
                     ],
                   ),
+                  const SizedBox(height: 18),
+                  _CommunityPieCard(distribution: distribution),
+                  const SizedBox(height: 14),
+                  _CommunityBarCard(barangays: barangays),
                   const SizedBox(height: 22),
                   _SectionTitle('Top Species Distribution'),
                   const SizedBox(height: 10),
@@ -175,6 +179,197 @@ class _Panel extends StatelessWidget {
     );
   }
 }
+
+class _CommunityPieCard extends StatelessWidget {
+  final List<dynamic> distribution;
+  const _CommunityPieCard({required this.distribution});
+
+  @override
+  Widget build(BuildContext context) {
+    final top = distribution.take(5).toList();
+    final total = top.fold<int>(
+        0, (sum, item) => sum + ((item['count'] as int?) ?? 0));
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Species Distribution',
+              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+          const SizedBox(height: 14),
+          if (top.isEmpty)
+            const _EmptyLine('No species data yet.')
+          else
+            Row(
+              children: [
+                SizedBox(
+                  width: 110,
+                  height: 110,
+                  child: CustomPaint(
+                    painter: _CommunityPiePainter(
+                      values: top
+                          .map((e) => ((e['count'] as int?) ?? 0).toDouble())
+                          .toList(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    children: top.map((item) {
+                      final index = top.indexOf(item);
+                      final count = (item['count'] as int?) ?? 0;
+                      final percent =
+                          total == 0 ? 0 : ((count / total) * 100).round();
+                      return _CommunityLegend(
+                        color: _communityChartColors[
+                            index % _communityChartColors.length],
+                        label: '${item['name'] ?? 'Unknown'}',
+                        value: '$percent%',
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommunityBarCard extends StatelessWidget {
+  final List<dynamic> barangays;
+  const _CommunityBarCard({required this.barangays});
+
+  @override
+  Widget build(BuildContext context) {
+    final top = barangays.take(6).toList();
+    final maxTrees = top.fold<int>(0, (max, row) {
+      final count = (row['total_trees'] as int?) ?? 0;
+      return count > max ? count : max;
+    });
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Trees per Barangay',
+              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+          const SizedBox(height: 14),
+          if (top.isEmpty)
+            const _EmptyLine('No barangay data yet.')
+          else
+            ...top.map((row) {
+              final count = (row['total_trees'] as int?) ?? 0;
+              final ratio = maxTrees == 0 ? 0.0 : count / maxTrees;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 92,
+                      child: Text('${row['barangay'] ?? 'Unknown'}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 11, fontWeight: FontWeight.w700)),
+                    ),
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(999),
+                        child: LinearProgressIndicator(
+                          value: ratio,
+                          minHeight: 12,
+                          color: kPrimary,
+                          backgroundColor: kMuted,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text('$count',
+                        style: const TextStyle(
+                            color: kMutedFg,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800)),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommunityLegend extends StatelessWidget {
+  final Color color;
+  final String label, value;
+  const _CommunityLegend({
+    required this.color,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: Row(
+        children: [
+          Container(
+              width: 9,
+              height: 9,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style:
+                    const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+          ),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 11, color: kMutedFg, fontWeight: FontWeight.w800)),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommunityPiePainter extends CustomPainter {
+  final List<double> values;
+  _CommunityPiePainter({required this.values});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final total = values.fold<double>(0, (sum, value) => sum + value);
+    final rect = Offset.zero & size;
+    final paint = Paint()..style = PaintingStyle.fill;
+    var start = -1.5708;
+    if (total <= 0) return;
+    for (var i = 0; i < values.length; i++) {
+      final sweep = (values[i] / total) * 6.28318;
+      paint.color = _communityChartColors[i % _communityChartColors.length];
+      canvas.drawArc(rect, start, sweep, true, paint);
+      start += sweep;
+    }
+    paint.color = kCard;
+    canvas.drawCircle(size.center(Offset.zero), size.width * 0.28, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _CommunityPiePainter oldDelegate) =>
+      oldDelegate.values != values;
+}
+
+const _communityChartColors = [
+  kPrimary,
+  kHealthy,
+  kFair,
+  Color(0xFF2563EB),
+  Color(0xFF9333EA),
+  Color(0xFF0891B2),
+];
 
 class _SectionTitle extends StatelessWidget {
   final String title;
