@@ -157,8 +157,22 @@ async def identify_tree(
     contents = await file.read()
     image_data = base64.standard_b64encode(contents).decode("utf-8")
     image_bytes = base64.standard_b64decode(image_data)
-    result = await _pipeline_with_status(image_bytes, image_data, file.content_type)
-    return result
+    try:
+        result = await _pipeline_with_status(image_bytes, image_data, file.content_type)
+        return result
+    except Exception as exc:
+        return {
+            "not_identified": True,
+            "common_name": "Unknown species",
+            "scientific_name": "",
+            "confidence": "Low",
+            "possible_candidates": [],
+            "reason": (
+                "TreeTrace could not complete AI identification right now. "
+                "You can still submit this photo for expert review."
+            ),
+            "debug_detail": str(exc),
+        }
 
 class IdentifyFromURLRequest(BaseModel):
     image_url: str

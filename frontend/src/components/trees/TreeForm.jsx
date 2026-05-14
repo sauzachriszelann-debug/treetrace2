@@ -427,7 +427,7 @@ export default function TreeForm({
             <Loader2 className="w-4 h-4 animate-spin text-primary flex-shrink-0" />
             <div>
               <p className="font-medium text-foreground">Identifying species...</p>
-              <p className="text-xs">Checking Pl@ntNet + Claude AI</p>
+              <p className="text-xs">Checking TreeTrace AI-assisted identification</p>
             </div>
           </div>
         )}

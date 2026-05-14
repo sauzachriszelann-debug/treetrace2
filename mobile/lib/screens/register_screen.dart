@@ -31,7 +31,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     try {
       await api.register(_nameCtrl.text.trim(), _emailCtrl.text.trim(), _passCtrl.text);
       final ok = await context.read<AuthProvider>().login(_emailCtrl.text.trim(), _passCtrl.text);
-      if (!ok && mounted) setState(() => _error = 'Registration succeeded but login failed. Try logging in.');
+      if (!mounted) return;
+      if (ok) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      } else {
+        setState(() => _error = 'Registration succeeded but login failed. Try logging in.');
+      }
     } catch (e) {
       setState(() => _error = e.toString().contains('already') ? 'Email already registered.' : 'Registration failed. Try again.');
     } finally {

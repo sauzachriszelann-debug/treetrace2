@@ -241,7 +241,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     padding: EdgeInsets.zero,
                     crossAxisSpacing: 6,
                     mainAxisSpacing: 6,
-                    childAspectRatio: 3.2,
+                    childAspectRatio: 3.9,
                     children: [
                       _DashboardActionButton(
                           label: 'Scan QR',
@@ -311,7 +311,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ],
                   ),
 
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
 
                   TextField(
                     onChanged: (value) => setState(() => _search = value),
@@ -321,7 +321,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
 
 // ── Stats grid (2x2) ─────────────────────────────────────
 
@@ -333,25 +333,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                     padding: EdgeInsets.zero,
 
-                    crossAxisSpacing: 10, mainAxisSpacing: 10,
+                    crossAxisSpacing: 9, mainAxisSpacing: 9,
 
-                    childAspectRatio: 1.55,
+                    childAspectRatio: 1.85,
 
                     children: [
 
-                      StatsCard(title: 'Total Trees',
+                      _CompactStatsCard(title: 'Total Trees',
 
                           value: '${_trees.length}',
 
                           icon: Icons.park, color: kPrimary),
 
-                      StatsCard(title: 'Healthy',
+                      _CompactStatsCard(title: 'Healthy',
 
                           value: '$healthy',
 
                           icon: Icons.eco, color: kHealthy),
 
-                      StatsCard(title: 'Need Attention',
+                      _CompactStatsCard(title: 'Need Attention',
 
                           value: '${fair + poor}',
 
@@ -359,7 +359,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                           icon: Icons.warning_amber_rounded, color: kFair),
 
-                      StatsCard(title: 'Carbon Stock',
+                      _CompactStatsCard(title: 'Carbon Stock',
 
                           value: '${(carbon / 1000).toStringAsFixed(2)} t',
 
@@ -373,7 +373,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   ),
 
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 10),
 
                   _CommunityDashboardCards(
                     data: _community,
@@ -683,7 +683,7 @@ class _DashboardActionButton extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
         decoration: BoxDecoration(
           color: kPrimary,
           borderRadius: BorderRadius.circular(8),
@@ -691,8 +691,8 @@ class _DashboardActionButton extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: Colors.white, size: 14),
-            const SizedBox(width: 4),
+            Icon(icon, color: Colors.white, size: 12),
+            const SizedBox(width: 3),
             Expanded(
               child: Text(
                 label,
@@ -701,13 +701,91 @@ class _DashboardActionButton extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 9,
+                  fontSize: 8.5,
                   fontWeight: FontWeight.w800,
                 ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _CompactStatsCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final String? subtitle;
+  final IconData icon;
+  final Color color;
+  const _CompactStatsCard({
+    required this.title,
+    required this.value,
+    this.subtitle,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kBorder),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: kMutedFg,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: kForeground,
+                  ),
+                ),
+                if (subtitle != null)
+                  Text(
+                    subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: kMutedFg, fontSize: 9.5),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 18),
+          ),
+        ],
       ),
     );
   }
@@ -735,7 +813,7 @@ class _CommunityDashboardCards extends StatelessWidget {
       children: [
         if (endangered.isNotEmpty) ...[
           _CannotCutWarning(count: endangered.length, onTap: onTap),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
         ],
         _SpeciesDistributionCard(distribution: distribution, onTap: onTap),
         const SizedBox(height: 14),
@@ -757,45 +835,51 @@ class _CannotCutWarning extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
       child: Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.red.shade50,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.red.shade100),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: Colors.red.shade100,
-              borderRadius: BorderRadius.circular(12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        decoration: BoxDecoration(
+          color: Colors.red.shade50,
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(color: Colors.red.shade100),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: Colors.red.shade100,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.warning_amber_rounded,
+                  color: Colors.red.shade700, size: 20),
             ),
-            child: Icon(Icons.warning_amber_rounded,
-                color: Colors.red.shade700, size: 22),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('$count endangered trees identified',
-                    maxLines: 1,
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$count endangered tree${count == 1 ? '' : 's'} identified',
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                         color: Colors.red.shade800,
                         fontWeight: FontWeight.w900,
-                        fontSize: 12)),
-                Text('Cannot Cut warning active for protected species',
+                        fontSize: 11.5),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Cannot Cut warning active for protected species',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: Colors.red.shade700, fontSize: 10)),
-              ],
+                    style:
+                        TextStyle(color: Colors.red.shade700, fontSize: 9.5),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }

@@ -104,6 +104,8 @@ class _LandingWebScreenState extends State<LandingWebScreen> {
     final logo = await _assetDataUrl('assets/landing/logo.png');
     final me2 = await _assetDataUrl('assets/landing/me2.png');
     final me = await _assetDataUrl('assets/landing/me.jpg', mime: 'image/jpeg');
+
+
     html = html
         .replaceAll('href="images7.png"', 'href="$image7"')
         .replaceAll('src="images7.png"', 'src="$image7"')
@@ -112,6 +114,8 @@ class _LandingWebScreenState extends State<LandingWebScreen> {
         .replaceAll('src="logo.png"', 'src="$logo"')
         .replaceAll('src="me2.png"', 'src="$me2"')
         .replaceAll('src="me.jpg"', 'src="$me"');
+
+
 
     await _controller.loadHtmlString(
       html,

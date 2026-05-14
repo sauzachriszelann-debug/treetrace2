@@ -14,6 +14,7 @@ import 'ai_identify_screen.dart';
 import 'map_screen.dart';
 import 'scan_qr_screen.dart';
 import 'upgrade_screen.dart';
+import 'community_structure_screen.dart';
 
 class PublicPortalScreen extends StatefulWidget {
   final VoidCallback? onOpenMap;
@@ -145,12 +146,12 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildSearchBar(),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 12),
                     Row(
                       children: [
                         _StatCard('Total Trees', '$totalTrees',
                             Icons.analytics_outlined, kPrimary),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 10),
                         _StatCard('Species', '$totalSpecies',
                             Icons.eco_outlined, Colors.teal),
                       ],
@@ -260,6 +261,13 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanQRScreen()));
   }
 
+  void _openFullReport() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CommunityStructureScreen()),
+    );
+  }
+
   Widget _buildBiodiversityInsights() {
     if (_stats == null) return const SizedBox.shrink();
 
@@ -269,7 +277,8 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionHeader('Ecosystem Insights', 'Full Report'),
+        _buildSectionHeader('Ecosystem Insights', 'Full Report',
+            onTap: _openFullReport),
         const SizedBox(height: 16),
         SizedBox(
           height: 120,
@@ -764,10 +773,10 @@ class _StatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: kCard,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: kBorder),
           boxShadow: [
             BoxShadow(
@@ -780,24 +789,24 @@ class _StatCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                   color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10)),
-              child: Icon(icon, color: color, size: 18),
+                  borderRadius: BorderRadius.circular(8)),
+              child: Icon(icon, color: color, size: 16),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Text(value,
                 style: GoogleFonts.inter(
-                    fontSize: 24,
+                    fontSize: 20,
                     fontWeight: FontWeight.w800,
                     color: kForeground)),
             Text(label,
                 style: const TextStyle(
-                    fontSize: 10,
+                    fontSize: 9,
                     color: kMutedFg,
                     fontWeight: FontWeight.w800,
-                    letterSpacing: 0.5)),
+                    letterSpacing: 0.2)),
           ],
         ),
       ),

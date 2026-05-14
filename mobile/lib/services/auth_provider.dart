@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   UserModel? _user;
   bool _loading = true;
+  String? _lastError;
 
   UserModel? get user => _user;
   bool get loading => _loading;
   bool get isLoggedIn => _user != null;
   bool get isAdmin => _user?.isAdmin ?? false;
+  String? get lastError => _lastError;
 
   Future<void> init() async {
     print("DEBUG: AuthProvider.init() started");
@@ -34,6 +37,7 @@ class AuthProvider extends ChangeNotifier {
 
   Future<bool> login(String email, String password) async {
     try {
+      _lastError = null;
       final data = await api.login(email, password);
       await api.saveToken(data['access_token']);
       final me = await api.getMe();
@@ -41,6 +45,17 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (error) {
+      if (error is DioException) {
+        final detail = error.response?.data is Map
+            ? error.response?.data['detail']?.toString()
+            : null;
+        _lastError = detail ??
+            (error.response?.statusCode != null
+                ? 'Login failed with status ${error.response?.statusCode}.'
+                : 'Cannot reach the backend. Check internet or wake Render.');
+      } else {
+        _lastError = 'Login failed. Please try again.';
+      }
       debugPrint('DEBUG: login failed: $error');
       return false;
     }

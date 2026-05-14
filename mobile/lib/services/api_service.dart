@@ -28,7 +28,6 @@ class ApiService {
       baseUrl: kBaseUrl,
       connectTimeout: const Duration(seconds: 15),
       receiveTimeout: const Duration(seconds: 30),
-      headers: {'Content-Type': 'application/json'},
     ));
 
     _dio.interceptors.add(InterceptorsWrapper(
@@ -252,7 +251,11 @@ class ApiService {
       ),
     });
     // Note: Don't set Content-Type header manually, Dio handles boundary automatically for FormData
-    final res = await _dio.post('/ai/identify', data: formData);
+    final res = await _dio.post(
+      '/ai/identify',
+      data: formData,
+      options: Options(contentType: 'multipart/form-data'),
+    );
     await _recordAiIdentification(res.data);
     return res.data;
   }
@@ -303,7 +306,11 @@ class ApiService {
         'file': await MultipartFile.fromFile(file.path,
             filename: file.path.split('/').last),
       });
-      final res = await _dio.post('/storage/upload-photo', data: formData);
+      final res = await _dio.post(
+        '/storage/upload-photo',
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
+      );
       return res.data['file_url'];
     } catch (_) {
       return null;

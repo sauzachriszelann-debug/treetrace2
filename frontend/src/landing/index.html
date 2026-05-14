@@ -43,6 +43,10 @@
             overflow-x: hidden;
         }
 
+        html, body {
+    background: var(--green-deep);
+}
+
         /* ── NAVBAR ── */
         nav {
             position: fixed;
@@ -240,6 +244,7 @@
             border-radius: 8px;
             display: block;
             transition: all 0.2s;
+                text-align: center;
         }
 
         .nav-mobile a:hover {
@@ -248,11 +253,12 @@
         }
 
         .nav-mobile .nav-cta-mobile {
-            background: var(--green-bright);
+            #background: var(--green-bright);
             color: white !important;
             text-align: center;
             margin-top: 8px;
             font-weight: 600;
+                text-align: center;
         }
 
         /* ── HERO ── */
@@ -3017,6 +3023,71 @@
                 overflow-y: auto;
             }
         }
+
+/* How it works*/
+        .features-wrapper .section-title { color: var(--cream); }
+.features-wrapper .section-label { color: var(--green-light); }
+.features-wrapper .section-label::before { background: var(--green-light); }
+.features-wrapper .section-desc { color: rgba(245, 240, 232, 0.55); }
+.features-wrapper .feature-name { color: var(--cream); }
+.features-wrapper .feature-desc { color: rgba(245, 240, 232, 0.5); }
+.features-wrapper .feature-num { color: var(--green-light); }
+.features-wrapper .feature-card {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(93, 214, 138, 0.12);
+}
+
+/* about sections*/
+        .about-wrapper .section-title { color: var(--cream); }
+.about-wrapper .section-label { color: var(--green-light); }
+.about-wrapper .section-label::before { background: var(--green-light); }
+.about-wrapper .section-desc { color: rgba(245, 240, 232, 0.55); }
+.about-wrapper .about-point {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(93, 214, 138, 0.12);
+}
+.about-wrapper .about-point-title { color: var(--cream); }
+.about-wrapper .about-point-desc { color: rgba(245, 240, 232, 0.5); }
+
+        .tech-wrapper .section-title { color: var(--cream); }
+.tech-wrapper .section-label { color: var(--green-light); }
+.tech-wrapper .section-label::before { background: var(--green-light); }
+.tech-wrapper .section-desc { color: rgba(245, 240, 232, 0.55); }
+
+/* tabs */
+.tech-tabs { background: rgba(255, 255, 255, 0.04); border-color: rgba(93, 214, 138, 0.15); }
+.tech-tab { color: rgba(245, 240, 232, 0.5); }
+.tech-tab.active { background: rgba(255, 255, 255, 0.08); color: var(--green-light); }
+
+/* outcome cards */
+.outcome-card { background: rgba(255, 255, 255, 0.04); border-color: rgba(93, 214, 138, 0.12); }
+.outcome-label { color: var(--cream); }
+.outcome-desc { color: rgba(245, 240, 232, 0.5); }
+
+/* tech list items */
+.tech-item { background: rgba(255, 255, 255, 0.04); border-left-color: var(--green-bright); }
+.tech-item-name { color: var(--cream); }
+.tech-item-desc { color: rgba(245, 240, 232, 0.5); }
+
+/* info banner */
+.tech-wrapper strong { color: var(--green-light); }
+
+/* accordion */
+.algo-accordion-head { background: rgba(255, 255, 255, 0.04); }
+.algo-head-title { color: var(--cream); }
+
+        /*Our team */
+        .team-wrapper .section-title { color: var(--cream); }
+.team-wrapper .section-label { color: var(--green-light); }
+.team-wrapper .section-label::before { background: var(--green-light); }
+.team-wrapper .section-desc { color: rgba(245, 240, 232, 0.55); }
+
+/* cards */
+.team-card { background: rgba(255, 255, 255, 0.04); border-color: rgba(93, 214, 138, 0.12); }
+.team-card .team-name { color: var(--cream); }
+.team-card .team-desc { color: rgba(245, 240, 232, 0.5); }
+
+
     </style>
 </head>
 
@@ -3030,7 +3101,10 @@
             <button class="modal-close" onclick="closeModal('authModal')" aria-label="Close">✕</button>
 
             <div class="modal-logo">
-                <div class="modal-logo-icon">🌿</div>
+                <div class="modal-logo-icon" style="background:none;padding:0;overflow:hidden;">
+                    <img src="logo.png" alt="TreeTrace Logo" style="width:35px;height:35px;object-fit:contain;border-radius:8px;"
+                         onerror="this.style.display='none';this.parentElement.innerHTML='🌿';this.parentElement.style.cssText='width:32px;height:32px;background:linear-gradient(135deg,var(--green-bright),var(--green-light));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;';">
+                </div>
                 <span class="modal-logo-text">TreeTrace</span>
             </div>
 
@@ -3119,7 +3193,11 @@
             <button class="modal-close" onclick="closeModal('pricingModal')" aria-label="Close">✕</button>
 
             <div class="modal-logo">
-                <div class="modal-logo-icon">🌿</div>
+                <div class="modal-logo-icon" style="background:none;padding:0;width:35px;height:35px;">
+                    <img src="logo.png" alt="TreeTrace Logo"
+                         style="width:32px;height:32px;object-fit:contain;border-radius:8px;display:block;"
+                         onerror="this.style.display='none';this.parentElement.style.cssText='width:32px;height:32px;background:linear-gradient(135deg,#2d9e5f,#5fd68a);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;';this.parentElement.textContent='🌿';">
+                </div>
                 <span class="modal-logo-text">TreeTrace</span>
             </div>
 
@@ -3326,7 +3404,7 @@
     </div>
 
     <!-- ABOUT -->
-    <div id="about" style="background:var(--cream);">
+    <div id="about" style="background:var(--green-deep);">
         <div class="about-wrapper">
             <div class="about-img reveal">
                 <div class="about-img-inner">
@@ -3411,10 +3489,10 @@
         </div>
     </div>
 
-    <div class="section-divider"></div>
+    <!--<div class="section-divider"></div>-->
 
     <!-- FEATURES -->
-    <div id="features" style="background:white;">
+    <div id="features" style="background:var(--green-deep);">
         <div class="features-wrapper">
             <div class="features-header">
                 <div>
@@ -3552,7 +3630,7 @@
     </div>
 
     <!-- TECHNOLOGY -->
-    <div id="technology" style="background:var(--cream);">
+    <div id="technology" style="background:var(--green-deep);">
         <div class="tech-wrapper">
             <div class="section-label reveal">Under the Hood</div>
             <h2 class="section-title reveal reveal-delay-1">Science You Can <em>Trust.</em> Technology That <span
@@ -3704,7 +3782,9 @@
                     </div>
                     <div class="outcome-card reveal reveal-delay-3">
     <span class="outcome-icon">
-        <i class="bi bi-brain"></i>
+       <span class="outcome-icon">
+    <i class="fa-solid fa-brain" style="color:transparent; -webkit-text-stroke:1.5px #2d9e5f;"></i>
+</span>
     </span>
 
                         <div class="outcome-metric">↑ Always</div>
@@ -3844,7 +3924,7 @@
     </div>
 
     <!-- TEAM -->
-    <div id="team" style="background:var(--cream);">
+    <div id="team" style="background:var(--green-deep);">
         <div class="team-wrapper">
             <div style="text-align:center;max-width:560px;margin:0 auto;">
                 <div class="section-label reveal" style="justify-content:center;">Our Team</div>
@@ -3886,7 +3966,7 @@
                   AVATAR PHOTO — Shaina L. Ma-ano
                   Replace src with: src="photos/shaina.jpg"
                 -->
-                        <img class="team-avatar-photo" src="https://placehold.co/84x84/3a1a5c/ffffff?text=SM"
+                        <img class="team-avatar-photo" src="./maano.png"
                             alt="Shaina L. Ma-ano"
                             onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
                         <div class="team-avatar-fallback" style="display:none;">👩‍🎨</div>

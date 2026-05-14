@@ -78,12 +78,18 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
       final isLimit = e is DioException && e.response?.statusCode == 402;
       final responseData = e is DioException ? e.response?.data : null;
       final detail = responseData is Map ? responseData['detail'] : null;
+      final statusCode = e is DioException ? e.response?.statusCode : null;
+      final errorText = detail?.toString();
       setState(() => _result = {
         'not_identified': true,
         'limit_reached': isLimit,
         'reason': isLimit
             ? detail ?? 'Free AI limit reached. Upgrade to Pro for unlimited scans.'
-            : 'Identification failed. Please ensure you have an active internet connection.'
+            : errorText != null && errorText.isNotEmpty
+                ? errorText
+                : statusCode != null
+                    ? 'AI identification service returned error $statusCode. You can still submit this photo for expert review.'
+                    : 'AI identification could not connect. Please check internet connection, or submit this photo for expert review.'
       });
     } finally {
       setState(() => _identifying = false);
@@ -178,21 +184,6 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
         foregroundColor: kForeground,
         iconTheme: const IconThemeData(color: kForeground),
         surfaceTintColor: Colors.transparent,
-        actions: [
-          _UsageBadge(
-            icon: Icons.auto_awesome,
-            usage: _aiUsage,
-            fallback: 'AI',
-            onTap: () => showUpgradeSheet(context),
-          ),
-          _UsageBadge(
-            icon: Icons.science_outlined,
-            usage: _unknownUsage,
-            fallback: 'Review',
-            onTap: () => showUpgradeSheet(context),
-          ),
-          const SizedBox(width: 8),
-        ],
       ),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
@@ -679,7 +670,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
       children: [
         Text('Capabilities', style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16)),
         const SizedBox(height: 16),
-        _buildCapabilityItem(Icons.auto_awesome, 'Instant Identification', 'Powered by Claude 3.5 Vision AI'),
+        _buildCapabilityItem(Icons.auto_awesome, 'Instant Identification', 'TreeTrace AI-assisted visual analysis'),
         _buildCapabilityItem(Icons.security, 'DENR Status Check', 'Real-time endangered species verification'),
         _buildCapabilityItem(Icons.architecture, 'Measurement Estimation', 'AI-driven DBH and height calculation'),
       ],
@@ -720,19 +711,28 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
 
   Widget _buildErrorCard() {
     final limitReached = _result?['limit_reached'] == true;
+    final reason = _result?['reason']?.toString() ?? '';
     return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.red.withOpacity(0.05), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.red.withOpacity(0.2))),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.red.withOpacity(0.05), borderRadius: BorderRadius.circular(18), border: Border.all(color: Colors.red.withOpacity(0.2))),
       child: Column(
         children: [
-          const Icon(Icons.error_outline_rounded, color: Colors.red, size: 40),
-          const SizedBox(height: 12),
-          Text('Identification Failed', style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: Colors.red)),
+          const Icon(Icons.error_outline_rounded, color: Colors.red, size: 34),
+          const SizedBox(height: 10),
+          Text(
+            limitReached ? 'Daily Limit Reached' : 'Could Not Identify',
+            style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: Colors.red),
+          ),
           const SizedBox(height: 8),
-          Text(_result?['reason'] ?? '', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: Colors.black54)),
-          const SizedBox(height: 14),
+          Text(
+            reason,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 12, color: Colors.black54, height: 1.35),
+          ),
+          const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
+            height: 48,
             child: ElevatedButton.icon(
               onPressed: limitReached
                   ? () => showUpgradeSheet(context)
@@ -803,68 +803,6 @@ class _MiniBadge extends StatelessWidget {
                   fontSize: 11,
                   fontWeight: FontWeight.w700)),
         ],
-      ),
-    );
-  }
-}
-
-class _UsageBadge extends StatelessWidget {
-  final IconData icon;
-  final Map<String, dynamic>? usage;
-  final String fallback;
-  final VoidCallback onTap;
-
-  const _UsageBadge({
-    required this.icon,
-    required this.usage,
-    required this.fallback,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final data = usage;
-    final unlimited = data?['unlimited'] == true;
-    final remaining = (data?['remaining'] as num?)?.toInt();
-    final limit = (data?['daily_limit'] as num?)?.toInt();
-    final isCritical = !unlimited && remaining != null && remaining <= 2;
-    final color = isCritical ? Colors.orange : kPrimary;
-    final label = data == null
-        ? fallback
-        : unlimited
-            ? '∞'
-            : remaining != null && limit != null
-                ? '$remaining/$limit'
-                : fallback;
-
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: color.withOpacity(0.24)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 14, color: color),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
