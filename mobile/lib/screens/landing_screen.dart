@@ -293,7 +293,7 @@ class _PreviewCard extends StatelessWidget {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(18),
                     child: Image.asset(
-                      'assets/landing/images7.png',
+                      'assets/landing/narra.jpg',
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(
                         color: kPrimary.withOpacity(0.25),

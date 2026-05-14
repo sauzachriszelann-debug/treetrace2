@@ -133,6 +133,13 @@ async def _plantnet(image_bytes: bytes, content_type: str) -> dict | None:
 
 # ── 2. Gemini Vision ──────────────────────────────────────────────────────────
 async def _gemini(image_b64: str, content_type: str, hint: dict | None) -> dict:
+    if not GEMINI_API_KEY:
+        return {
+            "not_identified": True,
+            "reason": "Gemini API key is not configured.",
+            "possible_candidates": [],
+        }
+
     prompt = IDENTIFY_PROMPT
     if hint:
         prompt += (
@@ -586,17 +593,21 @@ async def _pipeline(image_bytes: bytes, image_b64: str, content_type: str) -> di
         if pn:
             cl = {
                 **pn,
-                "description":            "",
-                "distinguishing_features": "",
-                "look_alikes":            "",
-                "dbh_method":             "Default estimate",
-                "habitat":                "Philippines",
-                "uses":                   "",
+                "description": (
+                    "Identified using PlantNet botanical image matching. "
+                    "Detailed TreeTrace vision enrichment is unavailable right now."
+                ),
+                "distinguishing_features": "Based on visible leaf, crown, bark, flower, or fruit features in the uploaded photo.",
+                "look_alikes":            "Use expert review when the image is unclear or visually similar to related species.",
+                "dbh_method":             "Not estimated from this photo.",
+                "habitat":                "Philippines / Southeast Asia",
+                "uses":                   "Ecological value, shade, habitat, and carbon storage.",
                 "is_tree":                True,
                 "not_identified":         False,
                 "confidence":             pn.get("confidence", "Low"),
                 "estimated_dbh_cm":       None,
                 "estimated_height_m":     None,
+                "source":                 pn.get("source", "plantnet"),
             }
         else:
             return {

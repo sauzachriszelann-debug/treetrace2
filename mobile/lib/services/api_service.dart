@@ -19,6 +19,7 @@ class ApiService {
   final _connectivity = Connectivity();
   late final Dio _dio;
   StreamSubscription? _connectivitySub;
+  String? _cachedToken;
 
   static const _queueKey = 'treetrace_offline_queue';
   static const _aiHistoryKey = 'treetrace_ai_history';
@@ -32,7 +33,7 @@ class ApiService {
 
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
-        final token = await _storage.read(key: 'token');
+        final token = _cachedToken ?? await getToken();
         if (token != null) {
           options.headers['Authorization'] = 'Bearer $token';
         }
@@ -40,7 +41,7 @@ class ApiService {
       },
       onError: (error, handler) {
         if (error.response?.statusCode == 401) {
-          _storage.delete(key: 'token');
+          clearToken();
         }
         return handler.next(error);
       },
@@ -151,12 +152,31 @@ class ApiService {
     return synced;
   }
 
-  Future<void> saveToken(String token) =>
-      _storage.write(key: 'token', value: token);
+  Future<void> saveToken(String token) async {
+    _cachedToken = token;
+    await _storage.write(key: 'token', value: token);
+  }
 
-  Future<void> clearToken() => _storage.delete(key: 'token');
+  Future<void> clearToken() async {
+    _cachedToken = null;
+    try {
+      await _storage.delete(key: 'token');
+    } catch (_) {
+      await _storage.deleteAll();
+    }
+  }
 
-  Future<String?> getToken() => _storage.read(key: 'token');
+  Future<String?> getToken() async {
+    if (_cachedToken != null) return _cachedToken;
+    try {
+      _cachedToken = await _storage.read(key: 'token');
+      return _cachedToken;
+    } catch (_) {
+      _cachedToken = null;
+      await _storage.deleteAll();
+      return null;
+    }
+  }
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   Future<Map<String, dynamic>> login(String email, String password) async {
@@ -254,7 +274,11 @@ class ApiService {
     final res = await _dio.post(
       '/ai/identify',
       data: formData,
-      options: Options(contentType: 'multipart/form-data'),
+      options: Options(
+        contentType: 'multipart/form-data',
+        sendTimeout: const Duration(seconds: 60),
+        receiveTimeout: const Duration(seconds: 120),
+      ),
     );
     await _recordAiIdentification(res.data);
     return res.data;

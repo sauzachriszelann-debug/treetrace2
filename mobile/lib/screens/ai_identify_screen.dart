@@ -61,7 +61,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
 
   Future<void> _pick(ImageSource source) async {
     final x = await ImagePicker().pickImage(
-        source: source, imageQuality: 80, maxWidth: 1200);
+        source: source, imageQuality: 68, maxWidth: 900);
     if (x == null) return;
     final f = File(x.path);
     setState(() { _photo = f; _result = null; });
@@ -75,11 +75,26 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
       _incrementUsage('ai');
       setState(() => _result = r);
     } catch (e) {
+      debugPrint('AI identify failed: $e');
       final isLimit = e is DioException && e.response?.statusCode == 402;
+      if (e is DioException) {
+        debugPrint('AI identify status: ${e.response?.statusCode}');
+        debugPrint('AI identify response: ${e.response?.data}');
+        debugPrint('AI identify type: ${e.type}');
+        debugPrint('AI identify message: ${e.message}');
+      }
       final responseData = e is DioException ? e.response?.data : null;
       final detail = responseData is Map ? responseData['detail'] : null;
       final statusCode = e is DioException ? e.response?.statusCode : null;
+      final errorType = e is DioException ? e.type : null;
       final errorText = detail?.toString();
+      final fallbackReason = errorType == DioExceptionType.connectionTimeout ||
+              errorType == DioExceptionType.receiveTimeout ||
+              errorType == DioExceptionType.sendTimeout
+          ? 'AI identification is taking too long. Render or the AI service may still be waking up. Please try again in a moment.'
+          : errorType == DioExceptionType.connectionError
+              ? 'AI identification could not connect to the backend. Check internet connection or wake Render.'
+              : 'AI identification could not connect. Please check internet connection, or submit this photo for expert review.';
       setState(() => _result = {
         'not_identified': true,
         'limit_reached': isLimit,
@@ -89,7 +104,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
                 ? errorText
                 : statusCode != null
                     ? 'AI identification service returned error $statusCode. You can still submit this photo for expert review.'
-                    : 'AI identification could not connect. Please check internet connection, or submit this photo for expert review.'
+                    : fallbackReason
       });
     } finally {
       setState(() => _identifying = false);
@@ -159,6 +174,11 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
   @override
   Widget build(BuildContext context) {
     final notIdentified = _result?['not_identified'] == true;
+    final hasPartialResult = notIdentified &&
+        ((_result?['common_name']?.toString().trim().isNotEmpty ?? false) ||
+            (_result?['scientific_name']?.toString().trim().isNotEmpty ??
+                false) ||
+            (_result?['partial'] == true));
     final confidence    = _result?['confidence'] as String?;
     final isProtected   = _result?['protected'] == true;
     final isCitizen     = context.watch<AuthProvider>().user?.role == 'citizen';
@@ -199,7 +219,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
             const SizedBox(height: 24),
 
             // ── Result Area ──────────────────────────────────────────────────
-            if (_result != null && !notIdentified)
+            if (_result != null && (!notIdentified || hasPartialResult))
               _buildResultCard(isProtected, confidence, isCitizen)
             else if (notIdentified)
               _buildErrorCard()
@@ -362,6 +382,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
   }
 
   Widget _buildResultCard(bool isProtected, String? confidence, bool isCitizen) {
+    final partial = _result?['not_identified'] == true || _result?['partial'] == true;
     final commonName = _textValue('common_name', fallback: 'Unknown Species');
     final scientificName = _textValue('scientific_name', fallback: '');
     final status = _textValue('endangered_status', fallback: 'Not Listed');
@@ -425,6 +446,10 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
               if (isProtected) ...[
                 const SizedBox(height: 16),
                 _buildCuttingWarning(),
+              ],
+              if (partial) ...[
+                const SizedBox(height: 16),
+                _buildPartialIdentificationNotice(),
               ],
             ],
           ),
@@ -535,6 +560,36 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _buildPartialIdentificationNotice() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.orange.withOpacity(0.32)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline_rounded, color: Colors.orange, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _result?['reason']?.toString() ??
+                  'TreeTrace returned a partial AI result. Submit this photo for expert review if the species is uncertain.',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

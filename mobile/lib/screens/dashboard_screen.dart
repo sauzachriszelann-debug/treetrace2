@@ -335,7 +335,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                     crossAxisSpacing: 9, mainAxisSpacing: 9,
 
-                    childAspectRatio: 1.85,
+                    childAspectRatio: 1.55,
 
                     children: [
 
@@ -513,7 +513,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                       padding: const EdgeInsets.symmetric(
 
-                          horizontal: 14, vertical: 12),
+                          horizontal: 14, vertical: 10),
 
                       decoration: BoxDecoration(
 
@@ -532,6 +532,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           children: [
 
                             Text(log.treeCommonName ?? 'Tree',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
 
                                 style: const TextStyle(
 
@@ -557,7 +559,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   ],
 
-                  const SizedBox(height: 24),
+                  SizedBox(height: MediaQuery.of(context).padding.bottom + 104),
 
                 ],
 
@@ -729,63 +731,71 @@ class _CompactStatsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: kCard,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kBorder),
+    return MediaQuery(
+      data: MediaQuery.of(context).copyWith(
+        textScaler: const TextScaler.linear(1),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: kMutedFg,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: kForeground,
-                  ),
-                ),
-                if (subtitle != null)
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: kCard,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: kBorder),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    subtitle!,
+                    title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: kMutedFg, fontSize: 9.5),
+                    style: const TextStyle(
+                      color: kMutedFg,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-              ],
+                  const SizedBox(height: 2),
+                  Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: kForeground,
+                    ),
+                  ),
+                  if (subtitle != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 1),
+                      child: Text(
+                        subtitle!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: kMutedFg, fontSize: 8),
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
+            const SizedBox(width: 7),
+            Container(
+              width: 31,
+              height: 31,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 17),
             ),
-            child: Icon(icon, color: color, size: 18),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
