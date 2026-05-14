@@ -64,12 +64,23 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
         source: source, imageQuality: 68, maxWidth: 900);
     if (x == null) return;
     final f = File(x.path);
-    setState(() { _photo = f; _result = null; });
-    await _identify(f);
+    setState(() {
+      _photo = f;
+      _result = null;
+      _identifying = true;
+    });
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    await _identify(f, markLoading: false);
   }
 
-  Future<void> _identify(File f) async {
-    setState(() => _identifying = true);
+  Future<void> _identify(File f, {bool markLoading = true}) async {
+    if (markLoading) {
+      setState(() {
+        _photo ??= f;
+        _identifying = true;
+      });
+    }
     try {
       final r = await api.identifyTree(f);
       _incrementUsage('ai');
@@ -255,11 +266,13 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
             style: _photo == null ? BorderStyle.solid : BorderStyle.solid,
           ),
         ),
-        child: _identifying
-            ? _buildLoadingOverlay()
-            : _photo != null
-                ? _buildImagePreview(notIdentified, confidence)
-                : _buildEmptyStatePrompt(),
+        child: _identifying && _photo != null
+            ? _buildAnalyzingImagePreview()
+            : _identifying
+                ? _buildLoadingOverlay()
+                : _photo != null
+                    ? _buildImagePreview(notIdentified, confidence)
+                    : _buildEmptyStatePrompt(),
       ),
     );
   }
@@ -291,6 +304,10 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
   }
 
   Widget _buildLoadingOverlay() {
+    if (_photo != null) {
+      return _buildAnalyzingImagePreview();
+    }
+
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -304,6 +321,72 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
         const SizedBox(height: 6),
         Text('Checking global botanical databases',
             style: TextStyle(color: kMutedFg, fontSize: 13)),
+      ],
+    );
+  }
+
+  Widget _buildAnalyzingImagePreview() {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(22),
+          child: Image.file(_photo!, fit: BoxFit.cover),
+        ),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(22),
+          child: Container(color: Colors.black.withOpacity(0.28)),
+        ),
+        Center(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 42),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.36),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withOpacity(0.22)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.18),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 38,
+                  height: 38,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Analyzing Species...',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  'Checking botanical and conservation data',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.82),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
