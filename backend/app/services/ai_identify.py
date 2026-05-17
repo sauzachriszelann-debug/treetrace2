@@ -30,6 +30,7 @@ PLANTNET_URL = "https://my-api.plantnet.org/v2/identify/all"
 GEMINI_URL   = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent"
 PERENUAL_URL = "https://perenual.com/api"
 TREFLE_URL   = "https://trefle.io/api/v1"
+GBIF_MATCH_URL = "https://api.gbif.org/v1/species/match"
 
 IDENTIFY_PROMPT = """\
 You are Dr. Maria Santos, a senior botanist at DENR with 20 years identifying Philippine trees.
@@ -286,6 +287,36 @@ async def _trefle(scientific_name: str) -> dict | None:
             "family_common_name": plant.get("family_common_name", ""),
             "genus":              plant.get("genus", ""),
             "image_url":          plant.get("image_url", ""),
+        }
+    except Exception:
+        return None
+
+
+# ── GBIF taxonomy validation ─────────────────────────────────────────────────
+async def _gbif_match(scientific_name: str) -> dict | None:
+    """Validate a scientific name through GBIF. This is not photo AI."""
+    if not scientific_name or scientific_name.lower() in {"unknown", "unknown tree"}:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=10) as http:
+            resp = await http.get(GBIF_MATCH_URL, params={"name": scientific_name})
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        usage_key = data.get("usageKey")
+        if not usage_key:
+            return None
+        return {
+            "usage_key": usage_key,
+            "accepted_usage_key": data.get("acceptedUsageKey"),
+            "scientific_name": data.get("scientificName") or data.get("canonicalName"),
+            "canonical_name": data.get("canonicalName"),
+            "family": data.get("family"),
+            "genus": data.get("genus"),
+            "rank": data.get("rank"),
+            "status": data.get("status"),
+            "confidence": data.get("confidence"),
+            "match_type": data.get("matchType"),
         }
     except Exception:
         return None
@@ -587,6 +618,7 @@ async def _pipeline(image_bytes: bytes, image_b64: str, content_type: str) -> di
 
     # Step 2 — Gemini visual confirmation
     cl = await _gemini(image_b64, content_type, hint=pn)
+    gemini_reason = cl.get("reason", "")
 
     # Step 3 — Merge species results
     if cl.get("not_identified"):
@@ -608,6 +640,13 @@ async def _pipeline(image_bytes: bytes, image_b64: str, content_type: str) -> di
                 "estimated_dbh_cm":       None,
                 "estimated_height_m":     None,
                 "source":                 pn.get("source", "plantnet"),
+                "ai_enrichment_available": False,
+                "fallback":               True,
+                "fallback_reason":        gemini_reason or "Detailed AI enrichment is unavailable.",
+                "user_message": (
+                    "Species match is based on PlantNet botanical image matching. "
+                    "Gemini details are temporarily unavailable, so submit for expert review if unsure."
+                ),
             }
         else:
             return {
@@ -628,10 +667,26 @@ async def _pipeline(image_bytes: bytes, image_b64: str, content_type: str) -> di
         cl["family"]          = pn["family"]           or cl.get("family", "")
         cl["plantnet_score"]  = pn["plantnet_score"]
         cl["source"]          = "plantnet+gemini"
+        cl["ai_enrichment_available"] = True
         if pn["confidence"] == "High":
             cl["confidence"] = "High"
     else:
         cl.setdefault("source", "gemini")
+        cl.setdefault("ai_enrichment_available", True)
+
+    gbif = await _gbif_match(cl.get("scientific_name", ""))
+    if gbif:
+        cl["gbif_validated"] = True
+        cl["gbif_usage_key"] = gbif.get("usage_key")
+        cl["gbif_match_type"] = gbif.get("match_type")
+        cl["gbif_confidence"] = gbif.get("confidence")
+        cl["gbif_status"] = gbif.get("status")
+        if gbif.get("canonical_name"):
+            cl["gbif_canonical_name"] = gbif["canonical_name"]
+        if gbif.get("family") and not cl.get("family"):
+            cl["family"] = gbif["family"]
+    else:
+        cl["gbif_validated"] = False
 
     return _enrich(cl)
 
