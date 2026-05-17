@@ -125,6 +125,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
   Future<void> _submitUnknown() async {
     if (_photo == null) return;
     setState(() => _identifying = true);
+    var submitted = false;
     try {
       final payload = {
         'photo_url': '',
@@ -137,6 +138,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
         payload['photo_url'] = await api.uploadPhoto(_photo!) ?? '';
         await api.submitUnknownSpecies(payload);
         _incrementUsage('unknown');
+        submitted = true;
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
               content: Text('Submitted for expert review.'),
@@ -144,6 +146,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
         }
       } else {
         await api.queueOfflineAction('SUBMIT_UNKNOWN', payload, photoPath: _photo!.path);
+        submitted = true;
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
               content: Text('Saved offline. Unknown species will sync later.'),
@@ -170,7 +173,21 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
             backgroundColor: kPoor));
       }
     } finally {
-      if (mounted) setState(() => _identifying = false);
+      if (mounted) {
+        setState(() {
+          _identifying = false;
+          if (submitted) {
+            _photo = null;
+            _result = null;
+          }
+        });
+        if (submitted) {
+          _loadUsage();
+          try {
+            await context.read<AuthProvider>().refreshUser();
+          } catch (_) {}
+        }
+      }
     }
   }
 

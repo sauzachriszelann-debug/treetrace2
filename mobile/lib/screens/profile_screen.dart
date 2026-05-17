@@ -72,10 +72,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _buildSectionTitle('Membership Status'),
                     _buildPlanCard(user),
                     const SizedBox(height: 24),
-                    _buildSectionTitle('My AI Identification Records'),
+                    _buildSectionTitle('History'),
                     _buildAiHistoryCard(user),
                     const SizedBox(height: 24),
-                    _buildSectionTitle('My Unknown Species Submissions'),
                     _buildUnknownSubmissionsCard(),
                     const SizedBox(height: 24),
                   ],
@@ -326,7 +325,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'AI scans today: ${user?.aiIdentificationsToday ?? 0}${user?.isEnterprise == true || user?.isInstitutional == true ? ' / unlimited' : user?.isPro == true ? ' / 50' : ' / 10'}',
+                  'AI Scan History',
                   style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
                 ),
               ),
@@ -336,6 +335,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ]),
             const SizedBox(height: 8),
+            Text(
+              'Today: ${user?.aiIdentificationsToday ?? 0}${user?.isEnterprise == true || user?.isInstitutional == true ? ' / unlimited' : user?.isPro == true ? ' / 50' : ' / 10'}',
+              style: const TextStyle(color: kMutedFg, fontSize: 12),
+            ),
+            const SizedBox(height: 4),
             if (history.isEmpty)
               const Text(
                 'No AI identification records on this phone yet. Scan a tree to start your history.',
@@ -410,7 +414,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  '${submissions.length} submitted for expert review',
+                  'Expert Review Submissions',
                   style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
                 ),
               ),
@@ -420,6 +424,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ]),
             const SizedBox(height: 8),
+            Text(
+              '${submissions.length} submitted for expert review',
+              style: const TextStyle(color: kMutedFg, fontSize: 12),
+            ),
+            const SizedBox(height: 4),
             if (snap.connectionState == ConnectionState.waiting)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
@@ -479,7 +488,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  item.reviewed ? 'REVIEWED' : 'PENDING',
+                  item.reviewed ? 'Reviewed' : 'Pending Review',
                   style: TextStyle(color: statusColor, fontSize: 9, fontWeight: FontWeight.w900),
                 ),
               ),

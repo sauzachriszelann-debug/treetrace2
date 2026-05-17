@@ -45,6 +45,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic>? _community;
   int _pendingReviews = 0;
   String _search = '';
+  final TextEditingController _searchController = TextEditingController();
   bool _reviewNotificationSeen = false;
 
   bool _loading = true;
@@ -54,6 +55,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
 
   void initState() { super.initState(); _load(); }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
 
 
@@ -117,6 +124,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ].join(' ').toLowerCase();
             return text.contains(query);
           }).toList();
+    final searching = query.isNotEmpty;
 
 
 
@@ -314,12 +322,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(height: 10),
 
                   TextField(
+                    controller: _searchController,
                     onChanged: (value) => setState(() => _search = value),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       hintText: 'Search trees...',
-                      prefixIcon: Icon(Icons.search_rounded, color: kPrimary),
+                      prefixIcon:
+                          const Icon(Icons.search_rounded, color: kPrimary),
+                      suffixIcon: _search.isEmpty
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.close_rounded,
+                                  color: kMutedFg),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _search = '');
+                              },
+                            ),
                     ),
                   ),
+
+                  if (searching) ...[
+                    const SizedBox(height: 8),
+                    _DashboardSearchResultsPanel(results: recentTrees),
+                  ],
 
                   const SizedBox(height: 10),
 
@@ -802,6 +827,106 @@ class _CompactStatsCard extends StatelessWidget {
 }
 
 
+
+class _DashboardSearchResultsPanel extends StatelessWidget {
+  final List<TreeModel> results;
+
+  const _DashboardSearchResultsPanel({required this.results});
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = results.take(6).toList();
+    return Container(
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: visible.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.all(14),
+              child: Text(
+                'No matching trees found.',
+                style: TextStyle(color: kMutedFg, fontSize: 13),
+              ),
+            )
+          : Column(
+              children: [
+                for (var i = 0; i < visible.length; i++) ...[
+                  _DashboardSearchResultTile(tree: visible[i]),
+                  if (i != visible.length - 1)
+                    const Divider(height: 1, color: kBorder),
+                ],
+              ],
+            ),
+    );
+  }
+}
+
+class _DashboardSearchResultTile extends StatelessWidget {
+  final TreeModel tree;
+
+  const _DashboardSearchResultTile({required this.tree});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => TreeDetailScreen(treeId: tree.id)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: kPrimary.withOpacity(0.09),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child:
+                  const Icon(Icons.forest_rounded, color: kPrimary, size: 20),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    tree.commonName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 13,
+                    ),
+                  ),
+                  Text(
+                    '${tree.scientificName ?? 'Tree record'} - ${tree.barangay ?? 'No barangay'}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: kMutedFg, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            HealthBadge(tree.healthStatus, small: true),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _CommunityDashboardCards extends StatelessWidget {
   final Map<String, dynamic>? data;

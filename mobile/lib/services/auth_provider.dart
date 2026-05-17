@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import '../models/models.dart';
@@ -15,20 +17,28 @@ class AuthProvider extends ChangeNotifier {
   String? get lastError => _lastError;
 
   Future<void> init() async {
+    final startedAt = DateTime.now();
     print("DEBUG: AuthProvider.init() started");
     try {
       final token = await api.getToken();
       print("DEBUG: Token found: ${token != null}");
       if (token != null) {
         print("DEBUG: Fetching user info...");
-        final data = await api.getMe();
+        final data = await api.getMe().timeout(const Duration(seconds: 10));
         print("DEBUG: User data received: $data");
         _user = UserModel.fromJson(data);
       }
+    } on TimeoutException {
+      print("DEBUG: AuthProvider.init() timed out after 10 seconds");
     } catch (e) {
       print("DEBUG: AuthProvider.init() error: $e");
       await api.clearToken();
     } finally {
+      final elapsed = DateTime.now().difference(startedAt);
+      const minimumSplashTime = Duration(seconds: 5);
+      if (elapsed < minimumSplashTime) {
+        await Future.delayed(minimumSplashTime - elapsed);
+      }
       _loading = false;
       print("DEBUG: AuthProvider.init() finished, loading=false");
       notifyListeners();

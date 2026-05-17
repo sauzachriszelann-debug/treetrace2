@@ -39,6 +39,13 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
   bool _reviewNotificationSeen = false;
   bool _loading = true;
   String _search = '';
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -129,6 +136,7 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
     final totalTrees = _stats?['total_trees'] ?? _trees.length;
     final totalSpecies = _stats?['total_species'] ?? 0;
     final endangeredCount = _stats?['total_endangered'] ?? 0;
+    final searching = _search.trim().isNotEmpty;
 
     return Scaffold(
       backgroundColor: kBackground,
@@ -146,6 +154,10 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildSearchBar(),
+                    if (searching) ...[
+                      const SizedBox(height: 8),
+                      _buildSearchResultsPanel(),
+                    ],
                     const SizedBox(height: 12),
                     Row(
                       children: [
@@ -193,13 +205,13 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
                       ),
                       const SizedBox(height: 32),
                     ],
-                    _buildSectionHeader(
-                      _search.isEmpty
-                          ? 'Urban Forest Inventory'
-                          : 'Search Results',
-                      '${_filtered.length} entries',
-                    ),
-                    const SizedBox(height: 16),
+                    if (!searching) ...[
+                      _buildSectionHeader(
+                        'Urban Forest Inventory',
+                        '${_filtered.length} entries',
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                   ],
                 ),
               ),
@@ -211,7 +223,7 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
                   child: LoadingList(),
                 ),
               )
-            else
+            else if (!searching)
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
                 sliver: SliverList(
@@ -229,6 +241,10 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
                     childCount: _filtered.length,
                   ),
                 ),
+              )
+            else
+              const SliverToBoxAdapter(
+                child: SizedBox(height: 100),
               ),
           ],
         ),
@@ -483,16 +499,70 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
         ],
       ),
       child: TextField(
+        controller: _searchController,
         onChanged: (v) => setState(() => _search = v),
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           hintText: 'Search by species name, location, or tag...',
-          prefixIcon: Icon(Icons.search_rounded, color: kPrimary),
+          prefixIcon: const Icon(Icons.search_rounded, color: kPrimary),
+          suffixIcon: _search.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.close_rounded, color: kMutedFg),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _search = '');
+                  },
+                ),
           border: InputBorder.none,
           enabledBorder: InputBorder.none,
           focusedBorder: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(vertical: 16),
+          contentPadding: const EdgeInsets.symmetric(vertical: 16),
         ),
       ),
+    );
+  }
+
+  Widget _buildSearchResultsPanel() {
+    final results = _filtered.take(6).toList();
+    return Container(
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: results.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.all(14),
+              child: Text(
+                'No matching trees found.',
+                style: TextStyle(color: kMutedFg, fontSize: 13),
+              ),
+            )
+          : Column(
+              children: [
+                for (var i = 0; i < results.length; i++) ...[
+                  _SearchResultTile(
+                    tree: results[i],
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            PublicTreeProfileScreen(treeId: results[i].id),
+                      ),
+                    ),
+                  ),
+                  if (i != results.length - 1)
+                    const Divider(height: 1, color: kBorder),
+                ],
+              ],
+            ),
     );
   }
 
@@ -758,6 +828,64 @@ class _CitizenNotificationButton extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SearchResultTile extends StatelessWidget {
+  final TreeModel tree;
+  final VoidCallback onTap;
+
+  const _SearchResultTile({
+    required this.tree,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: kPrimary.withOpacity(0.09),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: const Icon(Icons.park_rounded, color: kPrimary, size: 20),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    tree.commonName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 13,
+                    ),
+                  ),
+                  Text(
+                    '${tree.scientificName ?? 'Tree record'} - ${tree.barangay ?? 'No barangay'}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: kMutedFg, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            HealthBadge(tree.healthStatus, small: true),
+          ],
+        ),
       ),
     );
   }

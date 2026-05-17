@@ -51,217 +51,378 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  InputDecoration _buildInputDecoration({
+    required String hintText,
+    required IconData prefixIcon,
+    Widget? suffixIcon,
+  }) {
+    return InputDecoration(
+      hintText: hintText,
+      hintStyle: const TextStyle(color: kMutedFg, fontSize: 14),
+      prefixIcon: Icon(prefixIcon, size: 20, color: kMutedFg),
+      suffixIcon: suffixIcon,
+      filled: true,
+      fillColor: kMutedFg.withOpacity(0.05),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: kBorder.withOpacity(0.5), width: 1),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: kPrimary, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: kPoor.withOpacity(0.5), width: 1),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _AuthShell(
+      title: 'Welcome Back',
+      subtitle: 'Access your tree map, QR scanner, dashboard, and AI tools.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Animated error box for smooth appearance
+          AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            child: _error != null
+                ? Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: _ErrorBox(message: _error!),
+            )
+                : const SizedBox.shrink(),
+          ),
+
+          const _FieldLabel('Email Address'),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _emailCtrl,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.next,
+            style: const TextStyle(fontWeight: FontWeight.w500),
+            decoration: _buildInputDecoration(
+              hintText: 'you@example.com',
+              prefixIcon: Icons.email_outlined,
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          const _FieldLabel('Password'),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _passCtrl,
+            obscureText: _obscure,
+            textInputAction: TextInputAction.done,
+            style: const TextStyle(fontWeight: FontWeight.w500),
+            decoration: _buildInputDecoration(
+              hintText: '••••••••',
+              prefixIcon: Icons.lock_outline,
+              suffixIcon: Padding(
+                padding: const EdgeInsets.only(right: 8.0),
+                child: IconButton(
+                  icon: Icon(
+                    _obscure
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    size: 20,
+                    color: kMutedFg,
+                  ),
+                  splashRadius: 24,
+                  onPressed: () => setState(() => _obscure = !_obscure),
+                ),
+              ),
+            ),
+            onFieldSubmitted: (_) => _login(),
+          ),
+
+          const SizedBox(height: 32),
+
+          // Main action button with subtle shadow
+          Container(
+            height: 56,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: kPrimary.withOpacity(0.25),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: ElevatedButton(
+              onPressed: _loading ? null : _login,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kPrimary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              child: _loading
+                  ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2.5,
+                ),
+              )
+                  : const Text(
+                'Sign In',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          Row(
+            children: [
+              Expanded(child: Divider(color: kBorder.withOpacity(0.5))),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'or',
+                  style: TextStyle(
+                    color: kMutedFg,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              Expanded(child: Divider(color: kBorder.withOpacity(0.5))),
+            ],
+          ),
+
+          const SizedBox(height: 24),
+
+          SizedBox(
+            height: 56,
+            child: OutlinedButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const RegisterScreen()),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: kBorder, width: 1.5),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              child: const Text(
+                'Create Citizen Account',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: kPrimary,
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 32),
+
+          const Center(
+            child: Text(
+              'TreeTrace • Panabo City',
+              style: TextStyle(
+                color: kMutedFg,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AuthShell extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Widget child;
+
+  const _AuthShell({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+  });
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kSidebarBg,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [kSidebarBg, kSidebarBg, kPrimary],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    IconButton(
-                      onPressed: () => Navigator.maybePop(context),
-                      icon: const Icon(Icons.arrow_back_rounded),
-                      color: Colors.white,
-                      padding: EdgeInsets.zero,
-                      visualDensity: VisualDensity.compact,
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(13),
-                          child: Image.asset(
-                            'assets/landing/logo.png',
-                            width: 44,
-                            height: 44,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'TreeTrace',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 22,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            Text(
-                              'Geo-Spatial Inventory',
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.62),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 26),
-                    const Text(
-                      'Sign in to TreeTrace',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 26,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 7),
-                    Text(
-                      'Access your dashboard, tree map, QR scanner, and AI tools.',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.68),
-                        fontSize: 13,
-                        height: 1.35,
-                      ),
-                    ),
-                  ],
-                ),
+      body: Stack(
+        children: [
+          // Background Gradient Base
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [kSidebarBg, kPrimary],
+                stops: [0.3, 1.0],
               ),
-              Expanded(
-                child: Container(
-                  width: double.infinity,
-                  decoration: const BoxDecoration(
-                    color: kBackground,
-                    borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(28)),
-                  ),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(22, 24, 22, 26),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (_error != null) _ErrorBox(message: _error!),
-                        const _FieldLabel('Email'),
-                        const SizedBox(height: 7),
-                        TextFormField(
-                          controller: _emailCtrl,
-                          keyboardType: TextInputType.emailAddress,
-                          decoration: const InputDecoration(
-                            hintText: 'you@example.com',
-                            prefixIcon: Icon(Icons.email_outlined,
-                                size: 18, color: kMutedFg),
+            ),
+          ),
+
+          // Decorative Top Right Circle
+          Positioned(
+            top: -40,
+            right: -60,
+            child: Container(
+              width: 200,
+              height: 200,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.05),
+              ),
+            ),
+          ),
+
+          // Decorative Middle Left Circle
+          Positioned(
+            top: 150,
+            left: -80,
+            child: Container(
+              width: 150,
+              height: 150,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.04),
+              ),
+            ),
+          ),
+
+          SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 24, 28),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Back Button and Tag inline
+                      Row(
+                        children: [
+                          IconButton(
+                            onPressed: () => Navigator.maybePop(context),
+                            icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                            color: Colors.white,
+                            iconSize: 20,
+                            splashRadius: 24,
+                            padding: const EdgeInsets.all(8),
+                            visualDensity: VisualDensity.compact,
                           ),
-                          onFieldSubmitted: (_) => _login(),
-                        ),
-                        const SizedBox(height: 15),
-                        const _FieldLabel('Password'),
-                        const SizedBox(height: 7),
-                        TextFormField(
-                          controller: _passCtrl,
-                          obscureText: _obscure,
-                          decoration: InputDecoration(
-                            hintText: 'Password',
-                            prefixIcon: const Icon(Icons.lock_outline,
-                                size: 18, color: kMutedFg),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscure
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.visibility_outlined,
-                                size: 18,
-                                color: kMutedFg,
-                              ),
-                              onPressed: () =>
-                                  setState(() => _obscure = !_obscure),
+                          const SizedBox(width: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 7,
                             ),
-                          ),
-                          onFieldSubmitted: (_) => _login(),
-                        ),
-                        const SizedBox(height: 22),
-                        SizedBox(
-                          height: 50,
-                          child: ElevatedButton(
-                            onPressed: _loading ? null : _login,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: kPrimary,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                            child: _loading
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Text(
-                                    'Log In',
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.w900),
-                                  ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: const [
-                            Expanded(child: Divider(color: kBorder)),
-                            SizedBox(width: 12),
-                            Text('or',
-                                style:
-                                    TextStyle(color: kMutedFg, fontSize: 12)),
-                            SizedBox(width: 12),
-                            Expanded(child: Divider(color: kBorder)),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          height: 48,
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) => const RegisterScreen()),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: kPrimary,
-                              side: const BorderSide(color: kBorder),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.12),
                               ),
                             ),
                             child: const Text(
-                              'Create Citizen Account',
-                              style: TextStyle(fontWeight: FontWeight.w800),
+                              'TreeTrace Account',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 18),
-                        const Center(
-                          child: Text(
-                            'TreeTrace - Panabo City',
-                            style: TextStyle(color: kMutedFg, fontSize: 11),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Headers
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 34,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.5,
                           ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          subtitle,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.8),
+                            fontSize: 15,
+                            height: 1.4,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Bottom Sheet Container
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
+                    decoration: const BoxDecoration(
+                      color: kBackground,
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(32),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 20,
+                          offset: Offset(0, -5),
                         ),
                       ],
                     ),
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(32),
+                      ),
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(28, 36, 28, 36),
+                        physics: const BouncingScrollPhysics(),
+                        child: child,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -273,12 +434,15 @@ class _FieldLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w800,
-        color: kMutedFg,
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: kSidebarBg,
+        ),
       ),
     );
   }
@@ -291,21 +455,26 @@ class _ErrorBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: kPoor.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kPoor.withOpacity(0.3)),
+        color: kPoor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kPoor.withOpacity(0.4), width: 1.5),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline, color: kPoor, size: 17),
-          const SizedBox(width: 8),
+          const Icon(Icons.error_outline_rounded, color: kPoor, size: 20),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(color: kPoor, fontSize: 13),
+              style: const TextStyle(
+                color: kPoor,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                height: 1.3,
+              ),
             ),
           ),
         ],
