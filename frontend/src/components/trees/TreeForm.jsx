@@ -268,21 +268,27 @@ export default function TreeForm({
     setAiStatus("estimating");
     setAiError(null);
     try {
-      const { file_url } = await storageApi.uploadPhoto(photoFile);
-      const result = await aiApi.identifyFromUrl(file_url);
-      const dbh = result.estimated_dbh_cm;
-      const height = result.estimated_height_m;
-      const isDefaultEstimate = Number(dbh) === 25 && Number(height) === 8;
+      const reference = DBH_REFERENCES[dbhReference] || DBH_REFERENCES.none;
+      const distance = parseFloat(dbhDistance);
+      const result = await aiApi.measureDbh(photoFile, {
+        referenceHint: reference.hint,
+        method: "Web photo DBH measurement",
+        knownDistanceM: Number.isFinite(distance) && distance > 0 ? distance : null,
+      });
+      const dbh = result.dbh_cm;
+      const height = result.height_m;
+      const isDefaultEstimate = Number(dbh) === 25 && result.fallback;
 
       if (!dbh || isDefaultEstimate) {
         setDbhResult({
           confidence: "Low",
-          method: "AI visual estimate unavailable",
-          analysis_notes: result.reason || "The AI did not return a photo-specific DBH estimate for this image.",
+          method: result.method || "Photo DBH measurement unavailable",
+          analysis_notes: result.detail || result.analysis_notes || "The system did not return a photo-specific DBH measurement for this image.",
           distance_estimate_m: null,
-          accuracy_note: "Use the manual circumference calculator for accurate DBH.",
+          accuracy_note: result.accuracy_note || "Use the manual circumference calculator for accurate DBH.",
+          segmentation_used: Boolean(result.segmentation_used),
         });
-        toast.warning("AI could not estimate DBH from this photo. Please use the manual circumference calculator.");
+        toast.warning("Photo DBH measurement was uncertain. Please use the manual circumference calculator.");
         setAiStatus(null);
         return;
       }
@@ -297,13 +303,18 @@ export default function TreeForm({
         dbh_cm: dbh,
         height_m: height,
         confidence: result.confidence || "Low",
-        method: "AI visual estimate from uploaded photo URL",
-        analysis_notes: "The photo was uploaded first, then analyzed by the vision AI for rough DBH and height estimates.",
-        distance_estimate_m: null,
-        accuracy_note: "+/- 30-50 cm rough visual estimate. Manual circumference is recommended for accurate DBH.",
-        fallback: true,
+        method: result.method || "Photo DBH measurement",
+        analysis_notes: result.analysis_notes || result.notes || "The uploaded photo was analyzed for trunk size and scale reference.",
+        distance_estimate_m: result.distance_estimate_m || null,
+        accuracy_note: result.accuracy_note || "Use manual circumference for final field validation.",
+        segmentation_used: Boolean(result.segmentation_used),
+        fallback: Boolean(result.fallback),
       });
-      toast.success(`DBH: ${dbh || "estimated"} cm - AI visual estimate`);
+      toast.success(
+        result.segmentation_used
+          ? `DBH: ${dbh} cm - YOLO segmentation`
+          : `DBH: ${dbh} cm - photo estimate`
+      );
       setAiStatus("done");
     } catch (error) {
       const status = error.response?.status;
@@ -594,9 +605,12 @@ export default function TreeForm({
         {dbhResult && (
           <div className="rounded-md bg-background/80 border border-border px-3 py-2 text-xs text-muted-foreground">
             <span className="font-medium text-foreground">
+              {dbhResult.segmentation_used ? "YOLO segmentation" : "AI-assisted estimate"}
+              {" - "}
               {dbhResult.confidence || "AI"} confidence
             </span>
             {dbhResult.distance_estimate_m ? ` - estimated distance ${dbhResult.distance_estimate_m} m` : ""}
+            {dbhResult.method ? ` - ${dbhResult.method}` : ""}
             {dbhResult.accuracy_note ? ` - ${dbhResult.accuracy_note}` : ""}
           </div>
         )}
