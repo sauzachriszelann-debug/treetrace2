@@ -9,8 +9,10 @@ AI Tree Identification Service - Full Pipeline
 import base64
 import httpx
 import json
+import os
 import re
 import asyncio
+from pathlib import Path
 from app.services.species_db import lookup_species
 
 try:
@@ -31,6 +33,8 @@ GEMINI_URL   = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-
 PERENUAL_URL = "https://perenual.com/api"
 TREFLE_URL   = "https://trefle.io/api/v1"
 GBIF_MATCH_URL = "https://api.gbif.org/v1/species/match"
+YOLO_DBH_MODEL_PATH = Path(__file__).resolve().parents[2] / "models" / "tree_trunk_segmentation.pt"
+_YOLO_DBH_MODEL = None
 
 IDENTIFY_PROMPT = """\
 You are Dr. Maria Santos, a senior botanist at DENR with 20 years identifying Philippine trees.
@@ -550,6 +554,157 @@ Respond ONLY with valid JSON:
 """
 
 
+def _reference_width_cm(reference_hint: str) -> float | None:
+    hint = (reference_hint or "").lower()
+    if "smartphone" in hint:
+        return 7.0
+    if "hand" in hint or "palm" in hint:
+        return 18.0
+    if "id" in hint or "atm" in hint or "card" in hint:
+        return 8.5
+    if "a4" in hint or "paper" in hint:
+        return 21.0
+    if "5 coin" in hint or "₱5" in hint:
+        return 2.7
+    if "1 coin" in hint or "₱1" in hint:
+        return 2.4
+    if "shoe" in hint or "boot" in hint:
+        return 28.0
+    if "bottle" in hint:
+        return 6.5
+    return None
+
+
+def _mask_bounds(mask):
+    ys, xs = mask.nonzero()
+    if len(xs) == 0 or len(ys) == 0:
+        return None
+    return int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
+
+
+def _row_width(mask, y: int) -> int | None:
+    if y < 0 or y >= mask.shape[0]:
+        return None
+    xs = mask[y].nonzero()[0]
+    if len(xs) < 2:
+        return None
+    return int(xs.max() - xs.min() + 1)
+
+
+async def _yolo_segmented_dbh(
+    image_data: str,
+    content_type: str,
+    reference_hint: str,
+    known_distance_m: float | None = None,
+) -> dict | None:
+    """Use an optional YOLO segmentation model to measure DBH from masks.
+
+    The model is expected at backend/models/tree_trunk_segmentation.pt.
+    Required classes: trunk/tree_trunk and reference/reference_object/card/paper.
+    TimberVision-style trunk labels such as tronc, cut, and side are accepted.
+    """
+    if not YOLO_DBH_MODEL_PATH.exists():
+        return None
+
+    reference_width_cm = _reference_width_cm(reference_hint)
+    if reference_width_cm is None:
+        return None
+
+    try:
+        import cv2
+        import numpy as np
+        from ultralytics import YOLO
+    except Exception:
+        return None
+
+    try:
+        global _YOLO_DBH_MODEL
+        if _YOLO_DBH_MODEL is None:
+            _YOLO_DBH_MODEL = YOLO(str(YOLO_DBH_MODEL_PATH))
+
+        raw = base64.standard_b64decode(image_data)
+        img_array = np.frombuffer(raw, dtype=np.uint8)
+        image = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+        if image is None:
+            return None
+
+        predictions = _YOLO_DBH_MODEL.predict(image, imgsz=1024, conf=0.35, verbose=False)
+        if not predictions:
+            return None
+        result = predictions[0]
+        if result.masks is None or result.boxes is None:
+            return None
+
+        names = result.names or {}
+        masks = result.masks.data.cpu().numpy()
+        classes = result.boxes.cls.cpu().numpy().astype(int)
+        scores = result.boxes.conf.cpu().numpy()
+
+        trunk_mask = None
+        trunk_score = 0.0
+        ref_mask = None
+        ref_score = 0.0
+
+        for idx, cls_id in enumerate(classes):
+            label = str(names.get(int(cls_id), "")).lower().replace("-", "_").replace(" ", "_")
+            mask = masks[idx] > 0.5
+            if mask.shape[:2] != image.shape[:2]:
+                mask = cv2.resize(mask.astype("uint8"), (image.shape[1], image.shape[0])) > 0
+            score = float(scores[idx])
+            if label in {"trunk", "tree_trunk", "stem", "tree_stem", "tronc", "cut", "side"} and score > trunk_score:
+                trunk_mask = mask
+                trunk_score = score
+            if label in {"reference", "reference_object", "a4_paper", "paper", "id_card", "card", "ruler"} and score > ref_score:
+                ref_mask = mask
+                ref_score = score
+
+        if trunk_mask is None or ref_mask is None:
+            return None
+
+        ref_bounds = _mask_bounds(ref_mask)
+        if not ref_bounds:
+            return None
+        ref_x1, ref_y1, ref_x2, ref_y2 = ref_bounds
+        ref_width_px = max(ref_x2 - ref_x1 + 1, 1)
+        pixels_per_cm = ref_width_px / reference_width_cm
+        if pixels_per_cm <= 0:
+            return None
+
+        measurement_y = int((ref_y1 + ref_y2) / 2)
+        trunk_width_px = _row_width(trunk_mask, measurement_y)
+        if not trunk_width_px:
+            trunk_bounds = _mask_bounds(trunk_mask)
+            if not trunk_bounds:
+                return None
+            trunk_width_px = trunk_bounds[2] - trunk_bounds[0] + 1
+
+        dbh_cm = round(trunk_width_px / pixels_per_cm, 1)
+        if dbh_cm <= 0 or dbh_cm > 300:
+            return None
+
+        confidence = "High" if trunk_score >= 0.70 and ref_score >= 0.70 else "Medium"
+        return {
+            "dbh_cm": dbh_cm,
+            "height_m": None,
+            "confidence": confidence,
+            "method": "YOLOv8 trunk segmentation with reference object calibration",
+            "analysis_notes": (
+                f"Detected trunk and reference object masks. Reference width used: "
+                f"{reference_width_cm:g} cm; trunk width: {trunk_width_px}px; "
+                f"scale: {pixels_per_cm:.2f}px/cm."
+            ),
+            "distance_estimate_m": known_distance_m,
+            "accuracy_note": "+/- 5-15 cm when the reference object is flat, visible, and placed at DBH height.",
+            "segmentation_used": True,
+            "segmentation_model": str(YOLO_DBH_MODEL_PATH),
+            "trunk_detection_confidence": round(trunk_score, 3),
+            "reference_detection_confidence": round(ref_score, 3),
+            "reference_width_cm": reference_width_cm,
+        }
+    except Exception:
+        return None
+
+
 async def measure_dbh_from_base64(
     image_data: str,
     content_type: str = "image/jpeg",
@@ -562,6 +717,15 @@ async def measure_dbh_from_base64(
         if isinstance(known_distance_m, (int, float)) and known_distance_m > 0
         else "not provided"
     )
+    segmented = await _yolo_segmented_dbh(
+        image_data,
+        content_type,
+        reference_hint,
+        known_distance_m,
+    )
+    if segmented:
+        return segmented
+
     prompt = (
         DBH_MEASURE_PROMPT
         .replace("{method}", method)
