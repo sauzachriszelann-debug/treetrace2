@@ -196,6 +196,7 @@ def _safe_dbh_estimate(reason: str, reference_hint: str, known_distance_m: Optio
         "method": "Safe DBH estimate",
         "analysis_notes": reason,
         "distance_estimate_m": known_distance_m if has_distance else None,
+        "measurement_height_m": 1.3,
         "accuracy_note": "+/- 30-50 cm safe estimate. For accurate DBH, measure circumference at 1.3 meters and use DBH = circumference / pi.",
         "fallback": True,
     }
@@ -308,13 +309,14 @@ def community_structure(
         info = lookup_species(tree.common_name or "")
         if info and info["protected"]:
             barangay_map[b]["protected"] += 1
-            if info["status_code"] in ("CR", "EN"):
+            if info["status_code"] in ("CR", "EN", "VU"):
                 barangay_map[b]["endangered"] += 1
                 endangered_list.append({
                     "tree_id": tree.id,
                     "common_name": tree.common_name,
                     "scientific_name": tree.scientific_name,
                     "barangay": b,
+                    "photo_url": tree.photo_url,
                     "lat": tree.lat, "lng": tree.lng,
                     "status": info["status"],
                     "status_code": info["status_code"],

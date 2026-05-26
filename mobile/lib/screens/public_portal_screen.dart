@@ -15,6 +15,8 @@ import 'map_screen.dart';
 import 'scan_qr_screen.dart';
 import 'upgrade_screen.dart';
 import 'community_structure_screen.dart';
+import 'endangered_trees_screen.dart';
+import 'project_evaluation_screen.dart';
 
 class PublicPortalScreen extends StatefulWidget {
   final VoidCallback? onOpenMap;
@@ -159,6 +161,8 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
                       _buildSearchResultsPanel(),
                     ],
                     const SizedBox(height: 12),
+                    _buildAssignmentCard(),
+                    const SizedBox(height: 12),
                     Row(
                       children: [
                         _StatCard('Total Trees', '$totalTrees',
@@ -281,6 +285,86 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const CommunityStructureScreen()),
+    );
+  }
+
+  void _openEvaluation() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ProjectEvaluationScreen()),
+    );
+  }
+
+  Widget _buildAssignmentCard() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _openEvaluation,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: kSidebarBg,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: kSidebarBg.withOpacity(0.12),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: kSidebarPrimary.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(13),
+                  border: Border.all(color: kSidebarPrimary.withOpacity(0.22)),
+                ),
+                child: const Icon(
+                  Icons.fact_check_rounded,
+                  color: kSidebarPrimary,
+                ),
+              ),
+              const SizedBox(width: 13),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Project Evaluation',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'Requirements, algorithms, insights, and model results',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: kSidebarText,
+                        fontSize: 11.5,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Icon(Icons.chevron_right_rounded,
+                  color: kSidebarPrimary, size: 22),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -459,28 +543,42 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
   }
 
   Widget _buildEndangeredAlert(int count) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.orange.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.orange.withOpacity(0.2)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.warning_amber_rounded,
-              color: Colors.orange, size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              '$count Endangered trees identified in the latest survey.',
-              style: const TextStyle(
-                  color: Colors.orange,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600),
-            ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const EndangeredTreesScreen(publicMode: true),
           ),
-        ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.orange.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.orange.withOpacity(0.2)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded,
+                  color: Colors.orange, size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '$count protected/vulnerable trees identified in the latest survey.',
+                  style: const TextStyle(
+                      color: Colors.orange,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600),
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded,
+                  color: Colors.orange, size: 20),
+            ],
+          ),
+        ),
       ),
     );
   }

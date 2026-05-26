@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
 import '../services/theme.dart';
+import 'tree_detail_screen.dart';
 
 class CommunityStructureScreen extends StatefulWidget {
   const CommunityStructureScreen({super.key});
@@ -74,7 +75,7 @@ class _CommunityStructureScreenState extends State<CommunityStructureScreen> {
                       _SummaryCard('Species',
                           '${data['total_species'] ?? 0}', Icons.eco, kHealthy),
                       _SummaryCard(
-                        'Endangered',
+                        'Conservation',
                         '${data['total_endangered'] ?? 0}',
                         Icons.warning_amber_rounded,
                         kPoor,
@@ -112,7 +113,7 @@ class _CommunityStructureScreenState extends State<CommunityStructureScreen> {
                   ...barangays.map((row) => _BarangayCard(row)),
                   if (endangered.isNotEmpty) ...[
                     const SizedBox(height: 22),
-                    _SectionTitle('Endangered Trees - Do Not Cut'),
+                    _SectionTitle('Protected / Vulnerable Trees'),
                     const SizedBox(height: 10),
                     ...endangered.map((tree) => _EndangeredCard(tree)),
                   ],
@@ -494,33 +495,54 @@ class _EndangeredCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.red.shade50,
+    final rawId = tree is Map ? tree['tree_id'] ?? tree['id'] : null;
+    final treeId = rawId is int ? rawId : int.tryParse('$rawId');
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: treeId == null
+            ? null
+            : () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => TreeDetailScreen(treeId: treeId),
+                  ),
+                ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.red.shade100),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.warning_amber_rounded, color: Colors.red.shade700),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('${tree['common_name'] ?? 'Unknown Tree'}',
-                    style: const TextStyle(fontWeight: FontWeight.w900)),
-                Text('${tree['scientific_name'] ?? ''}',
-                    style: const TextStyle(color: kMutedFg, fontSize: 11)),
-              ],
-            ),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.red.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.red.shade100),
           ),
-          Text('${tree['status'] ?? ''}',
-              style: TextStyle(
-                  color: Colors.red.shade700, fontWeight: FontWeight.w900)),
-        ],
+          child: Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.red.shade700),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${tree['common_name'] ?? 'Unknown Tree'}',
+                        style: const TextStyle(fontWeight: FontWeight.w900)),
+                    Text('${tree['scientific_name'] ?? ''}',
+                        style: const TextStyle(color: kMutedFg, fontSize: 11)),
+                  ],
+                ),
+              ),
+              Text('${tree['status'] ?? ''}',
+                  style: TextStyle(
+                      color: Colors.red.shade700,
+                      fontWeight: FontWeight.w900)),
+              const SizedBox(width: 4),
+              Icon(Icons.chevron_right_rounded,
+                  color: Colors.red.shade700, size: 18),
+            ],
+          ),
+        ),
       ),
     );
   }

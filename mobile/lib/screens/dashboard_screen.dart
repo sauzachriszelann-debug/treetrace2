@@ -17,10 +17,14 @@ import '../widgets/widgets.dart';
 import 'tree_detail_screen.dart';
 import 'scan_qr_screen.dart';
 import 'community_structure_screen.dart';
+import 'endangered_trees_screen.dart';
 import 'users_screen.dart';
 import 'unknown_review_screen.dart';
 import 'qr_labels_screen.dart';
 import 'health_logs_screen.dart';
+import 'project_evaluation_screen.dart';
+import 'reports_tools_screen.dart';
+import 'tree_list_screen.dart';
 
 
 
@@ -112,6 +116,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final carbon = _trees.fold<double>(0, (s, t) => s + (t.carbonKg ?? 0));
 
     final gps = _trees.where((t) => t.lat != null).length;
+    final conservationTrees = _trees
+        .map(_conservationMapForTree)
+        .whereType<Map<String, dynamic>>()
+        .toList();
     final query = _search.trim().toLowerCase();
     final recentTrees = query.isEmpty
         ? _trees
@@ -243,13 +251,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
 
                   GridView.count(
-                    crossAxisCount: 3,
+                    crossAxisCount: 2,
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     padding: EdgeInsets.zero,
-                    crossAxisSpacing: 6,
-                    mainAxisSpacing: 6,
-                    childAspectRatio: 3.9,
+                    crossAxisSpacing: 9,
+                    mainAxisSpacing: 9,
+                    childAspectRatio: 2.45,
                     children: [
                       _DashboardActionButton(
                           label: 'Scan QR',
@@ -314,6 +322,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => const HealthLogsScreen(),
+                                ),
+                              )),
+                      _DashboardActionButton(
+                          label: 'Reports',
+                          icon: Icons.summarize_rounded,
+                          onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const ReportsToolsScreen(),
+                                ),
+                              )),
+                      _DashboardActionButton(
+                          label: 'Evaluation',
+                          icon: Icons.fact_check_outlined,
+                          onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const ProjectEvaluationScreen(),
                                 ),
                               )),
                     ],
@@ -402,10 +429,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   _CommunityDashboardCards(
                     data: _community,
-                    onTap: () => Navigator.push(
+                    fallbackConservationTrees: conservationTrees,
+                    onStructureTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => const CommunityStructureScreen(),
+                      ),
+                    ),
+                    onEndangeredTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => EndangeredTreesScreen(
+                          initialTrees: conservationTrees.isNotEmpty
+                              ? conservationTrees
+                              : (_community?['endangered_trees']
+                                      as List<dynamic>?) ??
+                                  const <dynamic>[],
+                        ),
                       ),
                     ),
                   ),
@@ -478,7 +518,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                     action: TextButton(
 
-                      onPressed: () {},
+                      onPressed: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const TreeListScreen(),
+                          ),
+                        );
+                        _load();
+                      },
 
                       child: const Text('View all',
 
@@ -694,6 +742,79 @@ class _CitizenReviewNotification extends StatelessWidget {
   }
 }
 
+Map<String, dynamic>? _conservationMapForTree(TreeModel tree) {
+  final info = _localConservationInfo(
+    '${tree.commonName} ${tree.scientificName ?? ''}',
+  );
+  if (info == null) return null;
+
+  return {
+    'tree_id': tree.id,
+    'id': tree.id,
+    'common_name': tree.commonName,
+    'scientific_name': tree.scientificName,
+    'barangay': tree.barangay ?? 'Unknown',
+    'photo_url': tree.photoUrl,
+    'lat': tree.lat,
+    'lng': tree.lng,
+    'status': info['status'],
+    'status_code': info['status_code'],
+    'iucn_color': info['iucn_color'],
+    'cutting_allowed': false,
+  };
+}
+
+Map<String, String>? _localConservationInfo(String rawName) {
+  final name = rawName.toLowerCase().trim();
+  const protectedSpecies = {
+    'narra': {
+      'status': 'Endangered',
+      'status_code': 'EN',
+      'iucn_color': '#f57c00',
+    },
+    'pterocarpus indicus': {
+      'status': 'Endangered',
+      'status_code': 'EN',
+      'iucn_color': '#f57c00',
+    },
+    'molave': {
+      'status': 'Endangered',
+      'status_code': 'EN',
+      'iucn_color': '#f57c00',
+    },
+    'yakal': {
+      'status': 'Vulnerable',
+      'status_code': 'VU',
+      'iucn_color': '#fbc02d',
+    },
+    'yakal tree': {
+      'status': 'Vulnerable',
+      'status_code': 'VU',
+      'iucn_color': '#fbc02d',
+    },
+    'shorea astylosa': {
+      'status': 'Vulnerable',
+      'status_code': 'VU',
+      'iucn_color': '#fbc02d',
+    },
+    'kamagong': {
+      'status': 'Vulnerable',
+      'status_code': 'VU',
+      'iucn_color': '#fbc02d',
+    },
+    'lauan': {
+      'status': 'Vulnerable',
+      'status_code': 'VU',
+      'iucn_color': '#fbc02d',
+    },
+  };
+
+  for (final entry in protectedSpecies.entries) {
+    if (name.contains(entry.key)) return entry.value;
+  }
+  return null;
+}
+
 class _DashboardActionButton extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -708,31 +829,47 @@ class _DashboardActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(15),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: kPrimary,
-          borderRadius: BorderRadius.circular(8),
+          color: kCard,
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: kBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.035),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: Colors.white, size: 12),
-            const SizedBox(width: 3),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: kPrimary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(icon, color: kPrimary, size: 18),
+            ),
+            const SizedBox(width: 10),
             Expanded(
               child: Text(
                 label,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
                 style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 8.5,
+                  color: kForeground,
+                  fontSize: 12,
                   fontWeight: FontWeight.w800,
+                  height: 1.1,
                 ),
               ),
             ),
+            const Icon(Icons.chevron_right_rounded, color: kMutedFg, size: 16),
           ],
         ),
       ),
@@ -930,16 +1067,27 @@ class _DashboardSearchResultTile extends StatelessWidget {
 
 class _CommunityDashboardCards extends StatelessWidget {
   final Map<String, dynamic>? data;
-  final VoidCallback onTap;
-  const _CommunityDashboardCards({required this.data, required this.onTap});
+  final List<Map<String, dynamic>> fallbackConservationTrees;
+  final VoidCallback onStructureTap;
+  final VoidCallback onEndangeredTap;
+  const _CommunityDashboardCards({
+    required this.data,
+    required this.fallbackConservationTrees,
+    required this.onStructureTap,
+    required this.onEndangeredTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     final distribution = data?['species_distribution'] as List<dynamic>? ?? [];
     final barangays = data?['barangay_breakdown'] as List<dynamic>? ?? [];
-    final endangered = data?['endangered_trees'] as List<dynamic>? ?? [];
+    final endpointConservation =
+        data?['endangered_trees'] as List<dynamic>? ?? [];
+    final endangered = endpointConservation.isNotEmpty
+        ? endpointConservation
+        : fallbackConservationTrees;
 
-    if (data == null) {
+    if (data == null && fallbackConservationTrees.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -947,12 +1095,12 @@ class _CommunityDashboardCards extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (endangered.isNotEmpty) ...[
-          _CannotCutWarning(count: endangered.length, onTap: onTap),
+          _CannotCutWarning(count: endangered.length, onTap: onEndangeredTap),
           const SizedBox(height: 12),
         ],
-        _SpeciesDistributionCard(distribution: distribution, onTap: onTap),
+        _SpeciesDistributionCard(distribution: distribution, onTap: onStructureTap),
         const SizedBox(height: 14),
-        _BarangayBarCard(barangays: barangays, onTap: onTap),
+        _BarangayBarCard(barangays: barangays, onTap: onStructureTap),
         const SizedBox(height: 18),
       ],
     );
@@ -994,7 +1142,7 @@ class _CannotCutWarning extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '$count endangered tree${count == 1 ? '' : 's'} identified',
+                    '$count protected/vulnerable tree${count == 1 ? '' : 's'} identified',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -1004,7 +1152,7 @@ class _CannotCutWarning extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Cannot Cut warning active for protected species',
+                    'Conservation warning active for protected species',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style:
@@ -1371,22 +1519,10 @@ class _RecentTreeRow extends StatelessWidget {
 
         child: Row(children: [
 
-          Container(
-
-            width: 36, height: 36,
-
-            decoration: BoxDecoration(
-
-              color: kPrimary.withOpacity(0.08),
-
-              borderRadius: BorderRadius.circular(8),
-
-            ),
-
-            child: const Icon(Icons.park_outlined,
-
-                color: kPrimary, size: 18),
-
+          TreePhoto(
+            url: tree.photoUrl,
+            size: 42,
+            radius: BorderRadius.circular(10),
           ),
 
           const SizedBox(width: 12),
