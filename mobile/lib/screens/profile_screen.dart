@@ -6,6 +6,7 @@ import '../services/api_service.dart';
 import '../services/theme.dart';
 import '../models/models.dart';
 import 'upgrade_screen.dart';
+import 'project_evaluation_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -528,6 +529,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildSettingsSection(AuthProvider auth) {
     return Column(
       children: [
+        _buildSettingsTile(
+          Icons.fact_check_outlined,
+          'Project Evaluation',
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const ProjectEvaluationScreen(),
+            ),
+          ),
+        ),
         _buildSettingsTile(Icons.notifications_none_rounded, 'Notifications', () {}),
         _buildSettingsTile(Icons.security_rounded, 'Privacy & Security', () {}),
         _buildSettingsTile(Icons.help_outline_rounded, 'Help Center', () {}),

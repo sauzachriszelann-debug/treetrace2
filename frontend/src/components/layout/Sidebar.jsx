@@ -3,30 +3,31 @@ import {
   LayoutDashboard, TreePine, Map, Plus, QrCode,
   Users, BarChart3, LogOut, Leaf, ScanLine, Globe,
   Sparkles, Network, WifiOff,
-  Crown, FileText, SearchCheck,
+  Crown, FileText, SearchCheck, ClipboardCheck,
 } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { label: "Dashboard",      icon: LayoutDashboard, path: "/dashboard" },
-  { label: "Tree Inventory", icon: TreePine,         path: "/trees" },
-  { label: "Tree Map",       icon: Map,              path: "/map" },
-  { label: "Add Tree",       icon: Plus,             path: "/add-tree" },
-  { label: "AI Identifier",  icon: Sparkles,         path: "/ai-identify" },
-  { label: "Community",      icon: Network,          path: "/community" },
-  { label: "QR Scanner",     icon: ScanLine,         path: "/scan" },
-  { label: "Public Portal",  icon: Globe,            path: "/public" },
-  { label: "Upgrade Pro",    icon: Crown,            path: "/upgrade" },
+  { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
+  { label: "Tree Inventory", icon: TreePine, path: "/trees" },
+  { label: "Tree Map", icon: Map, path: "/map" },
+  { label: "Add Tree", icon: Plus, path: "/add-tree" },
+  { label: "AI Identifier", icon: Sparkles, path: "/ai-identify" },
+  { label: "Community", icon: Network, path: "/community" },
+  { label: "Evaluation", icon: ClipboardCheck, path: "/evaluation" },
+  { label: "QR Scanner", icon: ScanLine, path: "/scan" },
+  { label: "Public Portal", icon: Globe, path: "/public" },
+  { label: "Upgrade Pro", icon: Crown, path: "/upgrade" },
 ];
 
 const adminItems = [
-  { label: "QR Generator", icon: QrCode,    path: "/qr-manager" },
-  { label: "Health Logs",  icon: BarChart3, path: "/health-logs" },
+  { label: "QR Generator", icon: QrCode, path: "/qr-manager" },
+  { label: "Health Logs", icon: BarChart3, path: "/health-logs" },
   { label: "Unknown Review", icon: SearchCheck, path: "/unknown-species" },
   { label: "Reports & Tools", icon: FileText, path: "/reports" },
-  { label: "Users",        icon: Users,     path: "/admin/users" },
+  { label: "Users", icon: Users, path: "/admin/users" },
 ];
 
 export default function Sidebar({ user }) {

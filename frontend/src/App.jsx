@@ -25,6 +25,7 @@ import CommunityStructure from "@/pages/CommunityStructure";
 import Upgrade           from "@/pages/Upgrade";
 import UnknownSpeciesReview from "@/pages/UnknownSpeciesReview";
 import ReportsAndTools from "@/pages/ReportsAndTools";
+import ProjectEvaluation from "@/pages/ProjectEvaluation";
 import SystemHome from "@/pages/SystemHome";
 
 // Public pages (no auth, no sidebar)
@@ -63,6 +64,7 @@ export default function App() {
           <Route path="upgrade"     element={<Upgrade />} />
           <Route path="unknown-species" element={<UnknownSpeciesReview />} />
           <Route path="reports"     element={<ReportsAndTools />} />
+          <Route path="evaluation"  element={<ProjectEvaluation />} />
 
           {/* Admin-only (backend enforces, frontend just shows/hides nav) */}
           <Route path="qr-manager"  element={<QRManager />} />

@@ -21,15 +21,32 @@ L.Icon.Default.mergeOptions({
 });
 
 const DEFAULT_CENTER = [7.3047, 125.6856];
-const STATUS_COLORS = { Healthy: "#22c55e", Fair: "#f59e0b", Poor: "#ef4444" };
+const STATUS_COLORS = { Healthy: "#10b981", Fair: "#f59e0b", Poor: "#ef4444" };
 
 function healthIcon(status) {
-  const color = STATUS_COLORS[status] || "#6b7280";
+  const color = STATUS_COLORS[status] || "#10b981";
   return L.divIcon({
-    className: "",
-    html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3)"></div>`,
-    iconSize: [14, 14],
-    iconAnchor: [7, 7],
+    className: "custom-leaflet-marker",
+    html: `
+      <div style="filter: drop-shadow(0px 3px 6px rgba(0,0,0,0.25)); display: flex; align-items: center; justify-content: center; position: relative;">
+        <!-- Pin Shape -->
+        <svg xmlns="http://www.w3.org/2000/svg" width="30" height="38" viewBox="0 0 24 30" fill="${color}">
+          <path d="M12 0C5.4 0 0 5.4 0 12c0 8.4 12 18 12 18s12-9.6 12-18c0-6.6-5.4-12-12-12z" />
+          <!-- Inner Circle -->
+          <circle cx="12" cy="12" r="5.5" fill="white" />
+        </svg>
+        <!-- Leaf icon centered in white circle -->
+        <div style="position: absolute; top: 8px; left: 8px; color: ${color}; width: 14px; height: 14px; display: flex; align-items: center; justify-content: center;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 3.5 1 9.8a7 7 0 0 1-9 8.2Z"/>
+            <path d="M9 22v-4h-4"/>
+          </svg>
+        </div>
+      </div>
+    `,
+    iconSize: [30, 38],
+    iconAnchor: [15, 38],
+    popupAnchor: [0, -36],
   });
 }
 
@@ -183,8 +200,8 @@ export default function PublicPortal() {
             ) : (
               <MapContainer center={DEFAULT_CENTER} zoom={13} style={{ height: "100%", width: "100%" }}>
                 <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org">OpenStreetMap</a>'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+                  url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
                 />
                 {geoTrees.map((tree) => (
                   <Marker key={tree.id} position={[tree.lat, tree.lng]} icon={healthIcon(tree.health_status)}>

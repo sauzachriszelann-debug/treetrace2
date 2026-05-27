@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
@@ -12,12 +13,20 @@ class DBHResult {
   final String confidence;
   final String method;
   final String notes;
+  final bool fallback;
+  final bool segmentationUsed;
+  final double measurementHeightM;
+  final String? accuracyNote;
   DBHResult({
     required this.dbhCm,
     this.heightM,
     required this.confidence,
     required this.method,
     required this.notes,
+    this.fallback = false,
+    this.segmentationUsed = false,
+    this.measurementHeightM = 1.3,
+    this.accuracyNote,
   });
 }
 
@@ -52,7 +61,10 @@ const _references = [
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 class DBHMeasureScreen extends StatefulWidget {
-  const DBHMeasureScreen({super.key});
+  final File? initialPhoto;
+
+  const DBHMeasureScreen({super.key, this.initialPhoto});
+
   @override
   State<DBHMeasureScreen> createState() => _DBHMeasureScreenState();
 }
@@ -67,6 +79,12 @@ class _DBHMeasureScreenState extends State<DBHMeasureScreen> {
   String? _error;
   final _distanceCtrl = TextEditingController();
   final _circumferenceCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _photo = widget.initialPhoto;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -273,6 +291,22 @@ class _DBHMeasureScreenState extends State<DBHMeasureScreen> {
       ),
       const SizedBox(height: 16),
 
+      if (widget.initialPhoto != null && _photo != null) ...[
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: kPrimary.withOpacity(0.07),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: kPrimary.withOpacity(0.22)),
+          ),
+          child: const Text(
+            'Using the tree photo you already added. Retake only if the trunk or reference object is not clear.',
+            style: TextStyle(color: kPrimary, fontSize: 12, height: 1.35),
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+
       // Selected reference reminder
       if (!_quickMode && _selectedRef != null)
         Container(
@@ -298,7 +332,7 @@ class _DBHMeasureScreenState extends State<DBHMeasureScreen> {
       GestureDetector(
         onTap: _photo == null ? _takePhoto : null,
         child: Container(
-          height: 220,
+          height: 280,
           decoration: BoxDecoration(
               color: kCard,
               borderRadius: BorderRadius.circular(14),
@@ -307,16 +341,57 @@ class _DBHMeasureScreenState extends State<DBHMeasureScreen> {
           child: _photo != null
               ? ClipRRect(
               borderRadius: BorderRadius.circular(13),
-              child: Image.file(_photo!, fit: BoxFit.cover,
-                  width: double.infinity))
-              : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(Icons.camera_alt_outlined, size: 48,
-                color: kPrimary.withOpacity(0.4)),
-            const SizedBox(height: 8),
-            const Text('Tap to take photo',
-                style: TextStyle(color: kMutedFg, fontWeight: FontWeight.w500)),
-          ]),
+              child: Stack(fit: StackFit.expand, children: [
+                Image.file(_photo!, fit: BoxFit.cover, width: double.infinity),
+                DBHMeasureOverlay(referenceName: _quickMode ? null : _selectedRef?.name),
+              ]))
+              : ClipRRect(
+                  borderRadius: BorderRadius.circular(13),
+                  child: Stack(fit: StackFit.expand, children: [
+                    Container(color: kSidebarBg.withOpacity(0.04)),
+                    DBHMeasureOverlay(referenceName: _quickMode ? null : _selectedRef?.name),
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: kCard.withOpacity(0.92),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: kBorder),
+                        ),
+                        child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(Icons.camera_alt_outlined, size: 38,
+                              color: kPrimary.withOpacity(0.6)),
+                          const SizedBox(height: 8),
+                          const Text('Tap to take photo',
+                              style: TextStyle(color: kForeground, fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 3),
+                          const Text('Align trunk with the DBH guide',
+                              style: TextStyle(color: kMutedFg, fontSize: 11)),
+                        ]),
+                      ),
+                    ),
+                  ]),
+                ),
         ),
+      ),
+      const SizedBox(height: 10),
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: kPrimary.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: kPrimary.withOpacity(0.16)),
+        ),
+        child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(Icons.straighten, color: kPrimary, size: 18),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Use the guide like an AR tape: keep the ground line at the tree base, align the trunk in the center, and place the reference object on the 1.3m DBH line.',
+              style: TextStyle(color: kForeground, fontSize: 12, height: 1.35),
+            ),
+          ),
+        ]),
       ),
       const SizedBox(height: 12),
 
@@ -381,8 +456,14 @@ class _DBHMeasureScreenState extends State<DBHMeasureScreen> {
   // ── Step 3: Result ─────────────────────────────────────────────────────────
   Widget _buildResult() {
     final r = _result!;
-    final confColor = r.confidence == 'High' ? kHealthy
+    final isFallback = r.fallback || r.method.toLowerCase().contains('safe dbh');
+    final confColor = isFallback ? kPoor : r.confidence == 'High' ? kHealthy
         : r.confidence == 'Medium' ? kFair : kPoor;
+    final methodLabel = r.segmentationUsed
+        ? 'YOLO Segmentation Used'
+        : isFallback
+            ? 'AI Measurement Unavailable'
+            : 'AI Photo Estimate';
 
     return SingleChildScrollView(
       key: const ValueKey(3),
@@ -392,9 +473,47 @@ class _DBHMeasureScreenState extends State<DBHMeasureScreen> {
         if (_photo != null)
           ClipRRect(
               borderRadius: BorderRadius.circular(14),
-              child: Image.file(_photo!, height: 160, fit: BoxFit.cover,
-                  width: double.infinity)),
+              child: SizedBox(
+                height: 180,
+                child: Stack(fit: StackFit.expand, children: [
+                  Image.file(_photo!, fit: BoxFit.cover, width: double.infinity),
+                  DBHMeasureOverlay(
+                    compact: true,
+                    referenceName: _quickMode ? null : _selectedRef?.name,
+                  ),
+                ]),
+              )),
         const SizedBox(height: 20),
+
+        if (isFallback) ...[
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: kPoor.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: kPoor.withOpacity(0.28)),
+            ),
+            child: const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.warning_amber_rounded, color: kPoor, size: 20),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'This is only a fallback estimate, not a measured DBH. Retake the photo with the trunk and a clear reference object, or use Manual Circumference for accurate records.',
+                    style: TextStyle(
+                      color: kPoor,
+                      fontSize: 12,
+                      height: 1.35,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
 
         // Main result
         Container(
@@ -404,8 +523,10 @@ class _DBHMeasureScreenState extends State<DBHMeasureScreen> {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: kBorder)),
           child: Column(children: [
-            const Text('Estimated DBH', style: TextStyle(
-                color: kMutedFg, fontSize: 13)),
+            Text(
+              isFallback ? 'Fallback DBH Estimate' : 'Estimated DBH',
+              style: const TextStyle(color: kMutedFg, fontSize: 13),
+            ),
             const SizedBox(height: 8),
             Text('${r.dbhCm.toStringAsFixed(1)} cm',
                 style: const TextStyle(color: kForeground, fontSize: 48,
@@ -424,10 +545,26 @@ class _DBHMeasureScreenState extends State<DBHMeasureScreen> {
                           : Icons.warning_amber,
                       color: confColor, size: 14),
                   const SizedBox(width: 6),
-                  Text('${r.confidence} Confidence',
+                  Text(isFallback ? 'Fallback Only' : '${r.confidence} Confidence',
                       style: TextStyle(color: confColor,
                           fontWeight: FontWeight.w700, fontSize: 13)),
                 ])),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: (r.segmentationUsed ? kHealthy : kPrimary).withOpacity(0.08),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                methodLabel,
+                style: TextStyle(
+                  color: r.segmentationUsed ? kHealthy : kPrimary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
             if (r.heightM != null) ...[
               const SizedBox(height: 12),
               const Divider(),
@@ -440,6 +577,24 @@ class _DBHMeasureScreenState extends State<DBHMeasureScreen> {
                         fontWeight: FontWeight.w600, fontSize: 14)),
               ]),
             ],
+            const SizedBox(height: 12),
+            if (r.heightM == null) const Divider(),
+            if (r.heightM == null) const SizedBox(height: 12),
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              const Icon(Icons.vertical_align_bottom, color: kMutedFg, size: 16),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  'DBH point: ${r.measurementHeightM.toStringAsFixed(1)} m above ground',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: kForeground,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ]),
           ]),
         ),
         const SizedBox(height: 12),
@@ -448,28 +603,57 @@ class _DBHMeasureScreenState extends State<DBHMeasureScreen> {
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-              color: kPrimary.withOpacity(0.06),
+              color: isFallback ? kPoor.withOpacity(0.05) : kPrimary.withOpacity(0.06),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: kPrimary.withOpacity(0.2))),
+              border: Border.all(color: isFallback ? kPoor.withOpacity(0.18) : kPrimary.withOpacity(0.2))),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Method Used', style: TextStyle(
-                color: kPrimary, fontWeight: FontWeight.w700, fontSize: 13)),
+            Text('Method Used', style: TextStyle(
+                color: isFallback ? kPoor : kPrimary, fontWeight: FontWeight.w700, fontSize: 13)),
             const SizedBox(height: 4),
             Text(r.method, style: const TextStyle(color: kForeground, fontSize: 13)),
             const SizedBox(height: 8),
-            const Text('AI Analysis Notes', style: TextStyle(
-                color: kPrimary, fontWeight: FontWeight.w700, fontSize: 13)),
+            Text(isFallback ? 'What happened' : 'AI Analysis Notes', style: TextStyle(
+                color: isFallback ? kPoor : kPrimary, fontWeight: FontWeight.w700, fontSize: 13)),
             const SizedBox(height: 4),
             Text(r.notes, style: const TextStyle(
                 color: kForeground, fontSize: 12, height: 1.5)),
           ]),
         ),
+        if (isFallback) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: kPrimary.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: kPrimary.withOpacity(0.18)),
+            ),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'For YOLO DBH to work',
+                  style: TextStyle(
+                    color: kPrimary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                  ),
+                ),
+                SizedBox(height: 6),
+                Text(
+                  'Use With Reference Object. The photo must show the trunk at breast height and a visible A4 paper, ID card, ruler, or phone beside the trunk. Avoid photos that show mostly leaves or canopy.',
+                  style: TextStyle(color: kForeground, fontSize: 12, height: 1.4),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 20),
 
         // Use this result button
         SizedBox(height: 46, child: ElevatedButton(
-          onPressed: () => Navigator.pop(context, r),
-          child: const Text('Use This Measurement'),
+          onPressed: isFallback ? null : () => Navigator.pop(context, r),
+          child: Text(isFallback ? 'Retake or Use Manual Measurement' : 'Use This Measurement'),
         )),
         const SizedBox(height: 10),
         OutlinedButton(
@@ -485,9 +669,16 @@ class _DBHMeasureScreenState extends State<DBHMeasureScreen> {
 
   // ── Actions ────────────────────────────────────────────────────────────────
   Future<void> _takePhoto() async {
-    final x = await ImagePicker().pickImage(
-        source: ImageSource.camera, imageQuality: 85, maxWidth: 1400);
-    if (x != null) setState(() => _photo = File(x.path));
+    final file = await Navigator.push<File>(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => DBHCameraScreen(
+          referenceName: _quickMode ? null : _selectedRef?.name,
+        ),
+      ),
+    );
+    if (file != null) setState(() => _photo = file);
   }
 
   Future<void> _pickGallery() async {
@@ -520,6 +711,12 @@ class _DBHMeasureScreenState extends State<DBHMeasureScreen> {
         heightM: json['height_m'] != null ? (json['height_m'] as num).toDouble() : null,
         confidence: json['confidence'] ?? 'Low',
         method: json['method'] ?? method,
+        fallback: json['fallback'] == true || json['error'] == true,
+        segmentationUsed: json['segmentation_used'] == true,
+        measurementHeightM: json['measurement_height_m'] is num
+            ? (json['measurement_height_m'] as num).toDouble()
+            : 1.3,
+        accuracyNote: json['accuracy_note']?.toString(),
         notes: '${json['analysis_notes'] ?? 'AI visual estimation.'}\n'
             'Distance estimate: ${json['distance_estimate_m'] ?? 'unknown'} m. '
             '${json['accuracy_note'] ?? ''}',
@@ -574,6 +771,8 @@ class _DBHMeasureScreenState extends State<DBHMeasureScreen> {
                   confidence: 'High',
                   method: 'Manual circumference measurement',
                   notes: 'Calculated using DBH = circumference / pi. This is the recommended field method.',
+                  measurementHeightM: 1.3,
+                  accuracyNote: 'High accuracy when circumference is measured with tape at 1.3 meters above ground.',
                 );
                 _step = 3;
               });
@@ -595,6 +794,427 @@ class _DBHMeasureScreenState extends State<DBHMeasureScreen> {
 }
 
 // ── Method Card Widget ────────────────────────────────────────────────────────
+class DBHMeasureOverlay extends StatelessWidget {
+  final bool compact;
+  final String? referenceName;
+
+  const DBHMeasureOverlay({
+    super.key,
+    this.compact = false,
+    this.referenceName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final labelSize = compact ? 9.0 : 11.0;
+    return IgnorePointer(
+      child: Stack(children: [
+        Positioned.fill(
+          child: CustomPaint(painter: _DBHGuidePainter(compact: compact)),
+        ),
+        Positioned(
+          left: 14,
+          bottom: compact ? 12 : 18,
+          child: _overlayLabel('GROUND', Icons.horizontal_rule, labelSize),
+        ),
+        Positioned(
+          right: 12,
+          top: compact ? 44 : 70,
+          child: _meterRail(compact),
+        ),
+        Positioned(
+          left: 22,
+          right: 54,
+          top: compact ? 64 : 100,
+          child: Row(children: [
+            Expanded(
+              child: Container(
+                height: 1.5,
+                decoration: BoxDecoration(
+                  color: kFair,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.25),
+                      blurRadius: 3,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            _pill('1.3m DBH', kFair, labelSize),
+          ]),
+        ),
+        Positioned(
+          left: 22,
+          top: compact ? 24 : 34,
+          child: _pill('Align trunk center', kPrimary, labelSize),
+        ),
+        Positioned(
+          right: 54,
+          top: compact ? 88 : 136,
+          child: _pill(
+            referenceName == null ? 'Scale object here' : '$referenceName here',
+            kHealthy,
+            labelSize,
+          ),
+        ),
+      ]),
+    );
+  }
+
+  static Widget _overlayLabel(String text, IconData icon, double fontSize) =>
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.48),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: Colors.white.withOpacity(0.18)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, color: Colors.white, size: fontSize + 2),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: fontSize,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ]),
+      );
+
+  static Widget _pill(String text, Color color, double fontSize) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.9),
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.22), blurRadius: 8),
+          ],
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: fontSize,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      );
+
+  static Widget _meterRail(bool compact) => Container(
+        width: compact ? 34 : 42,
+        height: compact ? 120 : 178,
+        padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5CE2E).withOpacity(0.92),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.black.withOpacity(0.18)),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 10),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            for (final mark in const ['2m', '1.5', '1m', '.5'])
+              Text(
+                mark,
+                style: TextStyle(
+                  color: Colors.black.withOpacity(0.72),
+                  fontSize: compact ? 8 : 10,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+          ],
+        ),
+      );
+}
+
+class DBHCameraScreen extends StatefulWidget {
+  final String? referenceName;
+
+  const DBHCameraScreen({super.key, this.referenceName});
+
+  @override
+  State<DBHCameraScreen> createState() => _DBHCameraScreenState();
+}
+
+class _DBHCameraScreenState extends State<DBHCameraScreen> {
+  CameraController? _controller;
+  bool _loading = true;
+  bool _capturing = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _setupCamera();
+  }
+
+  Future<void> _setupCamera() async {
+    try {
+      final cameras = await availableCameras();
+      if (cameras.isEmpty) {
+        setState(() {
+          _error = 'No camera found on this device.';
+          _loading = false;
+        });
+        return;
+      }
+      final backCamera = cameras.firstWhere(
+        (camera) => camera.lensDirection == CameraLensDirection.back,
+        orElse: () => cameras.first,
+      );
+      final controller = CameraController(
+        backCamera,
+        ResolutionPreset.high,
+        enableAudio: false,
+      );
+      await controller.initialize();
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+      setState(() {
+        _controller = controller;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Camera could not start. Please allow camera permission.';
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _capture() async {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized || _capturing) return;
+    setState(() => _capturing = true);
+    try {
+      final shot = await controller.takePicture();
+      if (!mounted) return;
+      Navigator.pop(context, File(shot.path));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _capturing = false;
+        _error = 'Could not capture photo. Try again.';
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller;
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator(color: Colors.white))
+                  : _error != null
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Text(
+                              _error!,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        )
+                      : controller == null
+                          ? const SizedBox.shrink()
+                          : Center(child: CameraPreview(controller)),
+            ),
+            Positioned.fill(
+              child: DBHMeasureOverlay(referenceName: widget.referenceName),
+            ),
+            Positioned(
+              left: 16,
+              right: 16,
+              top: 14,
+              child: Row(
+                children: [
+                  IconButton.filled(
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.black.withOpacity(0.48),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close, color: Colors.white),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.46),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Text(
+                        'Align trunk with the DBH guide',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              left: 18,
+              right: 18,
+              bottom: 22,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.46),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Text(
+                      'Put the tree base on GROUND and the reference object on the 1.3m DBH line.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white, fontSize: 12, height: 1.25),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  GestureDetector(
+                    onTap: _capture,
+                    child: Container(
+                      width: 74,
+                      height: 74,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 4),
+                      ),
+                      child: Center(
+                        child: Container(
+                          width: 54,
+                          height: 54,
+                          decoration: BoxDecoration(
+                            color: _capturing ? kMutedFg : Colors.white,
+                            shape: BoxShape.circle,
+                          ),
+                          child: _capturing
+                              ? const Padding(
+                                  padding: EdgeInsets.all(14),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 3,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : null,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DBHGuidePainter extends CustomPainter {
+  final bool compact;
+
+  _DBHGuidePainter({required this.compact});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final centerX = size.width * 0.50;
+    final groundY = size.height * 0.84;
+    final dbhY = size.height * (compact ? 0.42 : 0.39);
+    final topY = size.height * 0.13;
+    final bottomY = size.height * 0.92;
+
+    final shade = Paint()..color = Colors.black.withOpacity(0.12);
+    canvas.drawRect(Offset.zero & size, shade);
+
+    final trunkPaint = Paint()
+      ..color = Colors.white.withOpacity(0.82)
+      ..strokeWidth = compact ? 1.4 : 1.8;
+    canvas.drawLine(Offset(centerX, topY), Offset(centerX, bottomY), trunkPaint);
+
+    final groundPaint = Paint()
+      ..color = Colors.white.withOpacity(0.86)
+      ..strokeWidth = 2;
+    canvas.drawLine(
+      Offset(size.width * 0.08, groundY),
+      Offset(size.width * 0.92, groundY),
+      groundPaint,
+    );
+
+    final dbhPaint = Paint()
+      ..color = kFair.withOpacity(0.94)
+      ..strokeWidth = compact ? 2.2 : 2.8;
+    canvas.drawLine(
+      Offset(size.width * 0.12, dbhY),
+      Offset(size.width * 0.82, dbhY),
+      dbhPaint,
+    );
+
+    final guidePaint = Paint()
+      ..color = kHealthy.withOpacity(0.9)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = compact ? 2 : 2.5;
+    canvas.drawCircle(Offset(centerX, dbhY), compact ? 26 : 34, guidePaint);
+
+    final refPaint = Paint()
+      ..color = kHealthy.withOpacity(0.78)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    final refRect = Rect.fromCenter(
+      center: Offset(size.width * 0.72, dbhY + (compact ? 24 : 34)),
+      width: compact ? 38 : 52,
+      height: compact ? 52 : 70,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(refRect, const Radius.circular(6)),
+      refPaint,
+    );
+
+    final tickPaint = Paint()
+      ..color = Colors.black.withOpacity(0.5)
+      ..strokeWidth = 1.2;
+    final railX = size.width - (compact ? 29 : 35);
+    final railTop = compact ? 50.0 : 78.0;
+    final tickGap = compact ? 18.0 : 27.0;
+    for (var i = 0; i < 7; i++) {
+      final y = railTop + i * tickGap;
+      final length = i.isEven ? 14.0 : 8.0;
+      canvas.drawLine(Offset(railX, y), Offset(railX + length, y), tickPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DBHGuidePainter oldDelegate) =>
+      oldDelegate.compact != compact;
+}
+
 class _MethodCard extends StatelessWidget {
   final String icon, title, subtitle, accuracy, description;
   final Color accuracyColor;
@@ -621,9 +1241,18 @@ class _MethodCard extends StatelessWidget {
           Text(icon, style: const TextStyle(fontSize: 28)),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Text(title, style: const TextStyle(
-                  fontWeight: FontWeight.w700, fontSize: 16, color: kForeground)),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                      color: kForeground),
+                ),
+              ),
               if (badge != null) ...[
                 const SizedBox(width: 8),
                 Container(
@@ -636,7 +1265,12 @@ class _MethodCard extends StatelessWidget {
                         color: kHealthy, fontSize: 9, fontWeight: FontWeight.w800))),
               ],
             ]),
-            Text(subtitle, style: const TextStyle(color: kMutedFg, fontSize: 13)),
+            Text(
+              subtitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: kMutedFg, fontSize: 13),
+            ),
           ])),
           const Icon(Icons.arrow_forward_ios, size: 14, color: kMutedFg),
         ]),

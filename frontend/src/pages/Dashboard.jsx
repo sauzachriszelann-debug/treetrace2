@@ -25,18 +25,18 @@ export default function Dashboard() {
   });
 
   const stats = {
-    total:       trees.length,
-    healthy:     trees.filter((t) => t.health_status === "Healthy").length,
-    fair:        trees.filter((t) => t.health_status === "Fair").length,
-    poor:        trees.filter((t) => t.health_status === "Poor").length,
+    total: trees.length,
+    healthy: trees.filter((t) => t.health_status === "Healthy").length,
+    fair: trees.filter((t) => t.health_status === "Fair").length,
+    poor: trees.filter((t) => t.health_status === "Poor").length,
     totalCarbon: trees.reduce((s, t) => s + (t.carbon_kg || 0), 0),
-    gpsTagged:   trees.filter((t) => t.lat && t.lng).length,
+    gpsTagged: trees.filter((t) => t.lat && t.lng).length,
   };
 
   const chartData = [
     { name: "Healthy", count: stats.healthy, color: "#10b981" },
-    { name: "Fair",    count: stats.fair,    color: "#f59e0b" },
-    { name: "Poor",    count: stats.poor,    color: "#ef4444" },
+    { name: "Fair", count: stats.fair, color: "#f59e0b" },
+    { name: "Poor", count: stats.poor, color: "#ef4444" },
   ];
 
   const recentTrees = trees.slice(0, 5);
@@ -63,12 +63,12 @@ export default function Dashboard() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatsCard title="Total Trees"    value={stats.total}                                        icon={TreePine}     color="primary" />
-        <StatsCard title="Healthy"        value={stats.healthy}                                      icon={Leaf}         color="emerald" />
+        <StatsCard title="Total Trees" value={stats.total} icon={TreePine} color="primary" />
+        <StatsCard title="Healthy" value={stats.healthy} icon={Leaf} color="emerald" />
         <StatsCard title="Need Attention" value={stats.fair + stats.poor}
-          subtitle={`${stats.fair} Fair, ${stats.poor} Poor`}                                        icon={AlertTriangle} color="amber" />
-        <StatsCard title="Carbon Stock"   value={`${(stats.totalCarbon / 1000).toFixed(2)} t`}
-          subtitle="Total CO₂ equivalent"                                                            icon={Activity}     color="blue" />
+          subtitle={`${stats.fair} Fair, ${stats.poor} Poor`} icon={AlertTriangle} color="amber" />
+        <StatsCard title="Carbon Stock" value={`${(stats.totalCarbon / 1000).toFixed(2)} t`}
+          subtitle="Total CO₂ equivalent" icon={Activity} color="blue" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

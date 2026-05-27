@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../services/api_service.dart';
 import '../services/theme.dart';
 import '../models/models.dart';
@@ -21,7 +20,10 @@ class _TreeListScreenState extends State<TreeListScreen> {
   String _status = 'all';
 
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   Future<void> _load() async {
     try {
@@ -29,131 +31,270 @@ class _TreeListScreenState extends State<TreeListScreen> {
       setState(() {
         _all = data.map((j) => TreeModel.fromJson(j)).toList();
         _loading = false;
-        _filter();
       });
-    } catch (_) { setState(() => _loading = false); }
+      _filter();
+    } catch (_) {
+      setState(() => _loading = false);
+    }
   }
 
   void _filter() {
     setState(() {
       _filtered = _all.where((t) {
         final q = _search.toLowerCase();
-        final ms = q.isEmpty ||
+        final matchesSearch = q.isEmpty ||
             t.commonName.toLowerCase().contains(q) ||
             (t.scientificName?.toLowerCase().contains(q) ?? false) ||
             (t.barangay?.toLowerCase().contains(q) ?? false);
-        final mh = _status == 'all' || t.healthStatus == _status;
-        return ms && mh;
+        final matchesHealth = _status == 'all' || t.healthStatus == _status;
+        return matchesSearch && matchesHealth;
       }).toList();
     });
   }
 
+  int get _mappedCount => _all.where((t) => t.lat != null && t.lng != null).length;
+  int get _attentionCount =>
+      _all.where((t) => t.healthStatus == 'Fair' || t.healthStatus == 'Poor').length;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Column(crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Tree Inventory'),
-            Text('${_all.length} trees recorded',
-                style: TextStyle(
-                    fontSize: 12,
-                    color: kSidebarText.withOpacity(0.65),
-                    fontWeight: FontWeight.w400)),
-          ]),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () async {
-              await Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const AddTreeScreen()));
-              _load();
-            },
+      backgroundColor: kBackground,
+      body: RefreshIndicator(
+        onRefresh: _load,
+        color: kPrimary,
+        child: CustomScrollView(
+          slivers: [
+            SliverAppBar(
+              pinned: true,
+              expandedHeight: 170,
+              backgroundColor: kSidebarBg,
+              title: const Text('Tree Inventory'),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.add_circle_outline_rounded),
+                  onPressed: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AddTreeScreen()),
+                    );
+                    _load();
+                  },
+                ),
+              ],
+              flexibleSpace: FlexibleSpaceBar(
+                background: Container(
+                  padding: const EdgeInsets.fromLTRB(20, 76, 20, 18),
+                  color: kSidebarBg,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      const Text(
+                        'FIELD RECORDS',
+                        style: TextStyle(
+                          color: kSidebarPrimary,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.3,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${_all.length} trees recorded',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          _HeaderPill('$_mappedCount mapped'),
+                          const SizedBox(width: 8),
+                          _HeaderPill('$_attentionCount need attention'),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+                child: Column(
+                  children: [
+                    _SearchBox(
+                      onChanged: (value) {
+                        _search = value;
+                        _filter();
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      child: Row(
+                        children: [
+                          for (final s in ['all', 'Healthy', 'Fair', 'Poor'])
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: _StatusChip(
+                                label: s == 'all' ? 'All Trees' : s,
+                                selected: _status == s,
+                                color: s == 'Healthy'
+                                    ? kHealthy
+                                    : s == 'Fair'
+                                        ? kFair
+                                        : s == 'Poor'
+                                            ? kPoor
+                                            : kPrimary,
+                                onTap: () {
+                                  _status = s;
+                                  _filter();
+                                },
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Text(
+                          '${_filtered.length} results',
+                          style: const TextStyle(
+                            color: kMutedFg,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const Spacer(),
+                        const Text(
+                          'Tap a tree for details',
+                          style: TextStyle(color: kMutedFg, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (_loading)
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: LoadingList(),
+                ),
+              )
+            else if (_filtered.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: EmptyState(
+                  message: 'No trees found',
+                  subtitle:
+                      _search.isNotEmpty ? 'Try a different search.' : 'Add your first tree record.',
+                  icon: Icons.forest_outlined,
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (_, i) => TreeListItem(
+                      tree: _filtered[i],
+                      onTap: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => TreeDetailScreen(treeId: _filtered[i].id),
+                          ),
+                        );
+                        _load();
+                      },
+                    ),
+                    childCount: _filtered.length,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AddTreeScreen()),
+          );
+          _load();
+        },
+        backgroundColor: kPrimary,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('Add Tree'),
+      ),
+    );
+  }
+}
+
+class _HeaderPill extends StatelessWidget {
+  final String label;
+  const _HeaderPill(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withOpacity(0.14)),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: kSidebarText,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _SearchBox extends StatelessWidget {
+  final ValueChanged<String> onChanged;
+  const _SearchBox({required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.035),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      body: Column(children: [
-        // ── Search + filter bar ───────────────────────────────────────────────
-        Container(
-          color: kCard,
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          child: Column(children: [
-            // Search
-            TextField(
-              onChanged: (v) { _search = v; _filter(); },
-              decoration: InputDecoration(
-                hintText: 'Search by name, species, barangay…',
-                prefixIcon: const Icon(Icons.search,
-                    size: 18, color: kMutedFg),
-                filled: true, fillColor: kBackground,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                isDense: true,
-              ),
-            ),
-            const SizedBox(height: 10),
-            // Status chips
-            Row(children: [
-              for (final s in ['all', 'Healthy', 'Fair', 'Poor'])
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: _StatusChip(
-                    label: s == 'all' ? 'All' : s,
-                    selected: _status == s,
-                    color: s == 'Healthy' ? kHealthy
-                        : s == 'Fair' ? kFair
-                        : s == 'Poor' ? kPoor
-                        : kPrimary,
-                    onTap: () { _status = s; _filter(); },
-                  ),
-                ),
-            ]),
-          ]),
+      child: TextField(
+        onChanged: onChanged,
+        decoration: const InputDecoration(
+          hintText: 'Search name, species, or barangay...',
+          prefixIcon: Icon(Icons.search_rounded, color: kPrimary),
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          contentPadding: EdgeInsets.symmetric(vertical: 15),
         ),
-
-        // ── Count ─────────────────────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: Row(children: [
-            Text('${_filtered.length} trees found',
-                style: const TextStyle(fontSize: 12, color: kMutedFg)),
-          ]),
-        ),
-
-        // ── List ──────────────────────────────────────────────────────────────
-        Expanded(
-          child: _loading
-              ? const Padding(padding: EdgeInsets.all(16),
-                  child: LoadingList())
-              : _filtered.isEmpty
-                  ? EmptyState(
-                      message: 'No trees found',
-                      subtitle: _search.isNotEmpty
-                          ? 'Try a different search'
-                          : 'Add your first tree',
-                      icon: Icons.forest_outlined)
-                  : RefreshIndicator(
-                      onRefresh: _load, color: kPrimary,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
-                        itemCount: _filtered.length,
-                        itemBuilder: (_, i) => TreeListItem(
-                          tree: _filtered[i],
-                          onTap: () async {
-                            await Navigator.push(context,
-                                MaterialPageRoute(builder: (_) =>
-                                    TreeDetailScreen(
-                                        treeId: _filtered[i].id)));
-                            _load();
-                          },
-                        ),
-                      ),
-                    ),
-        ),
-      ]),
+      ),
     );
   }
 }
@@ -163,25 +304,33 @@ class _StatusChip extends StatelessWidget {
   final bool selected;
   final Color color;
   final VoidCallback onTap;
-  const _StatusChip({required this.label, required this.selected,
-    required this.color, required this.onTap});
+  const _StatusChip({
+    required this.label,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? color : color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-              color: selected ? color : color.withOpacity(0.25)),
+          color: selected ? color : color.withOpacity(0.09),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: selected ? color : color.withOpacity(0.28)),
         ),
-        child: Text(label,
-            style: TextStyle(
-                fontSize: 12, fontWeight: FontWeight.w500,
-                color: selected ? Colors.white : color)),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            color: selected ? Colors.white : color,
+          ),
+        ),
       ),
     );
   }

@@ -103,3 +103,23 @@
     z-index: 1;
     border-radius: var(--radius);
 }
+
+/* Custom scrollbar for dark sidebar */
+.bg-sidebar nav::-webkit-scrollbar,
+.bg-sidebar::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+}
+.bg-sidebar nav::-webkit-scrollbar-track,
+.bg-sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+.bg-sidebar nav::-webkit-scrollbar-thumb,
+.bg-sidebar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 99px;
+}
+.bg-sidebar nav::-webkit-scrollbar-thumb:hover,
+.bg-sidebar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.25);
+}

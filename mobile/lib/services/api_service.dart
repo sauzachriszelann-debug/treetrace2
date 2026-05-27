@@ -219,6 +219,47 @@ class ApiService {
     return res.data;
   }
 
+  Future<List<dynamic>> getQrPrintLabels() async {
+    final res = await _dio.get('/trees/qr-print');
+    return res.data;
+  }
+
+  Future<Map<String, dynamic>> getRoutePlan({
+    String? barangay,
+    String? healthStatus,
+    int limit = 15,
+  }) async {
+    final res = await _dio.get('/trees/route-plan', queryParameters: {
+      'limit': limit,
+      if (barangay != null && barangay.trim().isNotEmpty) 'barangay': barangay.trim(),
+      if (healthStatus != null && healthStatus.trim().isNotEmpty) 'health_status': healthStatus.trim(),
+    });
+    return Map<String, dynamic>.from(res.data);
+  }
+
+  Future<Map<String, dynamic>> getRoleAnalytics() async {
+    final res = await _dio.get('/users/analytics/role');
+    return Map<String, dynamic>.from(res.data);
+  }
+
+  Future<Map<String, dynamic>> getEvaluationResults() async {
+    final res = await _dio.get('/evaluation/results');
+    return Map<String, dynamic>.from(res.data);
+  }
+
+  Future<Map<String, dynamic>> importEvaluationCsv({bool replace = true}) async {
+    final res = await _dio.post(
+      '/evaluation/import-csv',
+      queryParameters: {'replace': replace},
+    );
+    return Map<String, dynamic>.from(res.data);
+  }
+
+  Future<Map<String, dynamic>> createEvaluationRow(Map<String, dynamic> data) async {
+    final res = await _dio.post('/evaluation/rows', data: data);
+    return Map<String, dynamic>.from(res.data);
+  }
+
   Future<Map<String, dynamic>> getTree(int id) async {
     final res = await _dio.get('/trees/$id');
     return res.data;

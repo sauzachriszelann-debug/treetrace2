@@ -14,40 +14,61 @@ class AddTreeScreen extends StatefulWidget {
 }
 
 class _AddTreeScreenState extends State<AddTreeScreen> {
-  final _formKey      = GlobalKey<FormState>();
-  final _nameCtrl     = TextEditingController();
-  final _sciCtrl      = TextEditingController();
-  final _dbhCtrl      = TextEditingController();
-  final _heightCtrl   = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _nameCtrl = TextEditingController();
+  final _sciCtrl = TextEditingController();
+  final _dbhCtrl = TextEditingController();
+  final _heightCtrl = TextEditingController();
   final _barangayCtrl = TextEditingController();
-  final _notesCtrl    = TextEditingController();
+  final _notesCtrl = TextEditingController();
 
   File? _photo;
   String _health = 'Healthy';
   bool _saving = false;
   bool _identifying = false;
+  bool _addToEvaluation = true;
   String? _dbhConfidence; // Low / Medium / High
   String? _dbhMethod;
+  Map<String, dynamic>? _aiPrediction;
+  double? _predictedDbhCm;
 
   @override
   void initState() {
     super.initState();
     if (widget.aiResult != null) {
       final r = widget.aiResult!;
-      _nameCtrl.text   = r['common_name']            ?? '';
-      _sciCtrl.text    = r['scientific_name']         ?? '';
-      _dbhCtrl.text    = r['estimated_dbh_cm']?.toString() ?? '';
+      _aiPrediction = r;
+      _nameCtrl.text = r['common_name'] ?? '';
+      _sciCtrl.text = r['scientific_name'] ?? '';
+      _dbhCtrl.text = r['estimated_dbh_cm']?.toString() ?? '';
       _heightCtrl.text = r['estimated_height_m']?.toString() ?? '';
-      _notesCtrl.text  = r['description']             ?? '';
+      _predictedDbhCm = (r['estimated_dbh_cm'] as num?)?.toDouble();
+      _notesCtrl.text = _usefulAiNote(r['description']) ?? '';
     }
   }
 
+  String? _usefulAiNote(dynamic value) {
+    final text = (value ?? '').toString().trim();
+    if (text.isEmpty) return null;
+    final lower = text.toLowerCase();
+    const blocked = [
+      'detailed treetrace vision enrichment is unavailable',
+      'identified using plantnet botanical image matching',
+      'gemini details are temporarily unavailable',
+      'species match is based on plantnet',
+    ];
+    if (blocked.any(lower.contains)) return null;
+    return text;
+  }
+
   Future<void> _pickPhoto(ImageSource source) async {
-    final x = await ImagePicker().pickImage(
-        source: source, imageQuality: 80, maxWidth: 1200);
+    final x = await ImagePicker()
+        .pickImage(source: source, imageQuality: 80, maxWidth: 1200);
     if (x == null) return;
     final f = File(x.path);
-    setState(() { _photo = f; });
+    setState(() {
+      _photo = f;
+    });
     if (widget.aiResult == null) await _autoIdentify(f);
   }
 
@@ -57,37 +78,47 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
       final r = await api.identifyTree(f);
       if (r['not_identified'] != true) {
         setState(() {
+          _aiPrediction = r;
           if (_nameCtrl.text.isEmpty) _nameCtrl.text = r['common_name'] ?? '';
-          if (_sciCtrl.text.isEmpty)  _sciCtrl.text  = r['scientific_name'] ?? '';
-          if (_dbhCtrl.text.isEmpty)  _dbhCtrl.text  = r['estimated_dbh_cm']?.toString() ?? '';
-          if (_heightCtrl.text.isEmpty) _heightCtrl.text = r['estimated_height_m']?.toString() ?? '';
-          if (_notesCtrl.text.isEmpty)  _notesCtrl.text  = r['description'] ?? '';
+          if (_sciCtrl.text.isEmpty) _sciCtrl.text = r['scientific_name'] ?? '';
+          if (_dbhCtrl.text.isEmpty)
+            _dbhCtrl.text = r['estimated_dbh_cm']?.toString() ?? '';
+          _predictedDbhCm ??= (r['estimated_dbh_cm'] as num?)?.toDouble();
+          if (_heightCtrl.text.isEmpty)
+            _heightCtrl.text = r['estimated_height_m']?.toString() ?? '';
+          if (_notesCtrl.text.isEmpty)
+            _notesCtrl.text = _usefulAiNote(r['description']) ?? '';
         });
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('AI identified: ${r['common_name']}'),
-            backgroundColor: kHealthy));
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('AI identified: ${r['common_name']}'),
+              backgroundColor: kHealthy));
       }
-    } catch (_) {}
-    finally { setState(() => _identifying = false); }
+    } catch (_) {
+    } finally {
+      setState(() => _identifying = false);
+    }
   }
 
   Future<void> _openDBHMeasure() async {
     final result = await Navigator.push<DBHResult>(
       context,
-      MaterialPageRoute(builder: (_) => const DBHMeasureScreen()),
+      MaterialPageRoute(builder: (_) => DBHMeasureScreen(initialPhoto: _photo)),
     );
     if (result != null) {
       setState(() {
-        _dbhCtrl.text    = result.dbhCm.toStringAsFixed(1);
+        _dbhCtrl.text = result.dbhCm.toStringAsFixed(1);
         if (result.heightM != null)
           _heightCtrl.text = result.heightM!.toStringAsFixed(1);
         _dbhConfidence = result.confidence;
-        _dbhMethod     = result.method;
+        _dbhMethod = result.method;
+        _predictedDbhCm = result.dbhCm;
       });
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('DBH set to ${result.dbhCm.toStringAsFixed(1)} cm '
-              '(${result.confidence} confidence)'),
-          backgroundColor: kHealthy));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('DBH set to ${result.dbhCm.toStringAsFixed(1)} cm '
+                '(${result.confidence} confidence)'),
+            backgroundColor: kHealthy));
     }
   }
 
@@ -100,20 +131,28 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
         context: context,
         builder: (_) => AlertDialog(
           title: Row(children: [
-            Text(endangered['code'] == 'CR' ? '⛔' :
-            endangered['code'] == 'EN' ? '🚫' : '⚠️',
+            Text(
+                endangered['code'] == 'CR'
+                    ? '⛔'
+                    : endangered['code'] == 'EN'
+                        ? '🚫'
+                        : '⚠️',
                 style: const TextStyle(fontSize: 24)),
             const SizedBox(width: 8),
-            Expanded(child: Text(
-                endangered['code'] == 'CR' ? 'Critically Endangered!' :
-                endangered['code'] == 'EN' ? 'Protected Species!' : 'Vulnerable Species',
-                style: const TextStyle(fontSize: 16))),
+            Expanded(
+                child: Text(
+                    endangered['code'] == 'CR'
+                        ? 'Critically Endangered!'
+                        : endangered['code'] == 'EN'
+                            ? 'Protected Species!'
+                            : 'Vulnerable Species',
+                    style: const TextStyle(fontSize: 16))),
           ]),
           content: Text(
               '${_nameCtrl.text.trim()} is listed as ${endangered['status']} '
-                  'under DENR DAO 2017-11.\n\n'
-                  'Cutting or transporting is STRICTLY PROHIBITED without a DENR permit.\n\n'
-                  'Do you still want to record this tree in the inventory?'),
+              'under DENR DAO 2017-11.\n\n'
+              'Cutting or transporting is STRICTLY PROHIBITED without a DENR permit.\n\n'
+              'Do you still want to record this tree in the inventory?'),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(context, false),
@@ -133,21 +172,31 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     try {
       String? photoUrl;
       final payload = {
-        'common_name':     _nameCtrl.text.trim(),
-        'scientific_name': _sciCtrl.text.trim().isEmpty ? null : _sciCtrl.text.trim(),
-        'health_status':   _health,
-        'barangay':        _barangayCtrl.text.trim().isEmpty ? null : _barangayCtrl.text.trim(),
-        'dbh_cm':          double.tryParse(_dbhCtrl.text),
-        'height_m':        double.tryParse(_heightCtrl.text),
-        'notes':           _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-        'photo_url':       photoUrl,
+        'common_name': _nameCtrl.text.trim(),
+        'scientific_name':
+            _sciCtrl.text.trim().isEmpty ? null : _sciCtrl.text.trim(),
+        'health_status': _health,
+        'barangay': _barangayCtrl.text.trim().isEmpty
+            ? null
+            : _barangayCtrl.text.trim(),
+        'dbh_cm': double.tryParse(_dbhCtrl.text),
+        'height_m': double.tryParse(_heightCtrl.text),
+        'notes': _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        'photo_url': photoUrl,
       };
 
       if (await api.isOnline()) {
-        if (_photo != null) payload['photo_url'] = await api.uploadPhoto(_photo!);
+        if (_photo != null)
+          payload['photo_url'] = await api.uploadPhoto(_photo!);
         await api.createTree(payload);
+        if (_addToEvaluation) {
+          try {
+            await _saveEvaluationRow();
+          } catch (_) {}
+        }
       } else {
-        await api.queueOfflineAction('CREATE_TREE', payload, photoPath: _photo?.path);
+        await api.queueOfflineAction('CREATE_TREE', payload,
+            photoPath: _photo?.path);
       }
       if (mounted) {
         Navigator.pop(context);
@@ -158,9 +207,43 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
             backgroundColor: kHealthy));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error: $e'), backgroundColor: kPoor));
-    } finally { setState(() => _saving = false); }
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: kPoor));
+    } finally {
+      setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _saveEvaluationRow() async {
+    final actualSpecies = _nameCtrl.text.trim();
+    if (actualSpecies.isEmpty) return;
+
+    final actualConservation = _conservationStatusFor(actualSpecies);
+    final predictedSpecies =
+        (_aiPrediction?['common_name'] ?? actualSpecies).toString();
+    final predictedConservation = (_aiPrediction?['endangered_status'] ??
+            _aiPrediction?['status'] ??
+            actualConservation)
+        .toString();
+    final actualDbh = double.tryParse(_dbhCtrl.text.trim());
+
+    await (api as dynamic).createEvaluationRow({
+      'image_id': 'TREE_${DateTime.now().millisecondsSinceEpoch}',
+      'actual_species': actualSpecies,
+      'predicted_species': predictedSpecies,
+      'actual_conservation': actualConservation,
+      'predicted_conservation': predictedConservation,
+      'actual_dbh_cm': actualDbh,
+      'predicted_dbh_cm': _predictedDbhCm ?? actualDbh,
+      'scan_success': _aiPrediction != null || _dbhConfidence != null,
+      'app_success': true,
+      'latency_ms': null,
+    });
+  }
+
+  String _conservationStatusFor(String name) {
+    final found = _checkEndangered(name.trim().toLowerCase());
+    return found?['status']?.toString() ?? 'Not Listed';
   }
 
   @override
@@ -174,8 +257,8 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
         key: _formKey,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             // ── Photo ────────────────────────────────────────────────────
             GestureDetector(
               onTap: _showPhotoOptions,
@@ -186,27 +269,37 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: kBorder)),
                 child: _identifying
-                    ? Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  const CircularProgressIndicator(color: kPrimary),
-                  const SizedBox(height: 10),
-                  const Text('AI identifying species…',
-                      style: TextStyle(color: kMutedFg)),
-                ])
+                    ? Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                            const CircularProgressIndicator(color: kPrimary),
+                            const SizedBox(height: 10),
+                            const Text('AI identifying species…',
+                                style: TextStyle(color: kMutedFg)),
+                          ])
                     : _photo != null
-                    ? ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: Image.file(_photo!, fit: BoxFit.cover,
-                        width: double.infinity, height: 180))
-                    : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(Icons.add_a_photo_outlined, size: 36,
-                      color: kMutedFg.withOpacity(0.5)),
-                  const SizedBox(height: 8),
-                  const Text('Add photo',
-                      style: TextStyle(color: kMutedFg, fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 4),
-                  const Text('AI identifies species automatically',
-                      style: TextStyle(color: kMutedFg, fontSize: 12)),
-                ]),
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: Image.file(_photo!,
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: 180))
+                        : Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                                Icon(Icons.add_a_photo_outlined,
+                                    size: 36, color: kMutedFg.withOpacity(0.5)),
+                                const SizedBox(height: 8),
+                                const Text('Add photo',
+                                    style: TextStyle(
+                                        color: kMutedFg,
+                                        fontWeight: FontWeight.w500)),
+                                const SizedBox(height: 4),
+                                const Text(
+                                    'AI identifies species automatically',
+                                    style: TextStyle(
+                                        color: kMutedFg, fontSize: 12)),
+                              ]),
               ),
             ),
             const SizedBox(height: 16),
@@ -216,8 +309,10 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
               controller: _nameCtrl,
               decoration: const InputDecoration(
                   hintText: 'e.g., Narra, Mahogany',
-                  prefixIcon: Icon(Icons.park_outlined, size: 18, color: kMutedFg)),
-              validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                  prefixIcon:
+                      Icon(Icons.park_outlined, size: 18, color: kMutedFg)),
+              validator: (v) =>
+                  v == null || v.trim().isEmpty ? 'Required' : null,
             ),
             const SizedBox(height: 12),
 
@@ -226,7 +321,8 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
               controller: _sciCtrl,
               decoration: const InputDecoration(
                   hintText: 'e.g., Pterocarpus indicus',
-                  prefixIcon: Icon(Icons.science_outlined, size: 18, color: kMutedFg)),
+                  prefixIcon:
+                      Icon(Icons.science_outlined, size: 18, color: kMutedFg)),
             ),
             const SizedBox(height: 12),
 
@@ -234,22 +330,29 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
             DropdownButtonFormField<String>(
               value: _health,
               decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.favorite_outline, size: 18, color: kMutedFg)),
-              items: ['Healthy', 'Fair', 'Poor'].map((s) =>
-                  DropdownMenuItem(value: s, child: Row(children: [
-                    Container(width: 8, height: 8,
-                        decoration: BoxDecoration(
-                            color: healthColor(s), shape: BoxShape.circle)),
-                    const SizedBox(width: 8),
-                    Text(s),
-                  ]))).toList(),
+                  prefixIcon:
+                      Icon(Icons.favorite_outline, size: 18, color: kMutedFg)),
+              items: ['Healthy', 'Fair', 'Poor']
+                  .map((s) => DropdownMenuItem(
+                      value: s,
+                      child: Row(children: [
+                        Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                                color: healthColor(s), shape: BoxShape.circle)),
+                        const SizedBox(width: 8),
+                        Text(s),
+                      ])))
+                  .toList(),
               onChanged: (v) => setState(() => _health = v!),
             ),
             const SizedBox(height: 12),
 
             // ── DBH & Height with Measure button ─────────────────────────
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(child: Column(
+              Expanded(
+                  child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _label('DBH (cm)'),
@@ -258,27 +361,38 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
                         hintText: '30',
-                        prefixIcon: const Icon(Icons.straighten, size: 18, color: kMutedFg),
+                        prefixIcon: const Icon(Icons.straighten,
+                            size: 18, color: kMutedFg),
                         suffixIcon: _dbhConfidence != null
                             ? Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                    color: (_dbhConfidence == 'High' ? kHealthy
-                                        : _dbhConfidence == 'Medium' ? kFair : kPoor).withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(8)),
-                                child: Text(_dbhConfidence!,
-                                    style: TextStyle(
-                                        color: _dbhConfidence == 'High' ? kHealthy
-                                            : _dbhConfidence == 'Medium' ? kFair : kPoor,
-                                        fontSize: 10, fontWeight: FontWeight.w700))))
+                                padding: const EdgeInsets.all(8),
+                                child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                        color: (_dbhConfidence == 'High'
+                                                ? kHealthy
+                                                : _dbhConfidence == 'Medium'
+                                                    ? kFair
+                                                    : kPoor)
+                                            .withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(8)),
+                                    child: Text(_dbhConfidence!,
+                                        style: TextStyle(
+                                            color: _dbhConfidence == 'High'
+                                                ? kHealthy
+                                                : _dbhConfidence == 'Medium'
+                                                    ? kFair
+                                                    : kPoor,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w700))))
                             : null),
                   ),
                 ],
               )),
               const SizedBox(width: 12),
-              Expanded(child: Column(
+              Expanded(
+                  child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _label('Height (m)'),
@@ -287,7 +401,8 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
                         hintText: '10',
-                        prefixIcon: Icon(Icons.height, size: 18, color: kMutedFg)),
+                        prefixIcon:
+                            Icon(Icons.height, size: 18, color: kMutedFg)),
                   ),
                 ],
               )),
@@ -320,7 +435,8 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
               controller: _barangayCtrl,
               decoration: const InputDecoration(
                   hintText: 'e.g., Brgy. Kakar',
-                  prefixIcon: Icon(Icons.location_on_outlined, size: 18, color: kMutedFg)),
+                  prefixIcon: Icon(Icons.location_on_outlined,
+                      size: 18, color: kMutedFg)),
             ),
             const SizedBox(height: 12),
 
@@ -333,15 +449,47 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
                   prefixIcon: Icon(Icons.notes, size: 18, color: kMutedFg),
                   alignLabelWithHint: true),
             ),
+            const SizedBox(height: 12),
+
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: kPrimary.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: kPrimary.withOpacity(0.16)),
+              ),
+              child: CheckboxListTile(
+                value: _addToEvaluation,
+                onChanged: (value) =>
+                    setState(() => _addToEvaluation = value ?? true),
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                activeColor: kPrimary,
+                title: const Text(
+                  'Add to evaluation test results',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w800, color: kForeground),
+                ),
+                subtitle: const Text(
+                  'Saves this record to the evaluation database so Project Evaluation can calculate accuracy, DBH error, and app success from real saved trees.',
+                  style: TextStyle(color: kMutedFg, fontSize: 12, height: 1.3),
+                ),
+              ),
+            ),
             const SizedBox(height: 24),
 
-            SizedBox(height: 46, child: ElevatedButton(
-              onPressed: _saving ? null : _save,
-              child: _saving
-                  ? const SizedBox(width: 18, height: 18,
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Text('Save Tree'),
-            )),
+            SizedBox(
+                height: 46,
+                child: ElevatedButton(
+                  onPressed: _saving ? null : _save,
+                  child: _saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2))
+                      : const Text('Save Tree'),
+                )),
             const SizedBox(height: 32),
           ]),
         ),
@@ -351,32 +499,58 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
 
   Widget _label(String text) => Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Text(text, style: const TextStyle(
-          fontSize: 13, fontWeight: FontWeight.w500, color: kForeground)));
+      child: Text(text,
+          style: const TextStyle(
+              fontSize: 13, fontWeight: FontWeight.w500, color: kForeground)));
 
   Map<String, dynamic>? _checkEndangered(String name) {
     const endangered = {
-      'narra':            {'status': 'Endangered',            'code': 'EN', 'cut': false},
-      'almaciga':         {'status': 'Critically Endangered', 'code': 'CR', 'cut': false},
-      'molave':           {'status': 'Endangered',            'code': 'EN', 'cut': false},
-      'ipil':             {'status': 'Endangered',            'code': 'EN', 'cut': false},
-      'apitong':          {'status': 'Endangered',            'code': 'EN', 'cut': false},
-      'dao':              {'status': 'Endangered',            'code': 'EN', 'cut': false},
-      'kamagong':         {'status': 'Vulnerable',            'code': 'VU', 'cut': false},
-      'yakal':            {'status': 'Vulnerable',            'code': 'VU', 'cut': false},
-      'philippine teak':  {'status': 'Critically Endangered', 'code': 'CR', 'cut': false},
-      'lauan':            {'status': 'Vulnerable',            'code': 'VU', 'cut': false},
-      'red lauan':        {'status': 'Endangered',            'code': 'EN', 'cut': false},
-      'pterocarpus indicus': {'status': 'Endangered',         'code': 'EN', 'cut': false},
-      'diospyros philippinensis': {'status': 'Vulnerable',    'code': 'VU', 'cut': false},
-      'philippine ebony': {'status': 'Vulnerable',            'code': 'VU', 'cut': false},
-      'shorea astylosa':  {'status': 'Vulnerable',            'code': 'VU', 'cut': false},
-      'agathis philippinensis': {'status': 'Critically Endangered', 'code': 'CR', 'cut': false},
-      'tectona philippinensis': {'status': 'Critically Endangered', 'code': 'CR', 'cut': false},
+      'narra': {'status': 'Endangered', 'code': 'EN', 'cut': false},
+      'almaciga': {
+        'status': 'Critically Endangered',
+        'code': 'CR',
+        'cut': false
+      },
+      'molave': {'status': 'Endangered', 'code': 'EN', 'cut': false},
+      'ipil': {'status': 'Endangered', 'code': 'EN', 'cut': false},
+      'apitong': {'status': 'Endangered', 'code': 'EN', 'cut': false},
+      'dao': {'status': 'Endangered', 'code': 'EN', 'cut': false},
+      'kamagong': {'status': 'Vulnerable', 'code': 'VU', 'cut': false},
+      'yakal': {'status': 'Vulnerable', 'code': 'VU', 'cut': false},
+      'philippine teak': {
+        'status': 'Critically Endangered',
+        'code': 'CR',
+        'cut': false
+      },
+      'lauan': {'status': 'Vulnerable', 'code': 'VU', 'cut': false},
+      'red lauan': {'status': 'Endangered', 'code': 'EN', 'cut': false},
+      'pterocarpus indicus': {
+        'status': 'Endangered',
+        'code': 'EN',
+        'cut': false
+      },
+      'diospyros philippinensis': {
+        'status': 'Vulnerable',
+        'code': 'VU',
+        'cut': false
+      },
+      'philippine ebony': {'status': 'Vulnerable', 'code': 'VU', 'cut': false},
+      'shorea astylosa': {'status': 'Vulnerable', 'code': 'VU', 'cut': false},
+      'agathis philippinensis': {
+        'status': 'Critically Endangered',
+        'code': 'CR',
+        'cut': false
+      },
+      'tectona philippinensis': {
+        'status': 'Critically Endangered',
+        'code': 'CR',
+        'cut': false
+      },
     };
     if (endangered[name] != null) return endangered[name];
     for (final entry in endangered.entries) {
-      if (name.contains(entry.key) || entry.key.contains(name)) return entry.value;
+      if (name.contains(entry.key) || entry.key.contains(name))
+        return entry.value;
     }
     return null;
   }
@@ -386,15 +560,22 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
       context: context,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      builder: (_) => SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
         ListTile(
             leading: const Icon(Icons.camera_alt_outlined, color: kPrimary),
             title: const Text('Take Photo'),
-            onTap: () { Navigator.pop(context); _pickPhoto(ImageSource.camera); }),
+            onTap: () {
+              Navigator.pop(context);
+              _pickPhoto(ImageSource.camera);
+            }),
         ListTile(
             leading: const Icon(Icons.photo_library_outlined, color: kPrimary),
             title: const Text('Choose from Gallery'),
-            onTap: () { Navigator.pop(context); _pickPhoto(ImageSource.gallery); }),
+            onTap: () {
+              Navigator.pop(context);
+              _pickPhoto(ImageSource.gallery);
+            }),
       ])),
     );
   }

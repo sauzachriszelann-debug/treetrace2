@@ -13,8 +13,8 @@ import L from "leaflet";
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
-  iconUrl:       "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
-  shadowUrl:     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
+  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
 });
 
 // Panabo City, Davao del Norte
@@ -53,8 +53,8 @@ function InternalTreeMap() {
       <div className="flex gap-4 mb-4 text-sm">
         {[
           { label: "Healthy", color: "bg-emerald-500" },
-          { label: "Fair",    color: "bg-amber-500" },
-          { label: "Poor",    color: "bg-red-500" },
+          { label: "Fair", color: "bg-amber-500" },
+          { label: "Poor", color: "bg-red-500" },
         ].map(({ label, color }) => (
           <div key={label} className="flex items-center gap-1.5 text-muted-foreground">
             <span className={`w-3 h-3 rounded-full ${color}`} />
@@ -64,7 +64,7 @@ function InternalTreeMap() {
       </div>
 
       <div className="rounded-xl overflow-hidden border border-border shadow-sm"
-           style={{ height: "calc(100vh - 260px)" }}>
+        style={{ height: "calc(100vh - 260px)" }}>
         <MapContainer
           center={DEFAULT_CENTER}
           zoom={13}

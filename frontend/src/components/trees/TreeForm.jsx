@@ -70,6 +70,19 @@ const errorToMessage = (error, fallback = "Request failed. Please try again.") =
   return String(detail);
 };
 
+const usefulAiNote = (description) => {
+  const text = (description || "").trim();
+  if (!text) return "";
+  const lower = text.toLowerCase();
+  const blocked = [
+    "detailed treetrace vision enrichment is unavailable",
+    "identified using plantnet botanical image matching",
+    "gemini details are temporarily unavailable",
+    "species match is based on plantnet",
+  ];
+  return blocked.some((phrase) => lower.includes(phrase)) ? "" : text;
+};
+
 export default function TreeForm({
   initial = {},
   onSubmit,
@@ -238,7 +251,7 @@ export default function TreeForm({
           scientific_name: result.scientific_name || prev.scientific_name,
           dbh_cm: dbh || prev.dbh_cm,
           height_m: height || prev.height_m,
-          notes: result.description || prev.notes,
+          notes: usefulAiNote(result.description) || prev.notes,
         }));
         setAiStatus("done");
         toast.success(`Identified: ${result.common_name}`);
