@@ -9,7 +9,8 @@ import 'dbh_measure_screen.dart';
 
 class AddTreeScreen extends StatefulWidget {
   final Map<String, dynamic>? aiResult;
-  const AddTreeScreen({super.key, this.aiResult});
+  final File? initialPhoto;
+  const AddTreeScreen({super.key, this.aiResult, this.initialPhoto});
   @override
   State<AddTreeScreen> createState() => _AddTreeScreenState();
 }
@@ -42,6 +43,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
   @override
   void initState() {
     super.initState();
+    _photo = widget.initialPhoto;
     if (widget.aiResult != null) {
       final r = widget.aiResult!;
       _aiPrediction = r;
@@ -191,8 +193,8 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(location.barangay == null
-              ? 'GPS captured. Add exact location if needed.'
-              : 'GPS and location details captured!'),
+              ? 'GPS captured. Add the exact place if needed.'
+              : 'GPS and full address captured!'),
           backgroundColor: kHealthy,
         ));
       }
@@ -200,7 +202,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(automatic
-              ? 'Tap Capture GPS & Barangay to try location again.'
+              ? 'Tap Capture GPS & Address to try location again.'
               : 'Could not capture GPS: $e'),
           backgroundColor: kPoor,
         ));
@@ -215,21 +217,28 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
       final marks = await placemarkFromCoordinates(lat, lng);
       if (marks.isEmpty) return const _ResolvedLocation();
       final place = marks.first;
+      final barangay = _firstCleanBarangay([
+        place.subLocality,
+        place.locality,
+        place.subAdministrativeArea,
+      ]);
+      final city = _cleanCity(place.locality) ??
+          _cleanCity(place.subAdministrativeArea);
+      final province = _cleanProvince(place.administrativeArea);
       return _ResolvedLocation(
-        exactLocation: _cleanExactLocation([
+        exactLocation: _cleanFullAddress([
           place.name,
           place.street,
           place.thoroughfare,
           place.subThoroughfare,
+          barangay,
+          city,
+          province,
+          place.country,
         ]),
-        barangay: _firstCleanBarangay([
-          place.subLocality,
-          place.locality,
-          place.subAdministrativeArea,
-        ]),
-        city: _cleanCity(place.locality) ??
-            _cleanCity(place.subAdministrativeArea),
-        province: _cleanProvince(place.administrativeArea),
+        barangay: barangay,
+        city: city,
+        province: province,
       );
     } catch (_) {}
     return const _ResolvedLocation();
@@ -271,6 +280,24 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
         .toList();
     if (cleaned.isEmpty) return null;
     return cleaned.take(2).join(', ');
+  }
+
+  String? _cleanFullAddress(List<String?> values) {
+    final cleaned = <String>[];
+    for (final raw in values) {
+      final value = raw?.trim();
+      if (value == null ||
+          value.isEmpty ||
+          _looksLikePlusCode(value) ||
+          value.toLowerCase() == 'philippines') {
+        continue;
+      }
+      if (!cleaned.any((item) => item.toLowerCase() == value.toLowerCase())) {
+        cleaned.add(value);
+      }
+    }
+    if (cleaned.isEmpty) return null;
+    return cleaned.take(5).join(', ');
   }
 
   String? _cleanCity(String? value) {
@@ -614,61 +641,16 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
             ],
 
             const SizedBox(height: 12),
-            _label('Barangay'),
-            TextFormField(
-              controller: _barangayCtrl,
-              decoration: const InputDecoration(
-                  hintText: 'e.g., Brgy. Kakar',
-                  prefixIcon: Icon(Icons.location_on_outlined,
-                      size: 18, color: kMutedFg)),
-            ),
-            const SizedBox(height: 12),
-
-            _label('Exact Location / Purok'),
+            _label('Exact Location / Purok / Barangay / City / Province'),
             TextFormField(
               controller: _exactLocationCtrl,
+              minLines: 1,
+              maxLines: 2,
               decoration: const InputDecoration(
-                  hintText: 'e.g., Purok 3, near gym, street name',
+                  hintText: 'Auto-filled from GPS, or type Purok / landmark',
                   prefixIcon: Icon(Icons.place_outlined,
                       size: 18, color: kMutedFg)),
             ),
-            const SizedBox(height: 12),
-
-            Row(children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _label('City'),
-                    TextFormField(
-                      controller: _cityCtrl,
-                      decoration: const InputDecoration(
-                        hintText: 'Panabo City',
-                        prefixIcon: Icon(Icons.location_city_outlined,
-                            size: 18, color: kMutedFg),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _label('Province'),
-                    TextFormField(
-                      controller: _provinceCtrl,
-                      decoration: const InputDecoration(
-                        hintText: 'Davao del Norte',
-                        prefixIcon: Icon(Icons.map_outlined,
-                            size: 18, color: kMutedFg),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ]),
             const SizedBox(height: 12),
 
             _label('GPS Location'),
@@ -693,7 +675,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
                         : const Icon(Icons.my_location, size: 16),
                     label: Text(_gpsLoading
                         ? 'Getting Location...'
-                        : 'Capture GPS, Address & Barangay'),
+                        : 'Capture GPS & Address'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: kPrimary,
                       side: const BorderSide(color: kPrimary),
@@ -828,8 +810,11 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
                   color: kSidebarPrimary.withOpacity(0.16),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.auto_awesome_rounded,
-                    color: kSidebarPrimary),
+                clipBehavior: Clip.antiAlias,
+                child: _photo != null
+                    ? Image.file(_photo!, fit: BoxFit.cover)
+                    : const Icon(Icons.auto_awesome_rounded,
+                        color: kSidebarPrimary),
               ),
               const SizedBox(width: 12),
               Expanded(

@@ -581,8 +581,18 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
           child: ElevatedButton.icon(
             onPressed: isCitizen
                 ? _submitUnknown
-                : () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddTreeScreen(aiResult: _result))),
-            icon: Icon(isCitizen ? Icons.science_outlined : Icons.add_location_alt_rounded),
+                : () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AddTreeScreen(
+                          aiResult: _result,
+                          initialPhoto: _photo,
+                        ),
+                      ),
+                    ),
+            icon: Icon(isCitizen
+                ? Icons.science_outlined
+                : Icons.add_location_alt_rounded),
             label: Text(
               isCitizen ? 'Submit for Expert Review' : 'Add to Inventory',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
@@ -982,18 +992,24 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
               'description':
                   'Often linked to wet conditions or fungal infection. Remove badly affected leaves.',
               'severity': 'Medium',
+              'image_url':
+                  'https://commons.wikimedia.org/wiki/Special:FilePath/Cherry%20Leaf%20Spot%202.jpg',
             },
             {
               'name': 'Root stress',
               'description':
                   'Can happen from poor drainage, flooding, or compacted soil.',
               'severity': 'High',
+              'image_url':
+                  'https://commons.wikimedia.org/wiki/Special:FilePath/2011.%20Laminated%20root%20rot%20in%20western%20red%20cedar.%20Zigzag%20Ranger%20District%2C%20Mt.%20Hood%20National%20Forest%2C%20Oregon.%20%2838723503075%29.jpg',
             },
             {
               'name': 'Scale insects',
               'description':
                   'Watch for small bumps on stems or leaves and treat early.',
               'severity': 'Low',
+              'image_url':
+                  'https://commons.wikimedia.org/wiki/Special:FilePath/Icerya%20purchasi%20407551030.jpg',
             },
           ];
 
@@ -1008,21 +1024,22 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
             title: (item['name'] ?? 'Common problem').toString(),
             description: (item['description'] ?? '').toString(),
             severity: (item['severity'] ?? 'Watch').toString(),
-            imageUrl: item['image_url']?.toString(),
-            fallbackAsset: _problemFallbackAsset(index),
+            imageUrl: _problemImageUrl(item['image_url']?.toString(), index),
           );
         },
       ),
     );
   }
 
-  String _problemFallbackAsset(int index) {
-    const assets = [
-      'assets/landing/narra.jpg',
-      'assets/landing/images.jpg',
-      'assets/landing/images7.png',
+  String _problemImageUrl(String? value, int index) {
+    final cleaned = value?.trim();
+    if (cleaned != null && cleaned.startsWith('http')) return cleaned;
+    const onlineFallbacks = [
+      'https://commons.wikimedia.org/wiki/Special:FilePath/Cherry%20Leaf%20Spot%202.jpg',
+      'https://commons.wikimedia.org/wiki/Special:FilePath/2011.%20Laminated%20root%20rot%20in%20western%20red%20cedar.%20Zigzag%20Ranger%20District%2C%20Mt.%20Hood%20National%20Forest%2C%20Oregon.%20%2838723503075%29.jpg',
+      'https://commons.wikimedia.org/wiki/Special:FilePath/Icerya%20purchasi%20407551030.jpg',
     ];
-    return assets[index % assets.length];
+    return onlineFallbacks[index % onlineFallbacks.length];
   }
 
   List<String> _imageList(dynamic value) {
@@ -1668,14 +1685,12 @@ class _ProblemPhotoCard extends StatelessWidget {
   final String title;
   final String description;
   final String severity;
-  final String? imageUrl;
-  final String fallbackAsset;
+  final String imageUrl;
   const _ProblemPhotoCard({
     required this.title,
     required this.description,
     required this.severity,
-    required this.fallbackAsset,
-    this.imageUrl,
+    required this.imageUrl,
   });
 
   @override
@@ -1697,22 +1712,15 @@ class _ProblemPhotoCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
-            child: imageUrl != null && imageUrl!.startsWith('http')
-                ? Image.network(
-                    imageUrl!,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _GalleryFallback(
-                      icon: Icons.bug_report_outlined,
-                      label: title,
-                      asset: fallbackAsset,
-                    ),
-                  )
-                : _GalleryFallback(
+            child: Image.network(
+              imageUrl,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _GalleryFallback(
                     icon: Icons.bug_report_outlined,
-                    label: title,
-                    asset: fallbackAsset,
+                    label: 'Online image unavailable',
                   ),
+            ),
           ),
           Padding(
             padding: const EdgeInsets.all(12),
