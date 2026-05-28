@@ -14,6 +14,16 @@ from app.services.species_db import lookup_species
 router = APIRouter()
 
 
+def _estimate_tree_carbon(dbh_cm: Optional[float], height_m: Optional[float]) -> tuple[Optional[float], Optional[float]]:
+    if not dbh_cm or dbh_cm <= 0:
+        return None, None
+    height = height_m if height_m and height_m > 0 else 10.0
+    wood_density = 0.6
+    biomass = 0.0673 * ((wood_density * (dbh_cm ** 2) * height) ** 0.976)
+    carbon = biomass * 0.47
+    return round(biomass, 2), round(carbon, 2)
+
+
 def _distance_km(a_lat: float, a_lng: float, b_lat: float, b_lng: float) -> float:
     radius = 6371.0
     d_lat = math.radians(b_lat - a_lat)
@@ -180,7 +190,12 @@ def create_tree(
             status_code=403,
             detail="Citizen accounts cannot add official inventory trees. Please submit the species for expert review instead.",
         )
-    tree = Tree(**payload.model_dump(), recorded_by_id=current_user.id)
+    data = payload.model_dump()
+    if data.get("carbon_kg") is None:
+        biomass, carbon = _estimate_tree_carbon(data.get("dbh_cm"), data.get("height_m"))
+        data["biomass_kg"] = data.get("biomass_kg") or biomass
+        data["carbon_kg"] = carbon
+    tree = Tree(**data, recorded_by_id=current_user.id)
     db.add(tree)
     db.commit()
     db.refresh(tree)
@@ -216,7 +231,14 @@ def update_tree(
     tree = db.query(Tree).filter(Tree.id == tree_id).first()
     if not tree:
         raise HTTPException(status_code=404, detail="Tree not found")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    dbh = data.get("dbh_cm", tree.dbh_cm)
+    height = data.get("height_m", tree.height_m)
+    if data.get("carbon_kg") is None and ("dbh_cm" in data or "height_m" in data):
+        biomass, carbon = _estimate_tree_carbon(dbh, height)
+        data["biomass_kg"] = data.get("biomass_kg") or biomass
+        data["carbon_kg"] = carbon
+    for field, value in data.items():
         setattr(tree, field, value)
     db.commit()
     db.refresh(tree)

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -203,9 +204,10 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
   }
 
   Widget _buildStatsStrip(TreeModel tree) {
+    final carbon = tree.carbonKg ?? _estimateCarbonKg(tree.dbhCm, tree.heightM);
     return Row(
       children: [
-        _StatPill(Icons.eco_rounded, '${tree.carbonKg?.toStringAsFixed(1) ?? "0"} kg', 'CO2 Stock'),
+        _StatPill(Icons.eco_rounded, '${carbon.toStringAsFixed(1)} kg', 'CO2 Stock'),
         const SizedBox(width: 12),
         _StatPill(Icons.straighten_rounded, '${tree.dbhCm?.toStringAsFixed(0) ?? "0"} cm', 'DBH'),
         const SizedBox(width: 12),
@@ -363,16 +365,90 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
   }
 
   Widget _buildTreePhotoGallery(TreeModel tree) {
-    if ((tree.photoUrl ?? '').isEmpty) return const SizedBox.shrink();
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: CachedNetworkImage(
-        imageUrl: tree.photoUrl!,
-        fit: BoxFit.cover,
-        width: double.infinity,
-        height: 150,
-      ),
+    final photos = _similarPhotos(tree);
+    if (photos.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Photos of Same Tree', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18)),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 170,
+          child: PageView.builder(
+            controller: PageController(viewportFraction: 0.9),
+            itemCount: photos.length,
+            itemBuilder: (_, index) => Container(
+              margin: const EdgeInsets.only(right: 10),
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: kBorder),
+              ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  CachedNetworkImage(
+                    imageUrl: photos[index],
+                    fit: BoxFit.cover,
+                    errorWidget: (_, __, ___) => const Icon(Icons.park_outlined, color: kMutedFg),
+                  ),
+                  Positioned(
+                    left: 12,
+                    bottom: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.45),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(index == 0 ? 'Inventory photo' : 'Similar photo $index',
+                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
+  }
+
+  List<String> _similarPhotos(TreeModel tree) {
+    final photos = <String>[];
+    void add(String? url) {
+      final value = url?.trim();
+      if (value != null && value.startsWith('http') && !photos.contains(value)) {
+        photos.add(value);
+      }
+    }
+
+    add(tree.photoUrl);
+    final wikiPhotos = _wiki?['match_images'];
+    if (wikiPhotos is List) {
+      for (final item in wikiPhotos) {
+        add(item?.toString());
+      }
+    }
+    final name = (tree.scientificName?.trim().isNotEmpty == true
+            ? tree.scientificName
+            : tree.commonName)
+        ?.trim();
+    if (name != null && name.isNotEmpty) {
+      final encoded = Uri.encodeComponent(name);
+      add('https://commons.wikimedia.org/wiki/Special:FilePath/$encoded.jpg');
+      add('https://source.unsplash.com/900x600/?$encoded,tree');
+    }
+    return photos.take(5).toList();
+  }
+
+  double _estimateCarbonKg(double? dbhCm, double? heightM) {
+    if (dbhCm == null || dbhCm <= 0) return 0;
+    final height = heightM != null && heightM > 0 ? heightM : 10.0;
+    const woodDensity = 0.6;
+    final biomass =
+        0.0673 * math.pow(woodDensity * dbhCm * dbhCm * height, 0.976);
+    return (biomass * 0.47).toDouble();
   }
 
   Widget _buildStoryCard(String title, String text) {
