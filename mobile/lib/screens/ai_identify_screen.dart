@@ -1009,10 +1009,20 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
             description: (item['description'] ?? '').toString(),
             severity: (item['severity'] ?? 'Watch').toString(),
             imageUrl: item['image_url']?.toString(),
+            fallbackAsset: _problemFallbackAsset(index),
           );
         },
       ),
     );
+  }
+
+  String _problemFallbackAsset(int index) {
+    const assets = [
+      'assets/landing/narra.jpg',
+      'assets/landing/images.jpg',
+      'assets/landing/images7.png',
+    ];
+    return assets[index % assets.length];
   }
 
   List<String> _imageList(dynamic value) {
@@ -1601,10 +1611,42 @@ class _GalleryFrame extends StatelessWidget {
 class _GalleryFallback extends StatelessWidget {
   final IconData icon;
   final String label;
-  const _GalleryFallback({required this.icon, required this.label});
+  final String? asset;
+  const _GalleryFallback({
+    required this.icon,
+    required this.label,
+    this.asset,
+  });
 
   @override
   Widget build(BuildContext context) {
+    if (asset != null) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(asset!, fit: BoxFit.cover),
+          Container(color: Colors.black.withOpacity(0.28)),
+          Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.42),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     return Container(
       color: kBackground,
       child: Center(
@@ -1627,10 +1669,12 @@ class _ProblemPhotoCard extends StatelessWidget {
   final String description;
   final String severity;
   final String? imageUrl;
+  final String fallbackAsset;
   const _ProblemPhotoCard({
     required this.title,
     required this.description,
     required this.severity,
+    required this.fallbackAsset,
     this.imageUrl,
   });
 
@@ -1661,11 +1705,13 @@ class _ProblemPhotoCard extends StatelessWidget {
                     errorBuilder: (_, __, ___) => _GalleryFallback(
                       icon: Icons.bug_report_outlined,
                       label: title,
+                      asset: fallbackAsset,
                     ),
                   )
                 : _GalleryFallback(
                     icon: Icons.bug_report_outlined,
                     label: title,
+                    asset: fallbackAsset,
                   ),
           ),
           Padding(

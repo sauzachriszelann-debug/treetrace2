@@ -341,6 +341,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _showTreePopup(TreeModel tree) {
+    final exactLocation = _exactLocationFromNotes(tree.notes);
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -364,11 +365,52 @@ class _MapScreenState extends State<MapScreen> {
                       Text(tree.commonName, style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w800)),
                       Text(tree.scientificName ?? '', style: GoogleFonts.inter(fontSize: 12, fontStyle: FontStyle.italic, color: kMutedFg)),
                       const SizedBox(height: 8),
-                      HealthBadge(tree.healthStatus, small: true),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          HealthBadge(tree.healthStatus, small: true),
+                          if ((tree.barangay ?? '').isNotEmpty)
+                            _MapInfoPill(Icons.location_on_outlined,
+                                tree.barangay!),
+                        ],
+                      ),
                     ],
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: kBackground,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: kBorder),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    [
+                      if (exactLocation != null) exactLocation,
+                      if ((tree.barangay ?? '').isNotEmpty) tree.barangay,
+                      if ((tree.city ?? '').isNotEmpty) tree.city,
+                      if ((tree.province ?? '').isNotEmpty) tree.province,
+                    ].whereType<String>().join(', '),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    '${tree.lat?.toStringAsFixed(6)}, ${tree.lng?.toStringAsFixed(6)}',
+                    style: const TextStyle(color: kMutedFg, fontSize: 12),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 24),
             SizedBox(
@@ -393,6 +435,49 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  String? _exactLocationFromNotes(String? notes) {
+    if (notes == null || notes.trim().isEmpty) return null;
+    final firstLine = notes.split('\n').first.trim();
+    const prefix = 'Exact location:';
+    if (!firstLine.toLowerCase().startsWith(prefix.toLowerCase())) return null;
+    final value = firstLine.substring(prefix.length).trim();
+    return value.isEmpty ? null : value;
+  }
+}
+
+class _MapInfoPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _MapInfoPill(this.icon, this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: kMuted,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: kMutedFg),
+          const SizedBox(width: 4),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 145),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  color: kMutedFg, fontSize: 10, fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
       ),
     );
   }

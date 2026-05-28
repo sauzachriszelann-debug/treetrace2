@@ -9,6 +9,7 @@ class TreeModel {
   final String healthStatus;
   final String? barangay;
   final String? city;
+  final String? province;
   final double? lat;
   final double? lng;
   final String? photoUrl;
@@ -26,6 +27,7 @@ class TreeModel {
     required this.healthStatus,
     this.barangay,
     this.city,
+    this.province,
     this.lat,
     this.lng,
     this.photoUrl,
@@ -44,6 +46,7 @@ class TreeModel {
         healthStatus: j['health_status'] ?? 'Healthy',
         barangay: j['barangay'],
         city: j['city'],
+        province: j['province'],
         lat: (j['lat'] as num?)?.toDouble(),
         lng: (j['lng'] as num?)?.toDouble(),
         photoUrl: j['photo_url'],
@@ -60,6 +63,8 @@ class TreeModel {
         'height_m': heightM,
         'health_status': healthStatus,
         'barangay': barangay,
+        'city': city,
+        'province': province,
         'lat': lat,
         'lng': lng,
         'photo_url': photoUrl,

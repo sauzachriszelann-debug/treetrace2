@@ -21,6 +21,9 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
   final _dbhCtrl = TextEditingController();
   final _heightCtrl = TextEditingController();
   final _barangayCtrl = TextEditingController();
+  final _exactLocationCtrl = TextEditingController();
+  final _cityCtrl = TextEditingController(text: 'Panabo City');
+  final _provinceCtrl = TextEditingController(text: 'Davao del Norte');
   final _latCtrl = TextEditingController();
   final _lngCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
@@ -61,6 +64,9 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     _dbhCtrl.dispose();
     _heightCtrl.dispose();
     _barangayCtrl.dispose();
+    _exactLocationCtrl.dispose();
+    _cityCtrl.dispose();
+    _provinceCtrl.dispose();
     _latCtrl.dispose();
     _lngCtrl.dispose();
     _notesCtrl.dispose();
@@ -162,22 +168,31 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
-      final barangay = await _barangayFromCoordinates(
+      final location = await _locationFromCoordinates(
         position.latitude,
         position.longitude,
       );
       setState(() {
         _latCtrl.text = position.latitude.toStringAsFixed(7);
         _lngCtrl.text = position.longitude.toStringAsFixed(7);
-        if (barangay != null && barangay.isNotEmpty) {
-          _barangayCtrl.text = barangay;
+        if (location.exactLocation != null) {
+          _exactLocationCtrl.text = location.exactLocation!;
+        }
+        if (location.barangay != null) {
+          _barangayCtrl.text = location.barangay!;
+        }
+        if (location.city != null) {
+          _cityCtrl.text = location.city!;
+        }
+        if (location.province != null) {
+          _provinceCtrl.text = location.province!;
         }
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(barangay == null
-              ? 'GPS coordinates captured. Barangay can be entered manually.'
-              : 'GPS and barangay captured!'),
+          content: Text(location.barangay == null
+              ? 'GPS captured. Add exact location if needed.'
+              : 'GPS and location details captured!'),
           backgroundColor: kHealthy,
         ));
       }
@@ -195,22 +210,36 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     }
   }
 
-  Future<String?> _barangayFromCoordinates(double lat, double lng) async {
+  Future<_ResolvedLocation> _locationFromCoordinates(double lat, double lng) async {
     try {
       final marks = await placemarkFromCoordinates(lat, lng);
-      if (marks.isEmpty) return null;
+      if (marks.isEmpty) return const _ResolvedLocation();
       final place = marks.first;
-      final candidates = [
-        place.subLocality,
-        place.thoroughfare,
-        place.street,
-        place.locality,
-      ];
-      for (final value in candidates) {
-        final cleaned = _cleanBarangay(value);
-        if (cleaned != null) return cleaned;
-      }
+      return _ResolvedLocation(
+        exactLocation: _cleanExactLocation([
+          place.name,
+          place.street,
+          place.thoroughfare,
+          place.subThoroughfare,
+        ]),
+        barangay: _firstCleanBarangay([
+          place.subLocality,
+          place.locality,
+          place.subAdministrativeArea,
+        ]),
+        city: _cleanCity(place.locality) ??
+            _cleanCity(place.subAdministrativeArea),
+        province: _cleanProvince(place.administrativeArea),
+      );
     } catch (_) {}
+    return const _ResolvedLocation();
+  }
+
+  String? _firstCleanBarangay(List<String?> values) {
+    for (final value in values) {
+      final cleaned = _cleanBarangay(value);
+      if (cleaned != null) return cleaned;
+    }
     return null;
   }
 
@@ -218,7 +247,8 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     final text = value?.trim();
     if (text == null || text.isEmpty) return null;
     final lower = text.toLowerCase();
-    if (lower == 'panabo' ||
+    if (_looksLikePlusCode(text) ||
+        lower == 'panabo' ||
         lower == 'panabo city' ||
         lower == 'davao del norte' ||
         lower == 'philippines') {
@@ -228,6 +258,36 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
         .replaceFirst(RegExp(r'^barangay\s+', caseSensitive: false), 'Brgy. ')
         .replaceFirst(RegExp(r'^brgy\.\s*', caseSensitive: false), 'Brgy. ');
   }
+
+  String? _cleanExactLocation(List<String?> values) {
+    final cleaned = values
+        .map((value) => value?.trim())
+        .whereType<String>()
+        .where((value) =>
+            value.isNotEmpty &&
+            !_looksLikePlusCode(value) &&
+            value.toLowerCase() != 'philippines')
+        .toSet()
+        .toList();
+    if (cleaned.isEmpty) return null;
+    return cleaned.take(2).join(', ');
+  }
+
+  String? _cleanCity(String? value) {
+    final text = value?.trim();
+    if (text == null || text.isEmpty) return null;
+    if (_looksLikePlusCode(text)) return null;
+    return text == 'Panabo' ? 'Panabo City' : text;
+  }
+
+  String? _cleanProvince(String? value) {
+    final text = value?.trim();
+    if (text == null || text.isEmpty || _looksLikePlusCode(text)) return null;
+    return text;
+  }
+
+  bool _looksLikePlusCode(String value) =>
+      RegExp(r'^[23456789CFGHJMPQRVWX]{4,}\+').hasMatch(value.trim());
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
@@ -278,6 +338,12 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     setState(() => _saving = true);
     try {
       String? photoUrl;
+      final exactLocation = _exactLocationCtrl.text.trim();
+      final rawNotes = _notesCtrl.text.trim();
+      final notes = [
+        if (exactLocation.isNotEmpty) 'Exact location: $exactLocation',
+        if (rawNotes.isNotEmpty) rawNotes,
+      ].join('\n\n');
       final payload = {
         'common_name': _nameCtrl.text.trim(),
         'scientific_name':
@@ -290,9 +356,11 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
         'height_m': double.tryParse(_heightCtrl.text),
         'lat': double.tryParse(_latCtrl.text),
         'lng': double.tryParse(_lngCtrl.text),
-        'city': 'Panabo City',
-        'province': 'Davao del Norte',
-        'notes': _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        'city': _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
+        'province': _provinceCtrl.text.trim().isEmpty
+            ? null
+            : _provinceCtrl.text.trim(),
+        'notes': notes.isEmpty ? null : notes,
         'photo_url': photoUrl,
       };
 
@@ -556,6 +624,53 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
             ),
             const SizedBox(height: 12),
 
+            _label('Exact Location / Purok'),
+            TextFormField(
+              controller: _exactLocationCtrl,
+              decoration: const InputDecoration(
+                  hintText: 'e.g., Purok 3, near gym, street name',
+                  prefixIcon: Icon(Icons.place_outlined,
+                      size: 18, color: kMutedFg)),
+            ),
+            const SizedBox(height: 12),
+
+            Row(children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _label('City'),
+                    TextFormField(
+                      controller: _cityCtrl,
+                      decoration: const InputDecoration(
+                        hintText: 'Panabo City',
+                        prefixIcon: Icon(Icons.location_city_outlined,
+                            size: 18, color: kMutedFg),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _label('Province'),
+                    TextFormField(
+                      controller: _provinceCtrl,
+                      decoration: const InputDecoration(
+                        hintText: 'Davao del Norte',
+                        prefixIcon: Icon(Icons.map_outlined,
+                            size: 18, color: kMutedFg),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ]),
+            const SizedBox(height: 12),
+
             _label('GPS Location'),
             Container(
               padding: const EdgeInsets.all(12),
@@ -578,7 +693,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
                         : const Icon(Icons.my_location, size: 16),
                     label: Text(_gpsLoading
                         ? 'Getting Location...'
-                        : 'Capture GPS & Barangay'),
+                        : 'Capture GPS, Address & Barangay'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: kPrimary,
                       side: const BorderSide(color: kPrimary),
@@ -883,4 +998,18 @@ class _AiPreviewPill extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ResolvedLocation {
+  final String? exactLocation;
+  final String? barangay;
+  final String? city;
+  final String? province;
+
+  const _ResolvedLocation({
+    this.exactLocation,
+    this.barangay,
+    this.city,
+    this.province,
+  });
 }

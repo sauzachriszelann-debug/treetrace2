@@ -2,5 +2,16 @@ backend/.env
 .env
 .idea/
 frontend/dist/
+frontend/node_modules/
+frontend/node_modules/.vite/
 backend/app/**/__pycache__/
+**/__pycache__/
 *.pyc
+mobile/build/
+mobile/.dart_tool/
+runs/
+scratch/
+timbervision/
+backend/models/*.pt
+yolov8n-seg.pt
+*.zip
