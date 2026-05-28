@@ -91,8 +91,8 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
           children: [
             _buildOverviewTab(tree),
             _buildCareTab(),
+            _buildExploreTab(tree),
             _buildInfoTab(tree),
-            _buildHistoryTab(tree),
           ],
         ),
       ),
@@ -166,8 +166,8 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
             tabs: const [
               Tab(text: 'Overview'),
               Tab(text: 'Care'),
-              Tab(text: 'Info'),
-              Tab(text: 'History'),
+              Tab(text: 'Explore'),
+              Tab(text: 'Record'),
             ],
           ),
         ),
@@ -182,11 +182,21 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
       children: [
         _buildStatsStrip(tree),
         const SizedBox(height: 24),
+        _buildTreePhotoGallery(tree),
+        const SizedBox(height: 16),
+        _buildStoryCard(
+          'AI Summary',
+          _wiki?['tagline']?.toString() ??
+              '${tree.commonName} is part of the TreeTrace public inventory.',
+        ),
+        const SizedBox(height: 16),
         if (_wiki?['basic_info'] != null)
           _buildWikiSection('🌿 General Description', _wiki!['basic_info']),
         const SizedBox(height: 16),
         if (_wiki?['characteristics'] != null)
           _buildWikiSection('⭐ Characteristics', _wiki!['characteristics']),
+        const SizedBox(height: 16),
+        _buildCommonProblems(),
         const SizedBox(height: 100),
       ],
     );
@@ -195,7 +205,7 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
   Widget _buildStatsStrip(TreeModel tree) {
     return Row(
       children: [
-        _StatPill(Icons.eco_rounded, '${tree.carbonKg?.toStringAsFixed(1) ?? "0"} kg', 'CO₂ Stock'),
+        _StatPill(Icons.eco_rounded, '${tree.carbonKg?.toStringAsFixed(1) ?? "0"} kg', 'CO2 Stock'),
         const SizedBox(width: 12),
         _StatPill(Icons.straighten_rounded, '${tree.dbhCm?.toStringAsFixed(0) ?? "0"} cm', 'DBH'),
         const SizedBox(width: 12),
@@ -205,6 +215,10 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
   }
 
   Widget _buildWikiSection(String title, Map<String, dynamic> data) {
+    final entries = data.entries
+        .where((e) => e.value != null && e.value.toString().trim().isNotEmpty)
+        .toList();
+    if (entries.isEmpty) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(24), border: Border.all(color: kBorder)),
@@ -213,7 +227,7 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
         children: [
           Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 16)),
           const SizedBox(height: 16),
-          ...data.entries.map((e) => Padding(
+          ...entries.map((e) => Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -254,21 +268,58 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
           'Fertilizer': care['fertilizer'],
           'Note': care['difficulty_note'],
         }),
+        const SizedBox(height: 16),
+        _buildHowTos(),
+        const SizedBox(height: 16),
+        _buildPopularQuestions(),
+        const SizedBox(height: 100),
+      ],
+    );
+  }
+
+  Widget _buildExploreTab(TreeModel tree) {
+    if (_wikiLoading) return _buildLoading();
+    final uses = _wiki?['uses'] is Map
+        ? Map<String, dynamic>.from(_wiki!['uses'])
+        : <String, dynamic>{};
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        _buildStoryCard(
+          'Name Story',
+          _wiki?['name_story']?.toString() ??
+              'The name ${tree.commonName} reflects the way people identify this tree in the field.',
+        ),
+        const SizedBox(height: 16),
+        _buildStoryCard(
+          'Adaptation Strategies',
+          _wiki?['adaptation_strategies']?.toString() ??
+              '${tree.commonName} adapts to tropical field conditions through steady root growth and seasonal leaf response.',
+        ),
+        const SizedBox(height: 16),
+        _buildStoryCard(
+          'Legends & Symbolism',
+          _wiki?['history_and_legends']?.toString() ??
+              '${tree.commonName} represents the value of local biodiversity and community tree care.',
+        ),
+        const SizedBox(height: 16),
+        if (uses.isNotEmpty) _buildWikiSection('Ecological Uses', uses),
         const SizedBox(height: 100),
       ],
     );
   }
 
   Widget _buildInfoTab(TreeModel tree) {
+    final location = _displayLocation(tree);
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
         _buildWikiSection('🌳 Inventory Record', {
           'Record ID': '#${tree.id}',
           'Health Status': tree.healthStatus,
-          'Barangay': tree.barangay,
+          'Location': location,
           'Coordinates': '${tree.lat?.toStringAsFixed(5)}, ${tree.lng?.toStringAsFixed(5)}',
-          'Last Survey': 'Oct 2024',
+          'Last Survey': tree.createdAt == null ? 'Not available' : _formatDate(tree.createdAt!),
         }),
         const SizedBox(height: 16),
         if (tree.notes != null)
@@ -311,8 +362,231 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
     );
   }
 
+  Widget _buildTreePhotoGallery(TreeModel tree) {
+    if ((tree.photoUrl ?? '').isEmpty) return const SizedBox.shrink();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: CachedNetworkImage(
+        imageUrl: tree.photoUrl!,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: 150,
+      ),
+    );
+  }
+
+  Widget _buildStoryCard(String title, String text) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: kBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 16)),
+          const SizedBox(height: 10),
+          Text(text, style: const TextStyle(fontSize: 14, height: 1.55, color: kForeground)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCommonProblems() {
+    final raw = _wiki?['common_problems'];
+    final problems = raw is List
+        ? raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+        : <Map<String, dynamic>>[];
+    if (problems.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Common Problems', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18)),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 230,
+          child: PageView.builder(
+            controller: PageController(viewportFraction: 0.9),
+            itemCount: problems.length,
+            itemBuilder: (_, index) {
+              final item = problems[index];
+              return _ProblemCard(
+                title: item['name']?.toString() ?? 'Common problem',
+                description: item['description']?.toString() ?? '',
+                severity: item['severity']?.toString() ?? 'Watch',
+                imageUrl: item['image_url']?.toString() ?? '',
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHowTos() {
+    final raw = _wiki?['how_tos'];
+    final items = raw is List
+        ? raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+        : <Map<String, dynamic>>[];
+    if (items.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('How Tos', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18)),
+        const SizedBox(height: 12),
+        ...items.map((item) {
+          final steps = item['steps'] is List ? item['steps'] as List : const [];
+          return _GuideCard(
+            title: item['title']?.toString() ?? 'Guide',
+            body: steps.map((e) => e.toString()).join('\n'),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildPopularQuestions() {
+    final raw = _wiki?['popular_questions'];
+    final items = raw is List
+        ? raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+        : <Map<String, dynamic>>[];
+    if (items.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Popular Questions', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18)),
+        const SizedBox(height: 12),
+        ...items.map((item) => _GuideCard(
+              title: item['q']?.toString() ?? 'Question',
+              body: item['a']?.toString() ?? '',
+            )),
+      ],
+    );
+  }
+
+  String _displayLocation(TreeModel tree) {
+    final parts = [
+      if ((tree.barangay ?? '').trim().isNotEmpty) tree.barangay!.trim(),
+      if ((tree.city ?? '').trim().isNotEmpty) tree.city!.trim(),
+      if ((tree.province ?? '').trim().isNotEmpty) tree.province!.trim(),
+    ];
+    if (parts.isNotEmpty) return parts.join(', ');
+    return _exactLocationFromNotes(tree.notes) ?? 'Location not tagged';
+  }
+
+  String? _exactLocationFromNotes(String? notes) {
+    if (notes == null) return null;
+    for (final line in notes.split('\n')) {
+      final trimmed = line.trim();
+      if (trimmed.toLowerCase().startsWith('exact location:')) {
+        final value = trimmed.substring('exact location:'.length).trim();
+        if (value.isNotEmpty && value.toLowerCase() != 'null') return value;
+      }
+    }
+    return null;
+  }
+
+  String _formatDate(DateTime date) => '${date.month}/${date.day}/${date.year}';
+
   Widget _buildLoading() => const Center(child: CircularProgressIndicator(color: kPrimary));
   Widget _buildEmpty() => const EmptyState(message: 'Data unavailable', icon: Icons.info_outline);
+}
+
+class _ProblemCard extends StatelessWidget {
+  final String title;
+  final String description;
+  final String severity;
+  final String imageUrl;
+
+  const _ProblemCard({
+    required this.title,
+    required this.description,
+    required this.severity,
+    required this.imageUrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = severity.toLowerCase() == 'high'
+        ? kPoor
+        : severity.toLowerCase() == 'medium'
+            ? kFair
+            : kHealthy;
+    return Container(
+      margin: const EdgeInsets.only(right: 10),
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: kBorder),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: imageUrl.startsWith('http')
+                ? CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorWidget: (_, __, ___) => const Icon(Icons.bug_report_outlined, color: kMutedFg),
+                  )
+                : const Center(child: Icon(Icons.bug_report_outlined, color: kMutedFg)),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 13))),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(999)),
+                      child: Text(severity, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w900)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                Text(description, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: kMutedFg, fontSize: 11.5, height: 1.25)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GuideCard extends StatelessWidget {
+  final String title;
+  final String body;
+
+  const _GuideCard({required this.title, required this.body});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: kBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 14)),
+          const SizedBox(height: 8),
+          Text(body, style: const TextStyle(color: kMutedFg, fontSize: 13, height: 1.45)),
+        ],
+      ),
+    );
+  }
 }
 
 class _StatPill extends StatelessWidget {
