@@ -1,9 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
 import '../services/theme.dart';
-import '../widgets/widgets.dart';
 import 'dbh_measure_screen.dart';
 
 class AddTreeScreen extends StatefulWidget {
@@ -20,12 +21,15 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
   final _dbhCtrl = TextEditingController();
   final _heightCtrl = TextEditingController();
   final _barangayCtrl = TextEditingController();
+  final _latCtrl = TextEditingController();
+  final _lngCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
 
   File? _photo;
   String _health = 'Healthy';
   bool _saving = false;
   bool _identifying = false;
+  bool _gpsLoading = false;
   bool _addToEvaluation = true;
   String? _dbhConfidence; // Low / Medium / High
   String? _dbhMethod;
@@ -45,6 +49,22 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
       _predictedDbhCm = (r['estimated_dbh_cm'] as num?)?.toDouble();
       _notesCtrl.text = _usefulAiNote(r['description']) ?? '';
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _captureGps(automatic: true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _sciCtrl.dispose();
+    _dbhCtrl.dispose();
+    _heightCtrl.dispose();
+    _barangayCtrl.dispose();
+    _latCtrl.dispose();
+    _lngCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
   }
 
   String? _usefulAiNote(dynamic value) {
@@ -122,6 +142,93 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     }
   }
 
+  Future<void> _captureGps({bool automatic = false}) async {
+    setState(() => _gpsLoading = true);
+    try {
+      final servicesEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!servicesEnabled) {
+        throw Exception('Location services are turned off.');
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw Exception('Location permission was denied.');
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      final barangay = await _barangayFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+      setState(() {
+        _latCtrl.text = position.latitude.toStringAsFixed(7);
+        _lngCtrl.text = position.longitude.toStringAsFixed(7);
+        if (barangay != null && barangay.isNotEmpty) {
+          _barangayCtrl.text = barangay;
+        }
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(barangay == null
+              ? 'GPS coordinates captured. Barangay can be entered manually.'
+              : 'GPS and barangay captured!'),
+          backgroundColor: kHealthy,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(automatic
+              ? 'Tap Capture GPS & Barangay to try location again.'
+              : 'Could not capture GPS: $e'),
+          backgroundColor: kPoor,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _gpsLoading = false);
+    }
+  }
+
+  Future<String?> _barangayFromCoordinates(double lat, double lng) async {
+    try {
+      final marks = await placemarkFromCoordinates(lat, lng);
+      if (marks.isEmpty) return null;
+      final place = marks.first;
+      final candidates = [
+        place.subLocality,
+        place.thoroughfare,
+        place.street,
+        place.locality,
+      ];
+      for (final value in candidates) {
+        final cleaned = _cleanBarangay(value);
+        if (cleaned != null) return cleaned;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  String? _cleanBarangay(String? value) {
+    final text = value?.trim();
+    if (text == null || text.isEmpty) return null;
+    final lower = text.toLowerCase();
+    if (lower == 'panabo' ||
+        lower == 'panabo city' ||
+        lower == 'davao del norte' ||
+        lower == 'philippines') {
+      return null;
+    }
+    return text
+        .replaceFirst(RegExp(r'^barangay\s+', caseSensitive: false), 'Brgy. ')
+        .replaceFirst(RegExp(r'^brgy\.\s*', caseSensitive: false), 'Brgy. ');
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -181,6 +288,10 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
             : _barangayCtrl.text.trim(),
         'dbh_cm': double.tryParse(_dbhCtrl.text),
         'height_m': double.tryParse(_heightCtrl.text),
+        'lat': double.tryParse(_latCtrl.text),
+        'lng': double.tryParse(_lngCtrl.text),
+        'city': 'Panabo City',
+        'province': 'Davao del Norte',
         'notes': _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
         'photo_url': photoUrl,
       };
@@ -199,7 +310,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
             photoPath: _photo?.path);
       }
       if (mounted) {
-        Navigator.pop(context);
+        Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(await api.isOnline()
                 ? 'Tree saved!'
@@ -303,6 +414,11 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
               ),
             ),
             const SizedBox(height: 16),
+
+            if (_aiPrediction != null) ...[
+              _buildAiProfilePreview(),
+              const SizedBox(height: 16),
+            ],
 
             _label('Common Name *'),
             TextFormField(
@@ -440,6 +556,70 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
             ),
             const SizedBox(height: 12),
 
+            _label('GPS Location'),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: kCard,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: kBorder),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _gpsLoading ? null : _captureGps,
+                    icon: _gpsLoading
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.my_location, size: 16),
+                    label: Text(_gpsLoading
+                        ? 'Getting Location...'
+                        : 'Capture GPS & Barangay'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: kPrimary,
+                      side: const BorderSide(color: kPrimary),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _latCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true, signed: true),
+                          decoration: const InputDecoration(
+                            hintText: 'Latitude',
+                            prefixIcon: Icon(Icons.pin_drop_outlined,
+                                size: 18, color: kMutedFg),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _lngCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true, signed: true),
+                          decoration: const InputDecoration(
+                            hintText: 'Longitude',
+                            prefixIcon: Icon(Icons.public,
+                                size: 18, color: kMutedFg),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+
             _label('Notes'),
             TextFormField(
               controller: _notesCtrl,
@@ -502,6 +682,92 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
       child: Text(text,
           style: const TextStyle(
               fontSize: 13, fontWeight: FontWeight.w500, color: kForeground)));
+
+  Widget _buildAiProfilePreview() {
+    final result = _aiPrediction ?? {};
+    final common = (result['common_name'] ?? 'AI identified tree').toString();
+    final scientific = (result['scientific_name'] ?? '').toString();
+    final status = (result['endangered_status'] ?? 'Not Listed').toString();
+    final habitat =
+        (result['habitat'] ?? 'Philippines / Southeast Asia').toString();
+    final description = _usefulAiNote(result['description']) ??
+        'TreeTrace AI filled the species fields. Review the record before saving.';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: kSidebarBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kSidebarPrimary.withOpacity(0.22)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: kSidebarPrimary.withOpacity(0.16),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.auto_awesome_rounded,
+                    color: kSidebarPrimary),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(common,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900)),
+                    if (scientific.isNotEmpty)
+                      Text(scientific,
+                          style: const TextStyle(
+                              color: kSidebarText,
+                              fontStyle: FontStyle.italic,
+                              fontSize: 12)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _AiPreviewPill(Icons.record_voice_over_outlined,
+                  _pronunciation(common)),
+              _AiPreviewPill(Icons.shield_outlined, status),
+              _AiPreviewPill(Icons.public_rounded, habitat),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(description,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  color: kSidebarText, fontSize: 12, height: 1.4)),
+        ],
+      ),
+    );
+  }
+
+  String _pronunciation(String value) {
+    final text = value.trim();
+    if (text.isEmpty) return 'Not available';
+    return text
+        .split(RegExp(r'\s+|-'))
+        .where((part) => part.isNotEmpty)
+        .map((part) => part.toLowerCase())
+        .join(' - ');
+  }
 
   Map<String, dynamic>? _checkEndangered(String name) {
     const endangered = {
@@ -577,6 +843,44 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
               _pickPhoto(ImageSource.gallery);
             }),
       ])),
+    );
+  }
+}
+
+class _AiPreviewPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _AiPreviewPill(this.icon, this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withOpacity(0.14)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: kSidebarPrimary),
+          const SizedBox(width: 5),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 190),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

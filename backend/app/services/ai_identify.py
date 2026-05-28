@@ -35,6 +35,7 @@ TREFLE_URL   = "https://trefle.io/api/v1"
 GBIF_MATCH_URL = "https://api.gbif.org/v1/species/match"
 YOLO_DBH_MODEL_PATH = Path(__file__).resolve().parents[2] / "models" / "tree_trunk_segmentation.pt"
 _YOLO_DBH_MODEL = None
+ENABLE_YOLO_DBH = os.getenv("ENABLE_YOLO_DBH", "").lower() in {"1", "true", "yes", "on"}
 
 IDENTIFY_PROMPT = """\
 You are Dr. Maria Santos, a senior botanist at DENR with 20 years identifying Philippine trees.
@@ -105,7 +106,7 @@ def _optional_int(val, lo: int = 1, hi: int = 500) -> int | None:
 async def _plantnet(image_bytes: bytes, content_type: str) -> dict | None:
     try:
         files  = {"images": ("tree.jpg", image_bytes, content_type)}
-        params = {"api-key": PLANTNET_API_KEY, "lang": "en", "include-related-images": "false"}
+        params = {"api-key": PLANTNET_API_KEY, "lang": "en", "include-related-images": "true"}
         async with httpx.AsyncClient(timeout=20) as http:
             resp = await http.post(PLANTNET_URL, files=files, params=params)
         if resp.status_code != 200:
@@ -124,6 +125,15 @@ async def _plantnet(image_bytes: bytes, content_type: str) -> dict | None:
         common_name = common_list[0] if common_list else sci_name.split()[0] if sci_name else ""
         family      = sp.get("family", {}).get("scientificNameWithoutAuthor", "")
         confidence  = "High" if score > 0.55 else "Medium" if score > 0.20 else "Low"
+        images = []
+        for image in best.get("images", [])[:8]:
+            url = (
+                image.get("url", {}).get("m")
+                or image.get("url", {}).get("o")
+                or image.get("url", {}).get("s")
+            )
+            if url:
+                images.append(url)
         return {
             "common_name":     common_name,
             "scientific_name": sci_name,
@@ -131,6 +141,7 @@ async def _plantnet(image_bytes: bytes, content_type: str) -> dict | None:
             "confidence":      confidence,
             "plantnet_score":  round(score, 4),
             "source":          "plantnet",
+            "match_images":    images,
         }
     except Exception:
         return None
@@ -458,16 +469,19 @@ def _build_wiki(
             "name":        "Leaf Blight",
             "description": "Brown spots on leaves caused by fungal infection during wet season. Remove affected leaves and apply copper-based fungicide.",
             "severity":    "Medium",
+            "image_url":   "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Leaf_spot_disease_on_a_leaf.jpg/640px-Leaf_spot_disease_on_a_leaf.jpg",
         },
         {
             "name":        "Root Rot",
             "description": "Caused by overwatering or poor drainage. Ensure soil drains well and reduce watering frequency.",
             "severity":    "High",
+            "image_url":   "https://upload.wikimedia.org/wikipedia/commons/thumb/9/96/Root_rot.jpg/640px-Root_rot.jpg",
         },
         {
             "name":        "Scale Insects",
             "description": "Small brown bumps on stems and leaves. Treat with neem oil or insecticidal soap spray.",
             "severity":    "Low",
+            "image_url":   "https://upload.wikimedia.org/wikipedia/commons/thumb/9/99/Scale_insect_on_leaf.jpg/640px-Scale_insect_on_leaf.jpg",
         },
     ]
 
@@ -549,6 +563,7 @@ Respond ONLY with valid JSON:
   "method": "brief method used",
   "analysis_notes": "2-3 sentences explaining scale cues, distance estimate, and uncertainty",
   "distance_estimate_m": 3.2,
+  "measurement_height_m": 1.3,
   "accuracy_note": "expected error range, e.g. +/- 10-15 cm"
 }
 """
@@ -603,11 +618,17 @@ async def _yolo_segmented_dbh(
     Required classes: trunk/tree_trunk and reference/reference_object/card/paper.
     TimberVision-style trunk labels such as tronc, cut, and side are accepted.
     """
+    if not ENABLE_YOLO_DBH:
+        print("[DBH] YOLO skipped: ENABLE_YOLO_DBH is not enabled.")
+        return None
+
     if not YOLO_DBH_MODEL_PATH.exists():
+        print(f"[DBH] YOLO skipped: model not found at {YOLO_DBH_MODEL_PATH}.")
         return None
 
     reference_width_cm = _reference_width_cm(reference_hint)
     if reference_width_cm is None:
+        print("[DBH] YOLO skipped: no supported reference object detected in hint.")
         return None
 
     try:
@@ -615,6 +636,7 @@ async def _yolo_segmented_dbh(
         import numpy as np
         from ultralytics import YOLO
     except Exception:
+        print("[DBH] YOLO skipped: ultralytics/opencv/numpy dependency missing.")
         return None
 
     try:
@@ -630,9 +652,11 @@ async def _yolo_segmented_dbh(
 
         predictions = _YOLO_DBH_MODEL.predict(image, imgsz=1024, conf=0.35, verbose=False)
         if not predictions:
+            print("[DBH] YOLO skipped: no predictions returned.")
             return None
         result = predictions[0]
         if result.masks is None or result.boxes is None:
+            print("[DBH] YOLO skipped: no masks or boxes detected.")
             return None
 
         names = result.names or {}
@@ -659,6 +683,7 @@ async def _yolo_segmented_dbh(
                 ref_score = score
 
         if trunk_mask is None or ref_mask is None:
+            print("[DBH] YOLO skipped: trunk or reference object mask not detected.")
             return None
 
         ref_bounds = _mask_bounds(ref_mask)
@@ -680,9 +705,11 @@ async def _yolo_segmented_dbh(
 
         dbh_cm = round(trunk_width_px / pixels_per_cm, 1)
         if dbh_cm <= 0 or dbh_cm > 300:
+            print(f"[DBH] YOLO skipped: invalid DBH result {dbh_cm} cm.")
             return None
 
         confidence = "High" if trunk_score >= 0.70 and ref_score >= 0.70 else "Medium"
+        print(f"[DBH] YOLO used: DBH {dbh_cm} cm, trunk={trunk_score:.3f}, reference={ref_score:.3f}.")
         return {
             "dbh_cm": dbh_cm,
             "height_m": None,
@@ -691,9 +718,11 @@ async def _yolo_segmented_dbh(
             "analysis_notes": (
                 f"Detected trunk and reference object masks. Reference width used: "
                 f"{reference_width_cm:g} cm; trunk width: {trunk_width_px}px; "
-                f"scale: {pixels_per_cm:.2f}px/cm."
+                f"scale: {pixels_per_cm:.2f}px/cm. Measurement row follows the "
+                f"reference object's center, which should be placed at 1.3m above ground."
             ),
             "distance_estimate_m": known_distance_m,
+            "measurement_height_m": 1.3,
             "accuracy_note": "+/- 5-15 cm when the reference object is flat, visible, and placed at DBH height.",
             "segmentation_used": True,
             "segmentation_model": str(YOLO_DBH_MODEL_PATH),
@@ -701,7 +730,8 @@ async def _yolo_segmented_dbh(
             "reference_detection_confidence": round(ref_score, 3),
             "reference_width_cm": reference_width_cm,
         }
-    except Exception:
+    except Exception as exc:
+        print(f"[DBH] YOLO skipped: {exc}")
         return None
 
 
@@ -760,6 +790,7 @@ async def measure_dbh_from_base64(
         result.setdefault("method", method)
         result.setdefault("analysis_notes", "")
         result.setdefault("distance_estimate_m", None)
+        result.setdefault("measurement_height_m", 1.3)
         result.setdefault("accuracy_note", "+/- 20-30 cm without a clear scale reference")
         return result
     except Exception as e:
@@ -772,6 +803,7 @@ async def measure_dbh_from_base64(
             "method": method,
             "analysis_notes": "Fallback estimate only. Retake with A4 paper, ruler, or known distance for better accuracy.",
             "distance_estimate_m": known_distance_m,
+            "measurement_height_m": 1.3,
             "accuracy_note": "+/- 30-50 cm fallback estimate",
         }
 
