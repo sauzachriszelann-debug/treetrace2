@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
 import '../services/theme.dart';
@@ -212,38 +214,173 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     }
   }
 
-  Future<_ResolvedLocation> _locationFromCoordinates(double lat, double lng) async {
+  Future<_ResolvedLocation> _locationFromCoordinates(
+      double lat, double lng) async {
+    _ResolvedLocation? phoneLocation;
     try {
       final marks = await placemarkFromCoordinates(lat, lng);
-      if (marks.isEmpty) return const _ResolvedLocation();
-      final place = marks.first;
+      if (marks.isNotEmpty) {
+        final place = marks.first;
+        final barangay = _firstCleanBarangay([
+          place.subLocality,
+          place.locality,
+          place.subAdministrativeArea,
+        ]);
+        final city = _cleanCity(place.locality) ??
+            _cleanCity(place.subAdministrativeArea);
+        final province = _cleanProvince(place.administrativeArea);
+        phoneLocation = _ResolvedLocation(
+          exactLocation: _cleanFullAddress([
+            place.name,
+            place.street,
+            place.thoroughfare,
+            place.subThoroughfare,
+            barangay,
+            city,
+            province,
+            place.country,
+          ]),
+          barangay: barangay,
+          city: city,
+          province: province,
+        );
+      }
+    } catch (_) {}
+
+    final onlineLocation =
+        phoneLocation?.barangay == null ? await _lookupOnlineLocation(lat, lng) : null;
+    final barangay = phoneLocation?.barangay ??
+        onlineLocation?.barangay ??
+        _nearestPanaboBarangay(lat, lng);
+    final city = phoneLocation?.city ?? onlineLocation?.city ?? 'Panabo City';
+    final province =
+        phoneLocation?.province ?? onlineLocation?.province ?? 'Davao del Norte';
+
+    return _ResolvedLocation(
+      exactLocation: _cleanFullAddress([
+        phoneLocation?.exactLocation,
+        onlineLocation?.exactLocation,
+        barangay,
+        city,
+        province,
+      ]),
+      barangay: barangay,
+      city: city,
+      province: province,
+    );
+  }
+
+  Future<_ResolvedLocation?> _lookupOnlineLocation(
+      double lat, double lng) async {
+    try {
+      final uri = Uri.https('nominatim.openstreetmap.org', '/reverse', {
+        'format': 'jsonv2',
+        'lat': lat.toString(),
+        'lon': lng.toString(),
+        'zoom': '18',
+        'addressdetails': '1',
+      });
+      final response = await http
+          .get(uri, headers: {'User-Agent': 'TreeTrace Mobile'})
+          .timeout(const Duration(seconds: 5));
+      if (response.statusCode != 200) return null;
+      final data = jsonDecode(response.body);
+      if (data is! Map<String, dynamic>) return null;
+      final address = data['address'];
+      if (address is! Map) return null;
+      final a = Map<String, dynamic>.from(address);
       final barangay = _firstCleanBarangay([
-        place.subLocality,
-        place.locality,
-        place.subAdministrativeArea,
+        a['neighbourhood']?.toString(),
+        a['suburb']?.toString(),
+        a['quarter']?.toString(),
+        a['village']?.toString(),
+        a['hamlet']?.toString(),
+        a['city_district']?.toString(),
       ]);
-      final city = _cleanCity(place.locality) ??
-          _cleanCity(place.subAdministrativeArea);
-      final province = _cleanProvince(place.administrativeArea);
+      final city = _cleanCity(a['city']?.toString()) ??
+          _cleanCity(a['town']?.toString()) ??
+          _cleanCity(a['municipality']?.toString()) ??
+          _cleanCity(a['county']?.toString());
+      final province = _cleanProvince(a['state']?.toString());
       return _ResolvedLocation(
         exactLocation: _cleanFullAddress([
-          place.name,
-          place.street,
-          place.thoroughfare,
-          place.subThoroughfare,
-          barangay,
+          a['house_number']?.toString(),
+          a['road']?.toString(),
+          a['neighbourhood']?.toString(),
+          a['suburb']?.toString(),
+          a['village']?.toString(),
           city,
           province,
-          place.country,
         ]),
         barangay: barangay,
         city: city,
         province: province,
       );
-    } catch (_) {}
-    return const _ResolvedLocation();
+    } catch (_) {
+      return null;
+    }
   }
 
+  String? _nearestPanaboBarangay(double lat, double lng) {
+    const barangays = [
+      _BarangayPoint('Gredu', 7.3076, 125.6847),
+      _BarangayPoint('San Francisco', 7.3140, 125.6722),
+      _BarangayPoint('New Visayas', 7.3028, 125.6851),
+      _BarangayPoint('Quezon', 7.2962, 125.6817),
+      _BarangayPoint('San Pedro', 7.3017, 125.6734),
+      _BarangayPoint('San Vicente', 7.2922, 125.6779),
+      _BarangayPoint('Santo Nino', 7.2888, 125.6908),
+      _BarangayPoint('Cagangohan', 7.3354, 125.6666),
+      _BarangayPoint('J.P. Laurel', 7.3288, 125.6846),
+      _BarangayPoint('New Pandan', 7.3221, 125.6946),
+      _BarangayPoint('San Nicolas', 7.3168, 125.6993),
+      _BarangayPoint('San Roque', 7.2876, 125.7043),
+      _BarangayPoint('Santa Cruz', 7.2809, 125.6861),
+      _BarangayPoint('Kauswagan', 7.2719, 125.6902),
+      _BarangayPoint('Little Panay', 7.2730, 125.6718),
+      _BarangayPoint('Dapco', 7.2566, 125.6868),
+      _BarangayPoint('Lower Panaga', 7.2595, 125.6725),
+      _BarangayPoint('Mabunao', 7.2476, 125.6794),
+      _BarangayPoint('Maduao', 7.2361, 125.6604),
+      _BarangayPoint('Malativas', 7.2597, 125.7085),
+      _BarangayPoint('Katipunan', 7.2463, 125.7152),
+      _BarangayPoint('Katualan', 7.2345, 125.7068),
+      _BarangayPoint('Kasilak', 7.2205, 125.6969),
+      _BarangayPoint('Nanyo', 7.2188, 125.7163),
+      _BarangayPoint('A.O. Floirendo', 7.2097, 125.6845),
+      _BarangayPoint('Buenavista', 7.2022, 125.6687),
+      _BarangayPoint('Consolacion', 7.1902, 125.6823),
+      _BarangayPoint('Salvacion', 7.1982, 125.7048),
+      _BarangayPoint('New Malaga', 7.1808, 125.7018),
+      _BarangayPoint('New Malitbog', 7.1690, 125.7136),
+      _BarangayPoint('Sindaton', 7.1644, 125.6949),
+      _BarangayPoint('Manay', 7.1510, 125.7040),
+      _BarangayPoint('Kiotoy', 7.3416, 125.7097),
+      _BarangayPoint('Tibungol', 7.3492, 125.6953),
+      _BarangayPoint('Tagpore', 7.3675, 125.7025),
+      _BarangayPoint('Upper Licanan', 7.3781, 125.7177),
+      _BarangayPoint('Waterfall', 7.3930, 125.7275),
+      _BarangayPoint('Southern Davao', 7.1714, 125.6702),
+    ];
+
+    _BarangayPoint? nearest;
+    var nearestKm = double.infinity;
+    for (final barangay in barangays) {
+      final distance = Geolocator.distanceBetween(
+            lat,
+            lng,
+            barangay.lat,
+            barangay.lng,
+          ) /
+          1000;
+      if (distance < nearestKm) {
+        nearestKm = distance;
+        nearest = barangay;
+      }
+    }
+    if (nearest == null || nearestKm > 18) return null;
+    return 'Brgy. ${nearest.name}';
+  }
   String? _firstCleanBarangay(List<String?> values) {
     for (final value in values) {
       final cleaned = _cleanBarangay(value);
@@ -997,4 +1134,12 @@ class _ResolvedLocation {
     this.city,
     this.province,
   });
+}
+
+class _BarangayPoint {
+  final String name;
+  final double lat;
+  final double lng;
+
+  const _BarangayPoint(this.name, this.lat, this.lng);
 }
