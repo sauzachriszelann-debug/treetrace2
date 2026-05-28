@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/api_service.dart';
+import '../services/auth_provider.dart';
 import '../services/theme.dart';
 import '../models/models.dart';
 import '../widgets/widgets.dart';
@@ -38,6 +40,7 @@ class _HealthLogsScreenState extends State<HealthLogsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final canManage = context.read<AuthProvider>().user?.role != 'citizen';
     return Scaffold(
       backgroundColor: kBackground,
       body: RefreshIndicator(
@@ -72,10 +75,10 @@ class _HealthLogsScreenState extends State<HealthLogsScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        '${_logs.length} assessments',
+                        '${_logs.length} ${_logs.length == 1 ? 'assessment' : 'assessments'}',
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 24,
+                          fontSize: 26,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
@@ -112,7 +115,11 @@ class _HealthLogsScreenState extends State<HealthLogsScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
-                    (_, i) => _HealthLogCard(log: _logs[i]),
+                    (_, i) => _HealthLogCard(
+                      log: _logs[i],
+                      canDelete: canManage,
+                      onDelete: () => _deleteLog(_logs[i].id),
+                    ),
                     childCount: _logs.length,
                   ),
                 ),
@@ -121,6 +128,45 @@ class _HealthLogsScreenState extends State<HealthLogsScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _deleteLog(int id) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete Health Log?'),
+        content: const Text('This health assessment will be removed.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: kPoor),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      await api.deleteHealthLog(id);
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Health log deleted.'),
+          backgroundColor: kHealthy,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Could not delete health log: $e'),
+          backgroundColor: kPoor,
+        ));
+      }
+    }
   }
 }
 
@@ -148,7 +194,13 @@ class _HeaderStat extends StatelessWidget {
 
 class _HealthLogCard extends StatelessWidget {
   final HealthLogModel log;
-  const _HealthLogCard({required this.log});
+  final bool canDelete;
+  final VoidCallback onDelete;
+  const _HealthLogCard({
+    required this.log,
+    required this.canDelete,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -161,10 +213,10 @@ class _HealthLogCard extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: kCard,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: kBorder),
         boxShadow: [
           BoxShadow(
@@ -178,11 +230,11 @@ class _HealthLogCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 42,
-            height: 42,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
               color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(13),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: color, size: 21),
           ),
@@ -195,24 +247,48 @@ class _HealthLogCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: Text(
-                        log.treeCommonName ?? 'Tree',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 14,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            log.treeCommonName ?? 'Tree',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            log.assessedDate,
+                            style: const TextStyle(
+                                fontSize: 11, color: kMutedFg),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 8),
                     HealthBadge(log.condition, small: true),
+                    if (canDelete)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4),
+                        child: InkWell(
+                          onTap: onDelete,
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: kPoor.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.delete_outline_rounded,
+                                color: kPoor, size: 18),
+                          ),
+                        ),
+                      ),
                   ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  log.assessedDate,
-                  style: const TextStyle(fontSize: 11, color: kMutedFg),
                 ),
                 if ((log.dbhCm != null) || (log.heightM != null)) ...[
                   const SizedBox(height: 8),

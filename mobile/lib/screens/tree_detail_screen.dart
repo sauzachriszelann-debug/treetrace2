@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../services/api_service.dart';
+import '../services/auth_provider.dart';
 import '../services/theme.dart';
 import '../models/models.dart';
 import '../widgets/widgets.dart';
@@ -48,6 +49,9 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
     );
 
     final tree = _tree!;
+    final role = context.read<AuthProvider>().user?.role;
+    final canManage = role != 'citizen';
+    final canDeleteTree = role == 'admin';
     return Scaffold(
       body: CustomScrollView(slivers: [
         // ── Photo / header ────────────────────────────────────────────────────
@@ -102,6 +106,10 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
                 )),
                 HealthBadge(tree.healthStatus),
               ]),
+              if (canManage) ...[
+                const SizedBox(height: 14),
+                _buildManagementActions(canDeleteTree),
+              ],
               const SizedBox(height: 16),
 
               // Details card
@@ -150,8 +158,20 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
 
               // Health logs
               SectionHeader('Health History',
-                action: Text('${_logs.length} records',
-                    style: const TextStyle(fontSize: 12, color: kMutedFg))),
+                action: canManage
+                    ? OutlinedButton.icon(
+                        onPressed: _showAddHealthLogSheet,
+                        icon: const Icon(Icons.add_rounded, size: 15),
+                        label: const Text('Add'),
+                        style: OutlinedButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          foregroundColor: kPrimary,
+                          side: const BorderSide(color: kBorder),
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                        ),
+                      )
+                    : Text('${_logs.length} records',
+                        style: const TextStyle(fontSize: 12, color: kMutedFg))),
 
               if (_logs.isEmpty)
                 const EmptyState(message: 'No health logs yet',
@@ -204,6 +224,13 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
                                   fontSize: 11, color: kMutedFg)),
                       ],
                     )),
+                    if (canManage)
+                      IconButton(
+                        tooltip: 'Delete log',
+                        icon: const Icon(Icons.delete_outline_rounded,
+                            color: kPoor),
+                        onPressed: () => _deleteHealthLog(log.id),
+                      ),
                   ]),
                 )),
               const SizedBox(height: 24),
@@ -212,6 +239,413 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
         )),
       ]),
     );
+  }
+
+  Widget _buildManagementActions(bool canDeleteTree) {
+    return Container(
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: kBorder),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _ActionTile(
+              icon: Icons.edit_outlined,
+              label: 'Edit',
+              onTap: _showEditTreeSheet,
+            ),
+          ),
+          _ActionDivider(),
+          Expanded(
+            child: _ActionTile(
+              icon: Icons.monitor_heart_outlined,
+              label: 'Health Log',
+              onTap: _showAddHealthLogSheet,
+            ),
+          ),
+          if (canDeleteTree) ...[
+            _ActionDivider(),
+            Expanded(
+              child: _ActionTile(
+                icon: Icons.delete_outline_rounded,
+                label: 'Delete',
+                color: kPoor,
+                onTap: _deleteTree,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAddHealthLogSheet() async {
+    final tree = _tree;
+    if (tree == null) return;
+    final conditionCtrl = ValueNotifier<String>(tree.healthStatus);
+    final dbhCtrl = TextEditingController(text: tree.dbhCm?.toString() ?? '');
+    final heightCtrl =
+        TextEditingController(text: tree.heightM?.toString() ?? '');
+    final notesCtrl = TextEditingController();
+
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+        ),
+        child: SafeArea(
+          child: ValueListenableBuilder<String>(
+            valueListenable: conditionCtrl,
+            builder: (_, condition, __) => Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('Add Health Log',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  value: condition,
+                  decoration: const InputDecoration(
+                    labelText: 'Condition',
+                    prefixIcon: Icon(Icons.favorite_outline_rounded),
+                  ),
+                  items: ['Healthy', 'Fair', 'Poor']
+                      .map((item) =>
+                          DropdownMenuItem(value: item, child: Text(item)))
+                      .toList(),
+                  onChanged: (value) {
+                    if (value != null) conditionCtrl.value = value;
+                  },
+                ),
+                const SizedBox(height: 10),
+                Row(children: [
+                  Expanded(
+                    child: TextField(
+                      controller: dbhCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'DBH (cm)'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: heightCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration:
+                          const InputDecoration(labelText: 'Height (m)'),
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: notesCtrl,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Notes',
+                    alignLabelWithHint: true,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    try {
+                      final now = DateTime.now();
+                      final date =
+                          '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+                      await api.createHealthLog({
+                        'tree_id': tree.id,
+                        'condition': conditionCtrl.value,
+                        'assessed_date': date,
+                        'dbh_cm': double.tryParse(dbhCtrl.text.trim()),
+                        'height_m': double.tryParse(heightCtrl.text.trim()),
+                        'notes': notesCtrl.text.trim().isEmpty
+                            ? null
+                            : notesCtrl.text.trim(),
+                      });
+                      if (sheetContext.mounted) {
+                        Navigator.pop(sheetContext, true);
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text('Could not save health log: $e'),
+                          backgroundColor: kPoor,
+                        ));
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.save_outlined),
+                  label: const Text('Save Health Log'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (saved == true) {
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Health log saved.'),
+          backgroundColor: kHealthy,
+        ));
+      }
+    }
+  }
+
+  Future<void> _showEditTreeSheet() async {
+    final tree = _tree;
+    if (tree == null) return;
+    final nameCtrl = TextEditingController(text: tree.commonName);
+    final sciCtrl = TextEditingController(text: tree.scientificName ?? '');
+    final barangayCtrl = TextEditingController(text: tree.barangay ?? '');
+    final dbhCtrl = TextEditingController(text: tree.dbhCm?.toString() ?? '');
+    final heightCtrl =
+        TextEditingController(text: tree.heightM?.toString() ?? '');
+    final latCtrl = TextEditingController(text: tree.lat?.toString() ?? '');
+    final lngCtrl = TextEditingController(text: tree.lng?.toString() ?? '');
+    final notesCtrl = TextEditingController(text: tree.notes ?? '');
+    final healthCtrl = ValueNotifier<String>(tree.healthStatus);
+
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            child: ValueListenableBuilder<String>(
+              valueListenable: healthCtrl,
+              builder: (_, health, __) => Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text('Edit Tree',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: nameCtrl,
+                    decoration:
+                        const InputDecoration(labelText: 'Common Name'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: sciCtrl,
+                    decoration:
+                        const InputDecoration(labelText: 'Scientific Name'),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    value: health,
+                    decoration: const InputDecoration(labelText: 'Health'),
+                    items: ['Healthy', 'Fair', 'Poor']
+                        .map((item) =>
+                            DropdownMenuItem(value: item, child: Text(item)))
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) healthCtrl.value = value;
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: barangayCtrl,
+                    decoration: const InputDecoration(labelText: 'Barangay'),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    Expanded(
+                      child: TextField(
+                        controller: dbhCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'DBH'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextField(
+                        controller: heightCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'Height'),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    Expanded(
+                      child: TextField(
+                        controller: latCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true, signed: true),
+                        decoration: const InputDecoration(labelText: 'Latitude'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextField(
+                        controller: lngCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true, signed: true),
+                        decoration:
+                            const InputDecoration(labelText: 'Longitude'),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: notesCtrl,
+                    maxLines: 3,
+                    decoration: const InputDecoration(labelText: 'Notes'),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      if (nameCtrl.text.trim().isEmpty) return;
+                      try {
+                        await api.updateTree(tree.id, {
+                          'common_name': nameCtrl.text.trim(),
+                          'scientific_name': sciCtrl.text.trim().isEmpty
+                              ? null
+                              : sciCtrl.text.trim(),
+                          'health_status': healthCtrl.value,
+                          'barangay': barangayCtrl.text.trim().isEmpty
+                              ? null
+                              : barangayCtrl.text.trim(),
+                          'dbh_cm': double.tryParse(dbhCtrl.text.trim()),
+                          'height_m': double.tryParse(heightCtrl.text.trim()),
+                          'lat': double.tryParse(latCtrl.text.trim()),
+                          'lng': double.tryParse(lngCtrl.text.trim()),
+                          'notes': notesCtrl.text.trim().isEmpty
+                              ? null
+                              : notesCtrl.text.trim(),
+                        });
+                        if (sheetContext.mounted) {
+                          Navigator.pop(sheetContext, true);
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text('Could not update tree: $e'),
+                            backgroundColor: kPoor,
+                          ));
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.save_outlined),
+                    label: const Text('Save Changes'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (saved == true) {
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Tree updated.'),
+          backgroundColor: kHealthy,
+        ));
+      }
+    }
+  }
+
+  Future<void> _deleteTree() async {
+    final tree = _tree;
+    if (tree == null) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete Tree?'),
+        content: Text('Delete ${tree.commonName}? This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: kPoor),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      await api.deleteTree(tree.id);
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Could not delete tree: $e'),
+          backgroundColor: kPoor,
+        ));
+      }
+    }
+  }
+
+  Future<void> _deleteHealthLog(int id) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete Health Log?'),
+        content: const Text('This health assessment will be removed.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: kPoor),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      await api.deleteHealthLog(id);
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Health log deleted.'),
+          backgroundColor: kHealthy,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Could not delete health log: $e'),
+          backgroundColor: kPoor,
+        ));
+      }
+    }
   }
 
   Widget _infoRow(IconData icon, String label, String? value) {
@@ -228,5 +662,54 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
             fontSize: 13, fontWeight: FontWeight.w600, color: kForeground)),
       ]),
     );
+  }
+}
+
+class _ActionTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ActionTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.color = kPrimary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: SizedBox(
+        height: 58,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 20, color: color),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(width: 1, height: 34, color: kBorder);
   }
 }

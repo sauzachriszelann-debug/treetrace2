@@ -288,7 +288,7 @@ class ApiService {
   }
 
   Future<List<dynamic>> getTreeHealthLogs(int treeId) async {
-    final res = await _dio.get('/health-logs/tree/$treeId');
+    final res = await _dio.get('/public/tree/$treeId/health-logs');
     return res.data;
   }
 
@@ -296,6 +296,10 @@ class ApiService {
       Map<String, dynamic> data) async {
     final res = await _dio.post('/health-logs/', data: data);
     return res.data;
+  }
+
+  Future<void> deleteHealthLog(int id) async {
+    await _dio.delete('/health-logs/$id');
   }
 
   // ── AI Identify ───────────────────────────────────────────────────────────

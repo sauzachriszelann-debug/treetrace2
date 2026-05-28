@@ -2,15 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 import '../services/api_service.dart';
+import '../services/auth_provider.dart';
 import '../services/theme.dart';
 import '../models/models.dart';
 import '../widgets/widgets.dart';
 import 'public_tree_profile_screen.dart';
+import 'tree_detail_screen.dart';
 
 class MapScreen extends StatefulWidget {
   final VoidCallback? onBack;
-  const MapScreen({super.key, this.onBack});
+  final int refreshKey;
+  const MapScreen({super.key, this.onBack, this.refreshKey = 0});
   @override
   State<MapScreen> createState() => _MapScreenState();
 }
@@ -32,12 +36,21 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   @override
+  void didUpdateWidget(covariant MapScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshKey != widget.refreshKey) {
+      _load();
+    }
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
+    setState(() => _loading = true);
     try {
       final data = await api.getPublicTrees();
       setState(() {
@@ -362,9 +375,18 @@ class _MapScreenState extends State<MapScreen> {
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
                   Navigator.pop(context);
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => PublicTreeProfileScreen(treeId: tree.id)));
+                  final role = context.read<AuthProvider>().user?.role;
+                  final changed = await Navigator.push<bool>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => role == 'citizen'
+                          ? PublicTreeProfileScreen(treeId: tree.id)
+                          : TreeDetailScreen(treeId: tree.id),
+                    ),
+                  );
+                  if (changed == true) _load();
                 },
                 child: const Text('View Full Details', style: TextStyle(fontWeight: FontWeight.w700)),
               ),

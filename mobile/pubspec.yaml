@@ -26,6 +26,7 @@ dependencies:
 
   # Image picker
   image_picker: ^1.0.7
+  camera: ^0.11.0+2
 
   # QR scanner
   mobile_scanner: ^5.1.0
@@ -33,11 +34,15 @@ dependencies:
   # Map
   flutter_map: ^7.0.2
   latlong2: ^0.9.1
+  geolocator: ^13.0.2
+  geocoding: ^3.0.0
 
   # Utilities
   intl: ^0.19.0
   connectivity_plus: ^6.0.3
   permission_handler: ^11.3.1
+  path_provider: ^2.1.5
+  share_plus: ^10.1.4
 
 dev_dependencies:
   flutter_test:
