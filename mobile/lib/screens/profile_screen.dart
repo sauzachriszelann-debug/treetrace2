@@ -44,13 +44,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         .toList();
   }
 
-  void _refreshActivity() {
-    setState(() {
-      _aiHistory = api.aiIdentificationHistory();
-      _unknownSubmissions = _loadUnknownSubmissions();
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -95,11 +88,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   if (user?.role == 'citizen') ...[
                     _buildSectionTitle('Membership Status'),
                     _buildPlanCard(user),
-                    const SizedBox(height: 24),
-                    _buildSectionTitle('History'),
-                    _buildAiHistoryCard(user),
-                    const SizedBox(height: 24),
-                    _buildUnknownSubmissionsCard(),
                     const SizedBox(height: 24),
                   ],
                   _buildSettingsSection(auth),
@@ -482,52 +470,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildAiHistoryCard(dynamic user) {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _aiHistory,
-      builder: (context, snap) {
-        final history = snap.data ?? [];
-        return Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: kCard,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: kBorder),
-          ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              const Icon(Icons.auto_awesome_outlined, color: kPrimary),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'AI Scan History',
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
-                ),
-              ),
-              IconButton(
-                onPressed: _refreshActivity,
-                icon: const Icon(Icons.refresh, size: 18),
-              ),
-            ]),
-            const SizedBox(height: 8),
-            Text(
-              'Today: ${user?.aiIdentificationsToday ?? 0}${user?.isEnterprise == true || user?.isInstitutional == true ? ' / unlimited' : user?.isPro == true ? ' / 50' : ' / 10'}',
-              style: const TextStyle(color: kMutedFg, fontSize: 12),
-            ),
-            const SizedBox(height: 4),
-            if (history.isEmpty)
-              const Text(
-                'No AI identification records on this phone yet. Scan a tree to start your history.',
-                style: TextStyle(color: kMutedFg, fontSize: 12, height: 1.35),
-              )
-            else
-              ...history.take(5).map((item) => _buildAiHistoryTile(item)),
-          ]),
-        );
-      },
-    );
-  }
-
   Widget _buildAiHistoryTile(Map<String, dynamic> item) {
     final protected = item['protected'] == true;
     final notIdentified = item['not_identified'] == true;
@@ -568,57 +510,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ]),
         ),
       ]),
-    );
-  }
-
-  Widget _buildUnknownSubmissionsCard() {
-    return FutureBuilder<List<UnknownSpeciesModel>>(
-      future: _unknownSubmissions,
-      builder: (context, snap) {
-        final submissions = snap.data ?? [];
-        return Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: kCard,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: kBorder),
-          ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              const Icon(Icons.science_outlined, color: kPrimary),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Expert Review Submissions',
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
-                ),
-              ),
-              IconButton(
-                onPressed: _refreshActivity,
-                icon: const Icon(Icons.refresh, size: 18),
-              ),
-            ]),
-            const SizedBox(height: 8),
-            Text(
-              '${submissions.length} submitted for expert review',
-              style: const TextStyle(color: kMutedFg, fontSize: 12),
-            ),
-            const SizedBox(height: 4),
-            if (snap.connectionState == ConnectionState.waiting)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: LinearProgressIndicator(color: kPrimary),
-              )
-            else if (submissions.isEmpty)
-              const Text(
-                'No unknown species submissions yet. When AI cannot identify a tree, submit it for expert review and track it here.',
-                style: TextStyle(color: kMutedFg, fontSize: 12, height: 1.35),
-              )
-            else
-              ...submissions.take(5).map(_buildUnknownSubmissionTile),
-          ]),
-        );
-      },
     );
   }
 
@@ -717,7 +608,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _buildSettingsTile(Icons.security_rounded, 'Privacy & Security', () {}),
         _buildSettingsTile(Icons.help_outline_rounded, 'Help Center', () {}),
         const SizedBox(height: 12),
-        _buildSettingsTile(Icons.logout_rounded, 'Sign Out', () => auth.logout(), isDestructive: true),
+        _buildSettingsTile(Icons.logout_rounded, 'Sign Out', () async {
+          await auth.logout();
+          if (!mounted) return;
+          Navigator.of(context, rootNavigator: true)
+              .popUntil((route) => route.isFirst);
+        }, isDestructive: true),
       ],
     );
   }

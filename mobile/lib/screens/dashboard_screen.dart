@@ -22,6 +22,7 @@ import 'unknown_review_screen.dart';
 import 'health_logs_screen.dart';
 import 'tree_list_screen.dart';
 import 'profile_screen.dart';
+import 'planting_recommendations_screen.dart';
 
 
 
@@ -44,6 +45,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<HealthLogModel> _logs = [];
 
   Map<String, dynamic>? _community;
+  List<Map<String, dynamic>> _plantingSuggestions = [];
   int _pendingReviews = 0;
   String _search = '';
   final TextEditingController _searchController = TextEditingController();
@@ -74,6 +76,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final l = await api.getHealthLogs(limit: 50);
 
       final c = await api.getCommunityStructure();
+      Map<String, dynamic> planting = {};
+      try {
+        planting = await api.getPlantingSuggestions();
+      } catch (_) {}
       List<dynamic> unknown = [];
       try {
         unknown = await api.getUnknownSpeciesReview();
@@ -86,6 +92,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _logs = l.map((j) => HealthLogModel.fromJson(j)).toList();
 
         _community = c;
+        _plantingSuggestions = (planting['suggestions'] as List? ?? [])
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
         _pendingReviews = unknown.where((e) => e['reviewed'] != true).length;
 
         _loading = false;
@@ -286,7 +296,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   builder: (_) => const HealthLogsScreen(),
                                 ),
                               )),
+                      _DashboardActionButton(
+                          label: 'Planting',
+                          icon: Icons.eco_outlined,
+                          onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const PlantingRecommendationsScreen(),
+                                ),
+                              )),
                     ],
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  _DashboardPlantingSuggestions(
+                    suggestions: _plantingSuggestions,
+                    onOpen: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const PlantingRecommendationsScreen(),
+                      ),
+                    ),
                   ),
 
                   const SizedBox(height: 10),
@@ -658,6 +690,161 @@ class _RoleIconBadge extends StatelessWidget {
       ),
     );
   }
+}
+
+class _DashboardPlantingSuggestions extends StatelessWidget {
+  final List<Map<String, dynamic>> suggestions;
+  final VoidCallback onOpen;
+  const _DashboardPlantingSuggestions({
+    required this.suggestions,
+    required this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final items = suggestions.take(5).toList();
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Planting Suggestions',
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+                ),
+              ),
+              TextButton(
+                onPressed: onOpen,
+                child: const Text('Open'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (items.isEmpty)
+            InkWell(
+              onTap: onOpen,
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: kBackground,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: kBorder),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.eco_outlined, color: kPrimary),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Open planting planner to add suggested trees.',
+                        style: TextStyle(color: kMutedFg, fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            SizedBox(
+              height: 118,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: items.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 9),
+                itemBuilder: (_, index) => _DashboardPlantCard(
+                  item: items[index],
+                  onTap: onOpen,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DashboardPlantCard extends StatelessWidget {
+  final Map<String, dynamic> item;
+  final VoidCallback onTap;
+  const _DashboardPlantCard({required this.item, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final name = item['species_name']?.toString() ?? 'Suggested tree';
+    final area = item['recommended_area']?.toString() ?? 'Recommended area';
+    final photo = _dashboardPlantPhoto(item, name);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: 132,
+        decoration: BoxDecoration(
+          color: kBackground,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: kBorder),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Image.network(
+              photo,
+              height: 62,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                height: 62,
+                color: kPrimary.withOpacity(0.08),
+                child: const Icon(Icons.eco_outlined, color: kPrimary),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    area,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: kMutedFg, fontSize: 10.5),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _dashboardPlantPhoto(Map<String, dynamic> item, String name) {
+  final images = item['image_urls'];
+  if (images is List && images.isNotEmpty) {
+    final first = images.first.toString();
+    if (first.isNotEmpty) return first;
+  }
+  return 'https://tse1.mm.bing.net/th?q=${Uri.encodeComponent('$name tree seedling')}';
 }
 
 Map<String, dynamic>? _conservationMapForTree(TreeModel tree) {
