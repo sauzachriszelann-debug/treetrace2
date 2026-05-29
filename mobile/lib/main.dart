@@ -13,7 +13,6 @@ import 'screens/scan_qr_screen.dart';
 import 'screens/add_tree_screen.dart';
 import 'screens/ai_identify_screen.dart';
 import 'screens/public_portal_screen.dart';
-import 'screens/planting_recommendations_screen.dart';
 import 'screens/profile_screen.dart';
 
 void main() {
@@ -62,7 +61,7 @@ const _adminNavItems = [
   _NavItem('Trees', Icons.forest_outlined, Icons.forest),
   _NavItem('AI Identify', Icons.auto_awesome_outlined, Icons.auto_awesome),
   _NavItem('Map', Icons.map_outlined, Icons.map),
-  _NavItem('Profile', Icons.person_outline, Icons.person),
+  _NavItem('More', Icons.more_horiz_rounded, Icons.more_horiz),
 ];
 
 class AdminMainShell extends StatefulWidget {
@@ -127,8 +126,7 @@ const _publicNavItems = [
   _NavItem('Map', Icons.map_outlined, Icons.map),
   _NavItem('AI Scan', Icons.auto_awesome_outlined, Icons.auto_awesome),
   _NavItem('Scan QR', Icons.qr_code_scanner_outlined, Icons.qr_code_scanner),
-  _NavItem('Plant', Icons.eco_outlined, Icons.eco),
-  _NavItem('Profile', Icons.person_outline, Icons.person),
+  _NavItem('More', Icons.more_horiz_rounded, Icons.more_horiz),
 ];
 
 class PublicMainShell extends StatefulWidget {
@@ -151,7 +149,6 @@ class _PublicMainShellState extends State<PublicMainShell> {
       MapScreen(onBack: _goHome),
       AIIdentifyScreen(onBack: _goHome),
       ScanQRScreen(onBack: _goHome),
-      const PlantingRecommendationsScreen(),
       const ProfileScreen(),
     ];
 

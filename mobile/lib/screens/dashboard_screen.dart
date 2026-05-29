@@ -713,7 +713,7 @@ class _RoleIconBadge extends StatelessWidget {
         border: Border.all(color: Colors.white.withOpacity(0.18)),
       ),
       child: const Icon(
-        Icons.workspace_premium_rounded,
+        Icons.person_outline_rounded,
         color: kPrimary,
         size: 17,
       ),

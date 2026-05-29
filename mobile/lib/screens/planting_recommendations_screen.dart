@@ -112,6 +112,8 @@ class _PlantingRecommendationsScreenState
                     onSubmitted: (_) => _load(),
                   ),
                   const SizedBox(height: 16),
+                  _AddPlantPrompt(onTap: () => _openCreateSheet()),
+                  const SizedBox(height: 16),
                   const _SectionTitle('Suggested Trees to Plant'),
                   const SizedBox(height: 10),
                   if (_suggestions.isEmpty)
@@ -155,6 +157,7 @@ class _PlantingFormSheetState extends State<_PlantingFormSheet> {
   final _barangayCtrl = TextEditingController();
   final _reasonCtrl = TextEditingController();
   File? _photo;
+  List<String> _similarPhotos = [];
   bool _saving = false;
 
   @override
@@ -164,7 +167,9 @@ class _PlantingFormSheetState extends State<_PlantingFormSheet> {
     if (s != null) {
       _speciesCtrl.text = s['species_name']?.toString() ?? '';
       _scientificCtrl.text = s['scientific_name']?.toString() ?? '';
+      _barangayCtrl.text = s['recommended_area']?.toString() ?? '';
       _reasonCtrl.text = s['reason']?.toString() ?? '';
+      _similarPhotos = _imageUrlsFor(s);
     }
   }
 
@@ -180,7 +185,17 @@ class _PlantingFormSheetState extends State<_PlantingFormSheet> {
   Future<void> _pickPhoto() async {
     final x = await ImagePicker()
         .pickImage(source: ImageSource.gallery, imageQuality: 78, maxWidth: 1200);
-    if (x != null) setState(() => _photo = File(x.path));
+    if (x != null) {
+      setState(() {
+        _photo = File(x.path);
+        _similarPhotos = _imageUrlsFor({
+          'species_name': _speciesCtrl.text.trim().isEmpty
+              ? 'tree seedling'
+              : _speciesCtrl.text.trim(),
+          'scientific_name': _scientificCtrl.text.trim(),
+        });
+      });
+    }
   }
 
   Future<void> _save() async {
@@ -276,9 +291,24 @@ class _PlantingFormSheetState extends State<_PlantingFormSheet> {
                     : Image.file(_photo!, fit: BoxFit.cover),
               ),
             ),
+            if (_similarPhotos.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              const Text(
+                'Similar photos / seedlings',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 8),
+              _PhotoStrip(urls: _similarPhotos),
+            ],
             const SizedBox(height: 12),
             TextField(
               controller: _speciesCtrl,
+              onChanged: (_) => setState(() {
+                _similarPhotos = _imageUrlsFor({
+                  'species_name': _speciesCtrl.text.trim(),
+                  'scientific_name': _scientificCtrl.text.trim(),
+                });
+              }),
               decoration: const InputDecoration(
                 labelText: 'Tree to plant',
                 prefixIcon: Icon(Icons.eco_outlined),
@@ -287,6 +317,12 @@ class _PlantingFormSheetState extends State<_PlantingFormSheet> {
             const SizedBox(height: 10),
             TextField(
               controller: _scientificCtrl,
+              onChanged: (_) => setState(() {
+                _similarPhotos = _imageUrlsFor({
+                  'species_name': _speciesCtrl.text.trim(),
+                  'scientific_name': _scientificCtrl.text.trim(),
+                });
+              }),
               decoration: const InputDecoration(
                 labelText: 'Scientific name',
                 prefixIcon: Icon(Icons.science_outlined),
@@ -329,6 +365,53 @@ class _PlantingFormSheetState extends State<_PlantingFormSheet> {
   }
 }
 
+class _AddPlantPrompt extends StatelessWidget {
+  final VoidCallback onTap;
+  const _AddPlantPrompt({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: kSidebarBg,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: kSidebarBg.withOpacity(0.12),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.add_circle_outline_rounded,
+                  color: kSidebarPrimary, size: 30),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Add user suggested plant for this area',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: kSidebarPrimary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _SuggestionCard extends StatelessWidget {
   final Map<String, dynamic> item;
   final VoidCallback onAdd;
@@ -338,6 +421,7 @@ class _SuggestionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final priority = item['priority']?.toString() ?? 'Medium';
     final color = priority == 'High' ? kPoor : kFair;
+    final images = _imageUrlsFor(item);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -376,10 +460,19 @@ class _SuggestionCard extends StatelessWidget {
                   color: kMutedFg, fontStyle: FontStyle.italic, fontSize: 12),
             ),
           ],
+          if (images.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _PhotoStrip(urls: images),
+          ],
           const SizedBox(height: 8),
           Text(
             item['reason']?.toString() ?? '',
             style: const TextStyle(color: kMutedFg, fontSize: 12.5, height: 1.35),
+          ),
+          const SizedBox(height: 8),
+          _AreaReason(
+            area: item['recommended_area']?.toString(),
+            reason: item['area_reason']?.toString(),
           ),
           const SizedBox(height: 10),
           Align(
@@ -394,6 +487,120 @@ class _SuggestionCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _PhotoStrip extends StatelessWidget {
+  final List<String> urls;
+  const _PhotoStrip({required this.urls});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 86,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: urls.take(5).length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, index) {
+          final url = urls[index];
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Image.network(
+              url,
+              width: 108,
+              height: 86,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                width: 108,
+                height: 86,
+                color: kPrimary.withOpacity(0.08),
+                child: const Icon(Icons.eco_outlined, color: kPrimary),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _AreaReason extends StatelessWidget {
+  final String? area;
+  final String? reason;
+  const _AreaReason({this.area, this.reason});
+
+  @override
+  Widget build(BuildContext context) {
+    if ((area ?? '').isEmpty && (reason ?? '').isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: kBackground,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: kBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if ((area ?? '').isNotEmpty)
+            Row(
+              children: [
+                const Icon(Icons.place_outlined, size: 15, color: kPrimary),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    area!,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          if ((reason ?? '').isNotEmpty) ...[
+            const SizedBox(height: 5),
+            Text(
+              reason!,
+              style: const TextStyle(
+                color: kMutedFg,
+                fontSize: 11.5,
+                height: 1.3,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+List<String> _imageUrlsFor(Map<String, dynamic> item) {
+  final provided = item['image_urls'];
+  if (provided is List) {
+    final urls = provided
+        .map((e) => e.toString())
+        .where((e) => e.trim().isNotEmpty)
+        .toList();
+    if (urls.isNotEmpty) return urls;
+  }
+  final name = (item['species_name'] ?? item['common_name'] ?? 'tree seedling')
+      .toString()
+      .trim();
+  final scientific = (item['scientific_name'] ?? '').toString().trim();
+  final terms = [
+    name,
+    if (scientific.isNotEmpty) scientific,
+    '$name seedling',
+    '$name leaves',
+    '$name seeds',
+  ];
+  return terms
+      .map((term) =>
+          'https://tse1.mm.bing.net/th?q=${Uri.encodeComponent('$term tree')}')
+      .toList();
 }
 
 class _PlantingRecordCard extends StatelessWidget {

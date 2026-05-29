@@ -7,6 +7,11 @@ import '../services/theme.dart';
 import '../models/models.dart';
 import 'upgrade_screen.dart';
 import 'project_evaluation_screen.dart';
+import 'planting_recommendations_screen.dart';
+import 'unknown_review_screen.dart';
+import 'users_screen.dart';
+import 'qr_labels_screen.dart';
+import 'reports_tools_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -65,6 +70,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   _buildSectionTitle('Account Information'),
                   _buildAccountCard(user),
+                  const SizedBox(height: 24),
+                  _buildSectionTitle(user?.role == 'citizen'
+                      ? 'Citizen More'
+                      : 'Field Tools'),
+                  _buildMoreActions(auth),
                   const SizedBox(height: 24),
                   _buildSectionTitle('Field Sync'),
                   _buildOfflineSyncCard(context),
@@ -304,6 +314,167 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(width: 10),
           Text(text, style: TextStyle(fontSize: 13, color: isLocked ? kMutedFg : kForeground)),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMoreActions(AuthProvider auth) {
+    final isCitizen = auth.user?.role == 'citizen';
+    final actions = isCitizen
+        ? [
+            _MoreAction(
+              'Planting',
+              Icons.eco_outlined,
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const PlantingRecommendationsScreen(),
+                ),
+              ),
+            ),
+            _MoreAction(
+              'Evaluation',
+              Icons.fact_check_outlined,
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const ProjectEvaluationScreen(),
+                ),
+              ),
+            ),
+            _MoreAction('Field Sync', Icons.sync_rounded, () {
+              _syncNow();
+            }),
+            _MoreAction('History', Icons.history_rounded, _showHistorySheet),
+            _MoreAction(
+              'Expert Reviews',
+              Icons.science_outlined,
+              _showExpertReviewsSheet,
+            ),
+          ]
+        : [
+            _MoreAction(
+              'Unknown',
+              Icons.help_outline_rounded,
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const UnknownReviewScreen()),
+              ),
+            ),
+            _MoreAction(
+              'Users',
+              Icons.people_alt_outlined,
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const UsersScreen()),
+              ),
+            ),
+            _MoreAction(
+              'QR Labels',
+              Icons.qr_code_2_rounded,
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const QrLabelsScreen()),
+              ),
+            ),
+            _MoreAction(
+              'Reports',
+              Icons.summarize_outlined,
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ReportsToolsScreen()),
+              ),
+            ),
+            _MoreAction(
+              'Evaluation',
+              Icons.fact_check_outlined,
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const ProjectEvaluationScreen(),
+                ),
+              ),
+            ),
+            _MoreAction('Field Sync', Icons.sync_rounded, () {
+              _syncNow();
+            }),
+          ];
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 2.55,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+      ),
+      itemCount: actions.length,
+      itemBuilder: (_, index) => _MoreActionTile(action: actions[index]),
+    );
+  }
+
+  Future<void> _syncNow() async {
+    final synced = await api.syncOfflineQueue();
+    _refreshQueue();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(synced > 0
+          ? 'Synced $synced offline record${synced == 1 ? '' : 's'}.'
+          : 'No offline records synced yet.'),
+      backgroundColor: synced > 0 ? kHealthy : kMutedFg,
+    ));
+  }
+
+  void _showHistorySheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ProfileSheet(
+        title: 'AI Scan History',
+        child: FutureBuilder<List<Map<String, dynamic>>>(
+          future: _aiHistory,
+          builder: (_, snap) {
+            final history = snap.data ?? [];
+            if (history.isEmpty) {
+              return const Text(
+                'No AI scan history on this phone yet.',
+                style: TextStyle(color: kMutedFg),
+              );
+            }
+            return Column(
+              children: history.take(10).map(_buildAiHistoryTile).toList(),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showExpertReviewsSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ProfileSheet(
+        title: 'Expert Review Submissions',
+        child: FutureBuilder<List<UnknownSpeciesModel>>(
+          future: _unknownSubmissions,
+          builder: (_, snap) {
+            final submissions = snap.data ?? [];
+            if (submissions.isEmpty) {
+              return const Text(
+                'No expert review submissions yet.',
+                style: TextStyle(color: kMutedFg),
+              );
+            }
+            return Column(
+              children: submissions.take(10).map(_buildUnknownSubmissionTile).toList(),
+            );
+          },
+        ),
       ),
     );
   }
@@ -584,15 +755,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               width: double.infinity,
               child: OutlinedButton.icon(
                 onPressed: () async {
-                  final synced = await api.syncOfflineQueue();
-                  _refreshQueue();
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(synced > 0
-                        ? 'Synced $synced offline record${synced == 1 ? '' : 's'}.'
-                        : 'No offline records synced yet.'),
-                    backgroundColor: synced > 0 ? kHealthy : kMutedFg,
-                  ));
+                  await _syncNow();
                 },
                 icon: const Icon(Icons.sync),
                 label: const Text('Sync Now'),
@@ -621,6 +784,115 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 4),
         Text('Version 1.0.0 (Build 12)', style: TextStyle(fontSize: 11, color: kMutedFg.withOpacity(0.6))),
       ],
+    );
+  }
+}
+
+class _MoreAction {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  const _MoreAction(this.label, this.icon, this.onTap);
+}
+
+class _MoreActionTile extends StatelessWidget {
+  final _MoreAction action;
+  const _MoreActionTile({required this.action});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: action.onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: kCard,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: kBorder),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: kPrimary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(action.icon, color: kPrimary, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  action.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileSheet extends StatelessWidget {
+  final String title;
+  final Widget child;
+  const _ProfileSheet({required this.title, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.72,
+      minChildSize: 0.4,
+      maxChildSize: 0.92,
+      builder: (_, controller) => Container(
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+        decoration: const BoxDecoration(
+          color: kBackground,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: ListView(
+          controller: controller,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            child,
+          ],
+        ),
+      ),
     );
   }
 }

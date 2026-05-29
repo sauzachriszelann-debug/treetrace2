@@ -10,24 +10,18 @@ import '../services/auth_provider.dart';
 import '../services/theme.dart';
 import '../models/models.dart';
 import '../widgets/widgets.dart';
-import 'ai_identify_screen.dart';
 import 'map_screen.dart';
-import 'scan_qr_screen.dart';
-import 'upgrade_screen.dart';
 import 'community_structure_screen.dart';
 import 'endangered_trees_screen.dart';
 import 'project_evaluation_screen.dart';
+import 'profile_screen.dart';
 
 class PublicPortalScreen extends StatefulWidget {
   final VoidCallback? onOpenMap;
-  final VoidCallback? onOpenAiScan;
-  final VoidCallback? onOpenQrScan;
 
   const PublicPortalScreen({
     super.key,
     this.onOpenMap,
-    this.onOpenAiScan,
-    this.onOpenQrScan,
   });
 
   @override
@@ -264,23 +258,6 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const MapScreen()));
   }
 
-  void _openAiScan() {
-    if (widget.onOpenAiScan != null) {
-      widget.onOpenAiScan!();
-      return;
-    }
-    Navigator.push(
-        context, MaterialPageRoute(builder: (_) => const AIIdentifyScreen()));
-  }
-
-  void _openQrScan() {
-    if (widget.onOpenQrScan != null) {
-      widget.onOpenQrScan!();
-      return;
-    }
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanQRScreen()));
-  }
-
   void _openFullReport() {
     Navigator.push(
       context,
@@ -482,7 +459,7 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
                   ),
                 if (_reviewedUnknown.isNotEmpty && !_reviewNotificationSeen)
                   const SizedBox(width: 8),
-                _ProHeaderButton(user: user),
+                _ProfileHeaderButton(user: user),
               ],
             ),
           ),
@@ -838,32 +815,25 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
   }
 }
 
-class _ProHeaderButton extends StatelessWidget {
+class _ProfileHeaderButton extends StatelessWidget {
   final dynamic user;
-  const _ProHeaderButton({required this.user});
+  const _ProfileHeaderButton({required this.user});
 
   @override
   Widget build(BuildContext context) {
-    final plan = (user?.subscriptionPlan ?? 'free').toString().toLowerCase();
-    final isEnterprise = plan == 'enterprise' ||
-        user?.role == 'admin' ||
-        user?.role == 'field_worker';
-    final isPro = plan == 'pro' || plan == 'professional';
-    final isPaid = isPro || isEnterprise;
-    final label = isEnterprise ? 'Enterprise' : isPro ? 'Pro' : 'Upgrade to Pro';
-
     return InkWell(
-      onTap: () => showUpgradeSheet(context),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ProfileScreen()),
+      ),
       borderRadius: BorderRadius.circular(999),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        width: 36,
+        height: 36,
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: isPro ? Colors.white.withOpacity(0.35) : kSidebarPrimary,
-            width: 1.2,
-          ),
+          shape: BoxShape.circle,
+          border: Border.all(color: kSidebarPrimary, width: 1.2),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.14),
@@ -872,26 +842,17 @@ class _ProHeaderButton extends StatelessWidget {
             ),
           ],
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isPaid
-                  ? Icons.workspace_premium_rounded
-                  : Icons.workspace_premium_outlined,
+        child: Center(
+          child: Text(
+            user?.fullName?.isNotEmpty == true
+                ? user.fullName[0].toUpperCase()
+                : '?',
+            style: const TextStyle(
               color: kPrimary,
-              size: 16,
+              fontWeight: FontWeight.w900,
+              fontSize: 14,
             ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: kPrimary,
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
