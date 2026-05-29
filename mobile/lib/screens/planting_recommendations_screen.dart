@@ -2,9 +2,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../services/auth_provider.dart';
 import '../services/theme.dart';
 import '../widgets/widgets.dart';
 
@@ -38,8 +40,8 @@ class _PlantingRecommendationsScreenState
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final suggestions = await api.getPlantingSuggestions(
-          barangay: _barangayCtrl.text.trim());
+      final suggestions =
+          await api.getPlantingSuggestions(barangay: _barangayCtrl.text.trim());
       final records =
           await api.getPlantingRecommendations(barangay: _barangayCtrl.text);
       if (!mounted) return;
@@ -49,8 +51,8 @@ class _PlantingRecommendationsScreenState
             .map((e) => Map<String, dynamic>.from(e))
             .toList();
         _records = records
-            .map((e) =>
-                PlantingRecommendationModel.fromJson(Map<String, dynamic>.from(e)))
+            .map((e) => PlantingRecommendationModel.fromJson(
+                Map<String, dynamic>.from(e)))
             .toList();
         _loading = false;
       });
@@ -65,17 +67,75 @@ class _PlantingRecommendationsScreenState
   }
 
   Future<void> _openCreateSheet({Map<String, dynamic>? suggestion}) async {
+    final user = context.read<AuthProvider>().user;
+    final isManager = user?.role == 'admin' || user?.role == 'field_worker';
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _PlantingFormSheet(suggestion: suggestion),
+      builder: (_) => _PlantingFormSheet(
+        suggestion: suggestion,
+        isManager: isManager,
+      ),
     );
     if (saved == true) _load();
   }
 
+  Future<void> _reviewRequest(
+      PlantingRecommendationModel item, bool approved) async {
+    final noteCtrl = TextEditingController();
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ReviewDecisionSheet(
+        approved: approved,
+        controller: noteCtrl,
+      ),
+    );
+    if (saved != true) {
+      noteCtrl.dispose();
+      return;
+    }
+    final note = noteCtrl.text.trim();
+    noteCtrl.dispose();
+    final existingReason = item.reason?.trim() ?? '';
+    final decision = approved ? 'Approved' : 'Rejected';
+    final reason = [
+      if (existingReason.isNotEmpty) existingReason,
+      '$decision by admin/field: ${note.isEmpty ? (approved ? 'Suitable for planting.' : 'Not suitable for the selected area.') : note}',
+    ].join('\n\n');
+    try {
+      await api.updatePlantingRecommendation(item.id, {
+        'status': approved ? 'approved' : 'rejected',
+        'reason': reason,
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(approved
+            ? 'Plant suggestion approved and moved to suggestions.'
+            : 'Plant suggestion rejected with reason.'),
+        backgroundColor: approved ? kHealthy : kPoor,
+      ));
+      _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Could not review suggestion: $e'),
+        backgroundColor: kPoor,
+      ));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final user = context.watch<AuthProvider>().user;
+    final isManager = user?.role == 'admin' || user?.role == 'field_worker';
+    final pendingRecords =
+        _records.where((item) => item.status == 'pending').toList();
+    final visibleRecords = isManager
+        ? _records.where((item) => item.status != 'pending').toList()
+        : _records.where((item) => item.status != 'approved').toList();
     return Scaffold(
       backgroundColor: kBackground,
       appBar: AppBar(
@@ -89,7 +149,7 @@ class _PlantingRecommendationsScreenState
         backgroundColor: kPrimary,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add_photo_alternate_outlined),
-        label: const Text('Add Plant'),
+        label: Text(isManager ? 'Add Plant' : 'Suggest Plant'),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: kPrimary))
@@ -112,7 +172,10 @@ class _PlantingRecommendationsScreenState
                     onSubmitted: (_) => _load(),
                   ),
                   const SizedBox(height: 16),
-                  _AddPlantPrompt(onTap: () => _openCreateSheet()),
+                  _AddPlantPrompt(
+                    isManager: isManager,
+                    onTap: () => _openCreateSheet(),
+                  ),
                   const SizedBox(height: 16),
                   const _SectionTitle('Suggested Trees to Plant'),
                   const SizedBox(height: 10),
@@ -124,18 +187,42 @@ class _PlantingRecommendationsScreenState
                   else
                     ..._suggestions.map((item) => _SuggestionCard(
                           item: item,
+                          canAdd: isManager,
                           onAdd: () => _openCreateSheet(suggestion: item),
                         )),
+                  if (isManager && pendingRecords.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    const _SectionTitle('Citizen Suggestions for Review'),
+                    const SizedBox(height: 10),
+                    ...pendingRecords.map((item) => _PlantingRecordCard(
+                          item: item,
+                          isManager: true,
+                          onApprove: () => _reviewRequest(item, true),
+                          onReject: () => _reviewRequest(item, false),
+                        )),
+                  ],
                   const SizedBox(height: 20),
-                  const _SectionTitle('Planting Requests'),
+                  _SectionTitle(
+                      isManager ? 'Planting Records' : 'My Suggested Plants'),
                   const SizedBox(height: 10),
-                  if (_records.isEmpty)
-                    const EmptyState(
-                      message: 'No planting requests saved yet.',
+                  if (visibleRecords.isEmpty)
+                    EmptyState(
+                      message: isManager
+                          ? 'No planting records saved yet.'
+                          : 'No plant suggestions submitted yet.',
                       icon: Icons.post_add_rounded,
                     )
                   else
-                    ..._records.map((item) => _PlantingRecordCard(item: item)),
+                    ...visibleRecords.map((item) => _PlantingRecordCard(
+                          item: item,
+                          isManager: isManager,
+                          onApprove: item.status == 'pending'
+                              ? () => _reviewRequest(item, true)
+                              : null,
+                          onReject: item.status == 'pending'
+                              ? () => _reviewRequest(item, false)
+                              : null,
+                        )),
                 ],
               ),
             ),
@@ -145,7 +232,8 @@ class _PlantingRecommendationsScreenState
 
 class _PlantingFormSheet extends StatefulWidget {
   final Map<String, dynamic>? suggestion;
-  const _PlantingFormSheet({this.suggestion});
+  final bool isManager;
+  const _PlantingFormSheet({this.suggestion, required this.isManager});
 
   @override
   State<_PlantingFormSheet> createState() => _PlantingFormSheetState();
@@ -183,8 +271,8 @@ class _PlantingFormSheetState extends State<_PlantingFormSheet> {
   }
 
   Future<void> _pickPhoto() async {
-    final x = await ImagePicker()
-        .pickImage(source: ImageSource.gallery, imageQuality: 78, maxWidth: 1200);
+    final x = await ImagePicker().pickImage(
+        source: ImageSource.gallery, imageQuality: 78, maxWidth: 1200);
     if (x != null) {
       setState(() {
         _photo = File(x.path);
@@ -208,14 +296,16 @@ class _PlantingFormSheetState extends State<_PlantingFormSheet> {
           : _scientificCtrl.text.trim(),
       'barangay':
           _barangayCtrl.text.trim().isEmpty ? null : _barangayCtrl.text.trim(),
-      'reason': _reasonCtrl.text.trim().isEmpty ? null : _reasonCtrl.text.trim(),
-      'status': 'recommended',
+      'reason':
+          _reasonCtrl.text.trim().isEmpty ? null : _reasonCtrl.text.trim(),
+      'status': widget.isManager ? 'recommended' : 'pending',
       'planted': false,
     };
 
     try {
       if (await api.isOnline()) {
-        if (_photo != null) payload['photo_url'] = await api.uploadPhoto(_photo!);
+        if (_photo != null)
+          payload['photo_url'] = await api.uploadPhoto(_photo!);
         await api.createPlantingRecommendation(payload);
       } else {
         await api.queueOfflineAction(
@@ -228,7 +318,9 @@ class _PlantingFormSheetState extends State<_PlantingFormSheet> {
       Navigator.pop(context, true);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(await api.isOnline()
-            ? 'Planting recommendation saved.'
+            ? (widget.isManager
+                ? 'Planting recommendation saved.'
+                : 'Suggestion sent for admin review.')
             : 'Saved offline. It will sync when internet returns.'),
         backgroundColor: kHealthy,
       ));
@@ -263,7 +355,9 @@ class _PlantingFormSheetState extends State<_PlantingFormSheet> {
         child: ListView(
           controller: controller,
           children: [
-            const _SectionTitle('Add Planting Recommendation'),
+            _SectionTitle(widget.isManager
+                ? 'Add Planting Recommendation'
+                : 'Suggest Plant for This Area'),
             const SizedBox(height: 14),
             GestureDetector(
               onTap: _pickPhoto,
@@ -356,7 +450,9 @@ class _PlantingFormSheetState extends State<_PlantingFormSheet> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.save_outlined),
-              label: const Text('Save Recommendation'),
+              label: Text(widget.isManager
+                  ? 'Save Recommendation'
+                  : 'Submit for Review'),
             ),
           ],
         ),
@@ -366,8 +462,9 @@ class _PlantingFormSheetState extends State<_PlantingFormSheet> {
 }
 
 class _AddPlantPrompt extends StatelessWidget {
+  final bool isManager;
   final VoidCallback onTap;
-  const _AddPlantPrompt({required this.onTap});
+  const _AddPlantPrompt({required this.isManager, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -389,21 +486,23 @@ class _AddPlantPrompt extends StatelessWidget {
               ),
             ],
           ),
-          child: const Row(
+          child: Row(
             children: [
-              Icon(Icons.add_circle_outline_rounded,
+              const Icon(Icons.add_circle_outline_rounded,
                   color: kSidebarPrimary, size: 30),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Add user suggested plant for this area',
-                  style: TextStyle(
+                  isManager
+                      ? 'Add official planting suggestion'
+                      : 'Add user suggested plant for this area',
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
               ),
-              Icon(Icons.chevron_right_rounded, color: kSidebarPrimary),
+              const Icon(Icons.chevron_right_rounded, color: kSidebarPrimary),
             ],
           ),
         ),
@@ -414,8 +513,13 @@ class _AddPlantPrompt extends StatelessWidget {
 
 class _SuggestionCard extends StatelessWidget {
   final Map<String, dynamic> item;
+  final bool canAdd;
   final VoidCallback onAdd;
-  const _SuggestionCard({required this.item, required this.onAdd});
+  const _SuggestionCard({
+    required this.item,
+    required this.canAdd,
+    required this.onAdd,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -438,7 +542,8 @@ class _SuggestionCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   item['species_name']?.toString() ?? 'Suggested tree',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w900),
                 ),
               ),
               Container(
@@ -448,7 +553,8 @@ class _SuggestionCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(priority,
-                    style: TextStyle(color: color, fontWeight: FontWeight.w900)),
+                    style:
+                        TextStyle(color: color, fontWeight: FontWeight.w900)),
               ),
             ],
           ),
@@ -467,22 +573,25 @@ class _SuggestionCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             item['reason']?.toString() ?? '',
-            style: const TextStyle(color: kMutedFg, fontSize: 12.5, height: 1.35),
+            style:
+                const TextStyle(color: kMutedFg, fontSize: 12.5, height: 1.35),
           ),
           const SizedBox(height: 8),
           _AreaReason(
             area: item['recommended_area']?.toString(),
             reason: item['area_reason']?.toString(),
           ),
-          const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerRight,
-            child: OutlinedButton.icon(
-              onPressed: onAdd,
-              icon: const Icon(Icons.add_location_alt_outlined, size: 16),
-              label: const Text('Add Plant'),
+          if (canAdd) ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                onPressed: onAdd,
+                icon: const Icon(Icons.add_location_alt_outlined, size: 16),
+                label: const Text('Add Plant'),
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -605,7 +714,15 @@ List<String> _imageUrlsFor(Map<String, dynamic> item) {
 
 class _PlantingRecordCard extends StatelessWidget {
   final PlantingRecommendationModel item;
-  const _PlantingRecordCard({required this.item});
+  final bool isManager;
+  final VoidCallback? onApprove;
+  final VoidCallback? onReject;
+  const _PlantingRecordCard({
+    required this.item,
+    required this.isManager,
+    this.onApprove,
+    this.onReject,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -617,40 +734,189 @@ class _PlantingRecordCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: kBorder),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: kPrimary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: item.photoUrl == null
-                ? const Icon(Icons.eco_rounded, color: kPrimary)
-                : Image.network(item.photoUrl!, fit: BoxFit.cover),
+          Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: kPrimary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: item.photoUrl == null
+                    ? const Icon(Icons.eco_rounded, color: kPrimary)
+                    : Image.network(item.photoUrl!, fit: BoxFit.cover),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item.speciesName,
+                        style: const TextStyle(fontWeight: FontWeight.w900)),
+                    if ((item.scientificName ?? '').isNotEmpty)
+                      Text(item.scientificName!,
+                          style: const TextStyle(
+                              color: kMutedFg,
+                              fontSize: 12,
+                              fontStyle: FontStyle.italic)),
+                    Text(
+                      item.barangay ?? 'No area selected',
+                      style: const TextStyle(color: kMutedFg, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              _StatusChip(item.status),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          if ((item.reason ?? '').isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              item.reason!,
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: kMutedFg,
+                fontSize: 12,
+                height: 1.35,
+              ),
+            ),
+          ],
+          if (isManager && item.status == 'pending') ...[
+            const SizedBox(height: 12),
+            Row(
               children: [
-                Text(item.speciesName,
-                    style: const TextStyle(fontWeight: FontWeight.w900)),
-                if ((item.scientificName ?? '').isNotEmpty)
-                  Text(item.scientificName!,
-                      style: const TextStyle(
-                          color: kMutedFg, fontSize: 12, fontStyle: FontStyle.italic)),
-                Text(
-                  item.barangay ?? item.status,
-                  style: const TextStyle(color: kMutedFg, fontSize: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onReject,
+                    icon: const Icon(Icons.close_rounded, size: 16),
+                    label: const Text('Reject'),
+                    style: OutlinedButton.styleFrom(foregroundColor: kPoor),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: onApprove,
+                    icon: const Icon(Icons.check_rounded, size: 16),
+                    label: const Text('Approve'),
+                  ),
                 ),
               ],
             ),
-          ),
-          HealthBadge(item.planted ? 'Healthy' : 'Fair', small: true),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  final String status;
+  const _StatusChip(this.status);
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = status.toLowerCase();
+    final color = normalized == 'approved' || normalized == 'recommended'
+        ? kHealthy
+        : normalized == 'rejected'
+            ? kPoor
+            : kFair;
+    final label = normalized == 'recommended'
+        ? 'Official'
+        : normalized == 'approved'
+            ? 'Approved'
+            : normalized == 'rejected'
+                ? 'Rejected'
+                : 'Pending';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewDecisionSheet extends StatelessWidget {
+  final bool approved;
+  final TextEditingController controller;
+  const _ReviewDecisionSheet({
+    required this.approved,
+    required this.controller,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: const BoxDecoration(
+          color: kBackground,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                approved
+                    ? 'Approve Plant Suggestion'
+                    : 'Reject Plant Suggestion',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: controller,
+                minLines: 3,
+                maxLines: 5,
+                decoration: InputDecoration(
+                  labelText: approved
+                      ? 'Why is this needed in the area?'
+                      : 'Why is this not approved?',
+                  prefixIcon: const Icon(Icons.notes_outlined),
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => Navigator.pop(context, true),
+                  icon: Icon(
+                    approved ? Icons.check_rounded : Icons.close_rounded,
+                  ),
+                  label: Text(approved ? 'Approve' : 'Reject'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: approved ? kPrimary : kPoor,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

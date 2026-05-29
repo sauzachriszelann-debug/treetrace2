@@ -15,6 +15,15 @@ from app.schemas.planting import (
 
 router = APIRouter()
 
+
+def _role_name(user: User) -> str:
+    role = user.role
+    return getattr(role, "value", role)
+
+
+def _can_manage(user: User) -> bool:
+    return _role_name(user) in {"admin", "field_worker"}
+
 NATIVE_PRIORITY = [
     (
         "Narra",
@@ -74,9 +83,11 @@ def list_recommendations(
     barangay: str | None = None,
     limit: int = Query(100, ge=1, le=300),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     query = db.query(PlantingRecommendation)
+    if not _can_manage(current_user):
+        query = query.filter(PlantingRecommendation.submitted_by_id == current_user.id)
     if barangay:
         query = query.filter(PlantingRecommendation.barangay.ilike(f"%{barangay}%"))
     return query.order_by(PlantingRecommendation.created_at.desc()).limit(limit).all()
@@ -100,6 +111,31 @@ def planting_suggestions(
             barangay_counts[tree.barangay].add(tree.common_name)
 
     suggestions = []
+    approved_records = db.query(PlantingRecommendation).filter(
+        PlantingRecommendation.status.in_(["approved", "recommended"])
+    )
+    if barangay:
+        approved_records = approved_records.filter(
+            PlantingRecommendation.barangay.ilike(f"%{barangay}%")
+        )
+    for record in approved_records.order_by(
+        PlantingRecommendation.created_at.desc()
+    ).limit(8).all():
+        images = [record.photo_url] if record.photo_url else _image_urls(
+            record.species_name,
+            record.scientific_name,
+        )
+        suggestions.append({
+            "species_name": record.species_name,
+            "scientific_name": record.scientific_name,
+            "priority": "Approved",
+            "recommended_area": record.barangay or barangay or "Recommended planting area",
+            "area_reason": "Approved by admin/field review for this planting area.",
+            "image_urls": images,
+            "reason": record.reason or "Approved planting recommendation from the TreeTrace review queue.",
+            "source": "approved",
+        })
+
     for common, scientific, base_reason, recommended_area, area_reason in NATIVE_PRIORITY:
         existing = species_counts.get(common, 0)
         if existing <= 1:
@@ -119,6 +155,7 @@ def planting_suggestions(
                     f"{' in ' + barangay if barangay else ' in the current inventory'}. "
                     f"{base_reason}"
                 ),
+                "source": "system",
             })
 
     if not suggestions:
@@ -130,6 +167,7 @@ def planting_suggestions(
             "area_reason": "Use mixed native seedlings where the inventory already has dominant species but needs resilience.",
             "image_urls": _image_urls("native Philippine tree seedling"),
             "reason": "This area already has recorded diversity. Add mixed native seedlings to keep the canopy resilient.",
+            "source": "system",
         })
 
     return {
@@ -137,7 +175,7 @@ def planting_suggestions(
         "total_trees_checked": len(filtered),
         "species_count": len(species_counts),
         "barangays_with_records": len(barangay_counts),
-        "suggestions": suggestions[:6],
+        "suggestions": suggestions[:8],
     }
 
 
@@ -147,8 +185,14 @@ def create_recommendation(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    data = payload.model_dump()
+    if _can_manage(current_user):
+        data["status"] = data.get("status") or "recommended"
+    else:
+        data["status"] = "pending"
+        data["planted"] = False
     recommendation = PlantingRecommendation(
-        **payload.model_dump(),
+        **data,
         submitted_by_id=current_user.id,
     )
     db.add(recommendation)
@@ -169,10 +213,18 @@ def update_recommendation(
     ).first()
     if not recommendation:
         raise HTTPException(status_code=404, detail="Planting recommendation not found")
-    if current_user.role == "citizen" and recommendation.submitted_by_id != current_user.id:
-        raise HTTPException(status_code=403, detail="You can only update your own planting recommendation.")
+    if not _can_manage(current_user):
+        if recommendation.submitted_by_id != current_user.id:
+            raise HTTPException(status_code=403, detail="You can only update your own planting recommendation.")
+        if recommendation.status != "pending":
+            raise HTTPException(status_code=403, detail="Reviewed planting suggestions can no longer be edited.")
 
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    update_data = payload.model_dump(exclude_unset=True)
+    if not _can_manage(current_user):
+        update_data.pop("status", None)
+        update_data.pop("planted", None)
+
+    for field, value in update_data.items():
         setattr(recommendation, field, value)
     db.commit()
     db.refresh(recommendation)

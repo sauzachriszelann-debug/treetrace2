@@ -432,6 +432,12 @@ class ApiService {
     return Map<String, dynamic>.from(res.data);
   }
 
+  Future<Map<String, dynamic>> updatePlantingRecommendation(
+      int id, Map<String, dynamic> data) async {
+    final res = await _dio.patch('/planting/$id', data: data);
+    return Map<String, dynamic>.from(res.data);
+  }
+
   Future<Map<String, dynamic>> getTreeWiki(int treeId) async {
     final res = await _dio.get('/public/tree/$treeId/wiki');
     return res.data;
