@@ -392,7 +392,16 @@ class _PlantingFormSheetState extends State<_PlantingFormSheet> {
                 style: TextStyle(fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 8),
-              _PhotoStrip(urls: _similarPhotos),
+              _PhotoStrip(
+                urls: _similarPhotos,
+                title: _speciesCtrl.text.trim().isEmpty
+                    ? 'Tree seedling'
+                    : _speciesCtrl.text.trim(),
+                subtitle: _barangayCtrl.text.trim(),
+                description: _reasonCtrl.text.trim().isEmpty
+                    ? 'Similar tree or seedling reference photo.'
+                    : _reasonCtrl.text.trim(),
+              ),
             ],
             const SizedBox(height: 12),
             TextField(
@@ -568,7 +577,16 @@ class _SuggestionCard extends StatelessWidget {
           ],
           if (images.isNotEmpty) ...[
             const SizedBox(height: 10),
-            _PhotoStrip(urls: images),
+            _PhotoStrip(
+              urls: images,
+              title: item['species_name']?.toString() ?? 'Suggested tree',
+              subtitle: item['recommended_area']?.toString() ??
+                  item['scientific_name']?.toString() ??
+                  '',
+              description: item['area_reason']?.toString() ??
+                  item['reason']?.toString() ??
+                  'Recommended planting suggestion.',
+            ),
           ],
           const SizedBox(height: 8),
           Text(
@@ -600,7 +618,15 @@ class _SuggestionCard extends StatelessWidget {
 
 class _PhotoStrip extends StatelessWidget {
   final List<String> urls;
-  const _PhotoStrip({required this.urls});
+  final String title;
+  final String? subtitle;
+  final String? description;
+  const _PhotoStrip({
+    required this.urls,
+    required this.title,
+    this.subtitle,
+    this.description,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -612,18 +638,28 @@ class _PhotoStrip extends StatelessWidget {
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (_, index) {
           final url = urls[index];
-          return ClipRRect(
+          return InkWell(
+            onTap: () => _showPlantPhotoDetail(
+              context,
+              imageUrl: url,
+              title: title,
+              subtitle: subtitle,
+              description: description,
+            ),
             borderRadius: BorderRadius.circular(14),
-            child: Image.network(
-              url,
-              width: 108,
-              height: 86,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Image.network(
+                url,
                 width: 108,
                 height: 86,
-                color: kPrimary.withOpacity(0.08),
-                child: const Icon(Icons.eco_outlined, color: kPrimary),
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  width: 108,
+                  height: 86,
+                  color: kPrimary.withOpacity(0.08),
+                  child: const Icon(Icons.eco_outlined, color: kPrimary),
+                ),
               ),
             ),
           );
@@ -747,9 +783,18 @@ class _PlantingRecordCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 clipBehavior: Clip.antiAlias,
-                child: item.photoUrl == null
-                    ? const Icon(Icons.eco_rounded, color: kPrimary)
-                    : Image.network(item.photoUrl!, fit: BoxFit.cover),
+                child: InkWell(
+                  onTap: () => _showPlantPhotoDetail(
+                    context,
+                    imageUrl: item.photoUrl,
+                    title: item.speciesName,
+                    subtitle: item.barangay ?? item.scientificName,
+                    description: item.reason,
+                  ),
+                  child: item.photoUrl == null
+                      ? const Icon(Icons.eco_rounded, color: kPrimary)
+                      : Image.network(item.photoUrl!, fit: BoxFit.cover),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -851,6 +896,101 @@ class _StatusChip extends StatelessWidget {
       ),
     );
   }
+}
+
+void _showPlantPhotoDetail(
+  BuildContext context, {
+  required String? imageUrl,
+  required String title,
+  String? subtitle,
+  String? description,
+}) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => DraggableScrollableSheet(
+      initialChildSize: 0.72,
+      minChildSize: 0.42,
+      maxChildSize: 0.94,
+      builder: (_, controller) => Container(
+        decoration: const BoxDecoration(
+          color: kBackground,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: ListView(
+          controller: controller,
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 22),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            if ((subtitle ?? '').isNotEmpty)
+              Text(
+                subtitle!,
+                style: const TextStyle(
+                  color: kPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: imageUrl == null || imageUrl.isEmpty
+                  ? Container(
+                      height: 260,
+                      color: kPrimary.withOpacity(0.08),
+                      child: const Icon(
+                        Icons.eco_outlined,
+                        color: kPrimary,
+                        size: 48,
+                      ),
+                    )
+                  : Image.network(
+                      imageUrl,
+                      height: 260,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        height: 260,
+                        color: kPrimary.withOpacity(0.08),
+                        child: const Icon(
+                          Icons.eco_outlined,
+                          color: kPrimary,
+                          size: 48,
+                        ),
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              (description ?? '').trim().isEmpty
+                  ? 'No description added yet.'
+                  : description!.trim(),
+              style: const TextStyle(
+                color: kForeground,
+                fontSize: 14,
+                height: 1.45,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _ReviewDecisionSheet extends StatelessWidget {

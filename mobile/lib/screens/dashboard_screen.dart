@@ -762,7 +762,6 @@ class _DashboardPlantingSuggestions extends StatelessWidget {
                 separatorBuilder: (_, __) => const SizedBox(width: 9),
                 itemBuilder: (_, index) => _DashboardPlantCard(
                   item: items[index],
-                  onTap: onOpen,
                 ),
               ),
             ),
@@ -774,16 +773,24 @@ class _DashboardPlantingSuggestions extends StatelessWidget {
 
 class _DashboardPlantCard extends StatelessWidget {
   final Map<String, dynamic> item;
-  final VoidCallback onTap;
-  const _DashboardPlantCard({required this.item, required this.onTap});
+  const _DashboardPlantCard({required this.item});
 
   @override
   Widget build(BuildContext context) {
     final name = item['species_name']?.toString() ?? 'Suggested tree';
     final area = item['recommended_area']?.toString() ?? 'Recommended area';
+    final reason = item['area_reason']?.toString() ??
+        item['reason']?.toString() ??
+        'Recommended planting suggestion.';
     final photo = _dashboardPlantPhoto(item, name);
     return InkWell(
-      onTap: onTap,
+      onTap: () => _showDashboardPlantDetail(
+        context,
+        imageUrl: photo,
+        title: name,
+        subtitle: area,
+        description: reason,
+      ),
       borderRadius: BorderRadius.circular(14),
       child: Container(
         width: 132,
@@ -845,6 +852,88 @@ String _dashboardPlantPhoto(Map<String, dynamic> item, String name) {
     if (first.isNotEmpty) return first;
   }
   return 'https://tse1.mm.bing.net/th?q=${Uri.encodeComponent('$name tree seedling')}';
+}
+
+void _showDashboardPlantDetail(
+  BuildContext context, {
+  required String imageUrl,
+  required String title,
+  required String subtitle,
+  required String description,
+}) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.42,
+      maxChildSize: 0.92,
+      builder: (_, controller) => Container(
+        decoration: const BoxDecoration(
+          color: kBackground,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: ListView(
+          controller: controller,
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 22),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                color: kPrimary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: Image.network(
+                imageUrl,
+                height: 260,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  height: 260,
+                  color: kPrimary.withOpacity(0.08),
+                  child: const Icon(
+                    Icons.eco_outlined,
+                    color: kPrimary,
+                    size: 48,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              description,
+              style: const TextStyle(
+                color: kForeground,
+                fontSize: 14,
+                height: 1.45,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 Map<String, dynamic>? _conservationMapForTree(TreeModel tree) {

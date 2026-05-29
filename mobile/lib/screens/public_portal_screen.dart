@@ -327,7 +327,6 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
               separatorBuilder: (_, __) => const SizedBox(width: 10),
               itemBuilder: (_, index) => _PlantingSuggestionCard(
                 item: suggestions[index],
-                onTap: _openPlanting,
               ),
             ),
           ),
@@ -851,8 +850,7 @@ class _ProfileHeaderButton extends StatelessWidget {
 
 class _PlantingSuggestionCard extends StatelessWidget {
   final Map<String, dynamic> item;
-  final VoidCallback onTap;
-  const _PlantingSuggestionCard({required this.item, required this.onTap});
+  const _PlantingSuggestionCard({required this.item});
 
   @override
   Widget build(BuildContext context) {
@@ -865,7 +863,13 @@ class _PlantingSuggestionCard extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
+        onTap: () => _showExplorePlantDetail(
+          context,
+          imageUrl: photo,
+          title: name,
+          subtitle: area,
+          description: reason,
+        ),
         borderRadius: BorderRadius.circular(18),
         child: Container(
           width: 210,
@@ -950,6 +954,88 @@ String _firstSuggestionPhoto(Map<String, dynamic> item, String name) {
     if (first.isNotEmpty) return first;
   }
   return 'https://tse1.mm.bing.net/th?q=${Uri.encodeComponent('$name tree seedling')}';
+}
+
+void _showExplorePlantDetail(
+  BuildContext context, {
+  required String imageUrl,
+  required String title,
+  required String subtitle,
+  required String description,
+}) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.42,
+      maxChildSize: 0.92,
+      builder: (_, controller) => Container(
+        decoration: const BoxDecoration(
+          color: kBackground,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: ListView(
+          controller: controller,
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 22),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                color: kPrimary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: CachedNetworkImage(
+                imageUrl: imageUrl,
+                height: 260,
+                fit: BoxFit.cover,
+                errorWidget: (_, __, ___) => Container(
+                  height: 260,
+                  color: kPrimary.withOpacity(0.08),
+                  child: const Icon(
+                    Icons.eco_outlined,
+                    color: kPrimary,
+                    size: 48,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              description,
+              style: const TextStyle(
+                color: kForeground,
+                fontSize: 14,
+                height: 1.45,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _CitizenNotificationButton extends StatelessWidget {
