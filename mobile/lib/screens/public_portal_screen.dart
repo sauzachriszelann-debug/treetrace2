@@ -33,7 +33,6 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
   Map<String, dynamic>? _stats;
   List<Map<String, dynamic>> _plantingSuggestions = [];
   List<dynamic> _reviewedUnknown = [];
-  bool _reviewNotificationSeen = false;
   bool _loading = true;
   String _search = '';
   final TextEditingController _searchController = TextEditingController();
@@ -120,10 +119,7 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     subtitle: const Text('Expert review completed'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      setState(() => _reviewNotificationSeen = true);
-                    },
+                    onTap: () => Navigator.pop(context),
                   )),
             ],
           ),
@@ -441,13 +437,13 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
           child: Center(
             child: Row(
               children: [
-                if (_reviewedUnknown.isNotEmpty && !_reviewNotificationSeen)
-                  _CitizenNotificationButton(
-                    count: _reviewedUnknown.length,
-                    onTap: _showReviewedUnknownSheet,
-                  ),
-                if (_reviewedUnknown.isNotEmpty && !_reviewNotificationSeen)
-                  const SizedBox(width: 8),
+                _CitizenNotificationButton(
+                  reviewedCount: _reviewedUnknown.length,
+                  plantingCount: _plantingSuggestions.length,
+                  onReviewed: _showReviewedUnknownSheet,
+                  onPlanting: _openPlanting,
+                ),
+                const SizedBox(width: 8),
                 _ProfileHeaderButton(user: user),
               ],
             ),
@@ -1039,33 +1035,130 @@ void _showExplorePlantDetail(
 }
 
 class _CitizenNotificationButton extends StatelessWidget {
-  final int count;
-  final VoidCallback onTap;
+  final int reviewedCount;
+  final int plantingCount;
+  final VoidCallback onReviewed;
+  final VoidCallback onPlanting;
   const _CitizenNotificationButton({
-    required this.count,
-    required this.onTap,
+    required this.reviewedCount,
+    required this.plantingCount,
+    required this.onReviewed,
+    required this.onPlanting,
   });
 
   @override
   Widget build(BuildContext context) {
+    final total = reviewedCount + plantingCount;
     return InkWell(
-      onTap: onTap,
+      onTap: () {
+        if (reviewedCount > 0 && plantingCount == 0) {
+          onReviewed();
+        } else if (plantingCount > 0 && reviewedCount == 0) {
+          onPlanting();
+        } else if (total > 0) {
+          _showCitizenNotificationMenu(context);
+        }
+      },
       borderRadius: BorderRadius.circular(999),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.notifications_active_rounded,
-              color: kSidebarPrimary, size: 18),
-          const SizedBox(width: 3),
-          Text(
-            '$count',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 11,
-              fontWeight: FontWeight.w900,
+      child: SizedBox(
+        width: 34,
+        height: 34,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Center(
+              child: Icon(
+                total > 0
+                    ? Icons.notifications_active_rounded
+                    : Icons.notifications_none_rounded,
+                color: total > 0 ? kSidebarPrimary : Colors.white,
+                size: 21,
+              ),
             ),
+            if (total > 0)
+              Positioned(
+                top: 1,
+                right: 0,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: kPoor,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: kSidebarBg, width: 1.2),
+                  ),
+                  child: Text(
+                    '$total',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCitizenNotificationMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: const EdgeInsets.all(16),
+        decoration: const BoxDecoration(
+          color: kCard,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Notifications',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+                ),
+              ),
+              const SizedBox(height: 10),
+              if (reviewedCount > 0)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const CircleAvatar(
+                    backgroundColor: kMuted,
+                    child: Icon(Icons.science_outlined, color: kPrimary),
+                  ),
+                  title: Text('$reviewedCount expert review update'),
+                  subtitle: const Text('View reviewed unknown submissions'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () {
+                    Navigator.pop(context);
+                    onReviewed();
+                  },
+                ),
+              if (plantingCount > 0)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const CircleAvatar(
+                    backgroundColor: kMuted,
+                    child: Icon(Icons.eco_outlined, color: kPrimary),
+                  ),
+                  title: Text('$plantingCount suggested plants available'),
+                  subtitle: const Text('Open planting recommendations'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () {
+                    Navigator.pop(context);
+                    onPlanting();
+                  },
+                ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

@@ -47,9 +47,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic>? _community;
   List<Map<String, dynamic>> _plantingSuggestions = [];
   int _pendingReviews = 0;
+  int _pendingPlantSuggestions = 0;
   String _search = '';
   final TextEditingController _searchController = TextEditingController();
-  bool _reviewNotificationSeen = false;
 
   bool _loading = true;
 
@@ -84,6 +84,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       try {
         unknown = await api.getUnknownSpeciesReview();
       } catch (_) {}
+      List<dynamic> plantingRecords = [];
+      try {
+        plantingRecords = await api.getPlantingRecommendations();
+      } catch (_) {}
 
       setState(() {
 
@@ -97,6 +101,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             .map((e) => Map<String, dynamic>.from(e))
             .toList();
         _pendingReviews = unknown.where((e) => e['reviewed'] != true).length;
+        _pendingPlantSuggestions =
+            plantingRecords.where((e) => e['status'] == 'pending').length;
 
         _loading = false;
 
@@ -178,24 +184,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Center(
                   child: Row(
                     children: [
-                      if (_pendingReviews > 0 && !_reviewNotificationSeen)
-                        _ReviewNotificationBadge(
-                          count: _pendingReviews,
-                          onTap: () async {
-                            await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const UnknownReviewScreen(),
-                              ),
-                            );
-                            if (mounted) {
-                              setState(() {
-                                _pendingReviews = 0;
-                                _reviewNotificationSeen = true;
-                              });
-                            }
-                          },
+                      _HeaderNotificationButton(
+                        unknownCount: _pendingReviews,
+                        plantingCount: _pendingPlantSuggestions,
+                        onUnknown: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const UnknownReviewScreen(),
+                          ),
                         ),
+                        onPlanting: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const PlantingRecommendationsScreen(),
+                          ),
+                        ),
+                      ),
                       const SizedBox(width: 8),
                       const _RoleIconBadge(),
                     ],
@@ -629,34 +634,130 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 
 
-class _ReviewNotificationBadge extends StatelessWidget {
-  final int count;
-  final VoidCallback onTap;
-  const _ReviewNotificationBadge({required this.count, required this.onTap});
+class _HeaderNotificationButton extends StatelessWidget {
+  final int unknownCount;
+  final int plantingCount;
+  final VoidCallback onUnknown;
+  final VoidCallback onPlanting;
+  const _HeaderNotificationButton({
+    required this.unknownCount,
+    required this.plantingCount,
+    required this.onUnknown,
+    required this.onPlanting,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final total = unknownCount + plantingCount;
     return InkWell(
-      onTap: onTap,
+      onTap: () {
+        if (unknownCount > 0 && plantingCount == 0) {
+          onUnknown();
+        } else if (plantingCount > 0 && unknownCount == 0) {
+          onPlanting();
+        } else if (total > 0) {
+          _showAdminNotificationMenu(context);
+        }
+      },
       borderRadius: BorderRadius.circular(999),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
-        child: Row(
+      child: SizedBox(
+        width: 34,
+        height: 34,
+        child: Stack(
+          clipBehavior: Clip.none,
           children: [
-            Icon(Icons.notifications_active_rounded,
-                color: Colors.orange.shade300, size: 18),
-            if (count > 0) ...[
-              const SizedBox(width: 3),
-              Text(
-                '$count',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
+            Center(
+              child: Icon(
+                total > 0
+                    ? Icons.notifications_active_rounded
+                    : Icons.notifications_none_rounded,
+                color: total > 0 ? Colors.orange.shade300 : Colors.white,
+                size: 21,
+              ),
+            ),
+            if (total > 0)
+              Positioned(
+                top: 1,
+                right: 0,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: kPoor,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: kSidebarBg, width: 1.2),
+                  ),
+                  child: Text(
+                    '$total',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                 ),
               ),
-            ],
           ],
+        ),
+      ),
+    );
+  }
+
+  void _showAdminNotificationMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: const EdgeInsets.all(16),
+        decoration: const BoxDecoration(
+          color: kCard,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Notifications',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+                ),
+              ),
+              const SizedBox(height: 10),
+              if (unknownCount > 0)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const CircleAvatar(
+                    backgroundColor: kMuted,
+                    child: Icon(Icons.help_outline_rounded, color: kPrimary),
+                  ),
+                  title: Text('$unknownCount unknown species review'),
+                  subtitle: const Text('Open expert review queue'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () {
+                    Navigator.pop(context);
+                    onUnknown();
+                  },
+                ),
+              if (plantingCount > 0)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const CircleAvatar(
+                    backgroundColor: kMuted,
+                    child: Icon(Icons.eco_outlined, color: kPrimary),
+                  ),
+                  title: Text('$plantingCount suggested plant review'),
+                  subtitle: const Text('Open planting approval queue'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () {
+                    Navigator.pop(context);
+                    onPlanting();
+                  },
+                ),
+            ],
+          ),
         ),
       ),
     );
