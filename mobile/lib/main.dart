@@ -13,18 +13,16 @@ import 'screens/scan_qr_screen.dart';
 import 'screens/add_tree_screen.dart';
 import 'screens/ai_identify_screen.dart';
 import 'screens/public_portal_screen.dart';
+import 'screens/planting_recommendations_screen.dart';
 import 'screens/profile_screen.dart';
 
 void main() {
-  debugPrint("DEBUG: main() started");
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
   ));
-  debugPrint("DEBUG: Initializing API...");
   api.init();
-  debugPrint("DEBUG: Running App...");
   runApp(
     ChangeNotifierProvider(
       create: (_) => AuthProvider()..init(),
@@ -42,8 +40,6 @@ class TreeTraceApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: buildTheme(),
       home: Consumer<AuthProvider>(builder: (_, auth, __) {
-        debugPrint(
-            "DEBUG: Consumer Build - Loading: ${auth.loading}, LoggedIn: ${auth.isLoggedIn}");
         if (auth.loading) return const SplashScreen();
         if (!auth.isLoggedIn) return const LandingScreen();
         if (auth.user?.role == 'citizen') return const PublicMainShell();
@@ -77,6 +73,7 @@ class AdminMainShell extends StatefulWidget {
 
 class _AdminMainShellState extends State<AdminMainShell> {
   int _index = 0;
+  int _mapRefreshKey = 0;
 
   void _goHome() => setState(() => _index = 0);
 
@@ -86,7 +83,7 @@ class _AdminMainShellState extends State<AdminMainShell> {
       const DashboardScreen(),
       const TreeListScreen(),
       AIIdentifyScreen(onBack: _goHome),
-      MapScreen(onBack: _goHome),
+      MapScreen(onBack: _goHome, refreshKey: _mapRefreshKey),
       const ProfileScreen(),
     ];
 
@@ -101,8 +98,11 @@ class _AdminMainShellState extends State<AdminMainShell> {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14)),
               onPressed: () async {
-                await Navigator.push(context,
+                final saved = await Navigator.push<bool>(context,
                     MaterialPageRoute(builder: (_) => const AddTreeScreen()));
+                if (saved == true) {
+                  setState(() => _mapRefreshKey++);
+                }
               },
               child: const Icon(Icons.add),
             )
@@ -112,7 +112,10 @@ class _AdminMainShellState extends State<AdminMainShell> {
         selectedIndex: _index,
         emphasizedIndex: 2,
         emphasizedLabel: 'AI Scan',
-        onSelected: (i) => setState(() => _index = i),
+        onSelected: (i) => setState(() {
+          _index = i;
+          if (i == 3) _mapRefreshKey++;
+        }),
       ),
     );
   }
@@ -124,6 +127,7 @@ const _publicNavItems = [
   _NavItem('Map', Icons.map_outlined, Icons.map),
   _NavItem('AI Scan', Icons.auto_awesome_outlined, Icons.auto_awesome),
   _NavItem('Scan QR', Icons.qr_code_scanner_outlined, Icons.qr_code_scanner),
+  _NavItem('Plant', Icons.eco_outlined, Icons.eco),
   _NavItem('Profile', Icons.person_outline, Icons.person),
 ];
 
@@ -143,12 +147,11 @@ class _PublicMainShellState extends State<PublicMainShell> {
     final screens = [
       PublicPortalScreen(
         onOpenMap: () => setState(() => _index = 1),
-        onOpenAiScan: () => setState(() => _index = 2),
-        onOpenQrScan: () => setState(() => _index = 3),
       ),
       MapScreen(onBack: _goHome),
       AIIdentifyScreen(onBack: _goHome),
       ScanQRScreen(onBack: _goHome),
+      const PlantingRecommendationsScreen(),
       const ProfileScreen(),
     ];
 

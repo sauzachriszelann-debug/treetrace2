@@ -8,7 +8,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 // OLD: const String kBaseUrl = 'http://10.0.2.2:8000/api';
 // For real device on same WiFi: 'http://192.168.x.x:8000/api'
 // NEW:
-const String kBaseUrl = 'https://treetrace-1o7l.onrender.com/api';
+const String kBaseUrl = 'https://treetrace2.onrender.com/api';
 
 class ApiService {
   static final ApiService _instance = ApiService._internal();
@@ -103,7 +103,8 @@ class ApiService {
   Future<void> _recordAiIdentification(Map<String, dynamic> result) async {
     final history = await aiIdentificationHistory();
     history.insert(0, {
-      'common_name': result['common_name'] ?? result['possible_name'] ?? 'Unknown species',
+      'common_name':
+          result['common_name'] ?? result['possible_name'] ?? 'Unknown species',
       'scientific_name': result['scientific_name'],
       'confidence': result['confidence'] ?? 'AI result',
       'status': result['endangered_status'] ?? result['status'] ?? 'Not Listed',
@@ -142,6 +143,13 @@ class ApiService {
             payload['photo_url'] = await uploadPhoto(File(photoPath)) ?? '';
           }
           await submitUnknownSpecies(payload);
+        } else if (item['type'] == 'CREATE_PLANTING_RECOMMENDATION') {
+          if (photoPath != null &&
+              photoPath.isNotEmpty &&
+              File(photoPath).existsSync()) {
+            payload['photo_url'] = await uploadPhoto(File(photoPath));
+          }
+          await createPlantingRecommendation(payload);
         }
         synced++;
       } catch (_) {
@@ -231,8 +239,10 @@ class ApiService {
   }) async {
     final res = await _dio.get('/trees/route-plan', queryParameters: {
       'limit': limit,
-      if (barangay != null && barangay.trim().isNotEmpty) 'barangay': barangay.trim(),
-      if (healthStatus != null && healthStatus.trim().isNotEmpty) 'health_status': healthStatus.trim(),
+      if (barangay != null && barangay.trim().isNotEmpty)
+        'barangay': barangay.trim(),
+      if (healthStatus != null && healthStatus.trim().isNotEmpty)
+        'health_status': healthStatus.trim(),
     });
     return Map<String, dynamic>.from(res.data);
   }
@@ -247,7 +257,8 @@ class ApiService {
     return Map<String, dynamic>.from(res.data);
   }
 
-  Future<Map<String, dynamic>> importEvaluationCsv({bool replace = true}) async {
+  Future<Map<String, dynamic>> importEvaluationCsv(
+      {bool replace = true}) async {
     final res = await _dio.post(
       '/evaluation/import-csv',
       queryParameters: {'replace': replace},
@@ -255,7 +266,8 @@ class ApiService {
     return Map<String, dynamic>.from(res.data);
   }
 
-  Future<Map<String, dynamic>> createEvaluationRow(Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>> createEvaluationRow(
+      Map<String, dynamic> data) async {
     final res = await _dio.post('/evaluation/rows', data: data);
     return Map<String, dynamic>.from(res.data);
   }
@@ -390,6 +402,34 @@ class ApiService {
   Future<Map<String, dynamic>> getCommunityStructure() async {
     final res = await _dio.get('/ai/community-structure');
     return res.data;
+  }
+
+  Future<Map<String, dynamic>> getPlantingSuggestions({String? barangay}) async {
+    final res = await _dio.get(
+      '/planting/suggestions',
+      queryParameters: {
+        if (barangay != null && barangay.trim().isNotEmpty)
+          'barangay': barangay.trim(),
+      },
+    );
+    return Map<String, dynamic>.from(res.data);
+  }
+
+  Future<List<dynamic>> getPlantingRecommendations({String? barangay}) async {
+    final res = await _dio.get(
+      '/planting/',
+      queryParameters: {
+        if (barangay != null && barangay.trim().isNotEmpty)
+          'barangay': barangay.trim(),
+      },
+    );
+    return res.data;
+  }
+
+  Future<Map<String, dynamic>> createPlantingRecommendation(
+      Map<String, dynamic> data) async {
+    final res = await _dio.post('/planting/', data: data);
+    return Map<String, dynamic>.from(res.data);
   }
 
   Future<Map<String, dynamic>> getTreeWiki(int treeId) async {

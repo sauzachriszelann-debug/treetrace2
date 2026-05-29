@@ -211,3 +211,41 @@ class UnknownSpeciesModel {
             j['created_at'] != null ? DateTime.tryParse(j['created_at']) : null,
       );
 }
+
+class PlantingRecommendationModel {
+  final int id;
+  final String speciesName;
+  final String? scientificName;
+  final String? barangay;
+  final String? reason;
+  final String? photoUrl;
+  final String status;
+  final bool planted;
+  final DateTime? createdAt;
+
+  PlantingRecommendationModel({
+    required this.id,
+    required this.speciesName,
+    this.scientificName,
+    this.barangay,
+    this.reason,
+    this.photoUrl,
+    required this.status,
+    required this.planted,
+    this.createdAt,
+  });
+
+  factory PlantingRecommendationModel.fromJson(Map<String, dynamic> j) =>
+      PlantingRecommendationModel(
+        id: j['id'],
+        speciesName: j['species_name'] ?? '',
+        scientificName: j['scientific_name'],
+        barangay: j['barangay'],
+        reason: j['reason'],
+        photoUrl: j['photo_url'],
+        status: j['status'] ?? 'recommended',
+        planted: j['planted'] == true,
+        createdAt:
+            j['created_at'] != null ? DateTime.tryParse(j['created_at']) : null,
+      );
+}

@@ -24,6 +24,7 @@ import 'qr_labels_screen.dart';
 import 'health_logs_screen.dart';
 import 'project_evaluation_screen.dart';
 import 'reports_tools_screen.dart';
+import 'planting_recommendations_screen.dart';
 import 'tree_list_screen.dart';
 
 
@@ -334,6 +335,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 ),
                               )),
                       _DashboardActionButton(
+                          label: 'Planting',
+                          icon: Icons.eco_outlined,
+                          onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const PlantingRecommendationsScreen(),
+                                ),
+                              )),
+                      _DashboardActionButton(
                           label: 'Evaluation',
                           icon: Icons.fact_check_outlined,
                           onTap: () => Navigator.push(
@@ -415,7 +426,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                           value: '${(carbon / 1000).toStringAsFixed(2)} t',
 
-                          subtitle: 'Total CO₂ equivalent',
+                          subtitle: 'Total CO2 equivalent',
 
                           icon: Icons.cloud_outlined,
 
@@ -705,38 +716,6 @@ class _RoleIconBadge extends StatelessWidget {
         Icons.workspace_premium_rounded,
         color: kPrimary,
         size: 17,
-      ),
-    );
-  }
-}
-
-class _CitizenReviewNotification extends StatelessWidget {
-  final int count;
-  final VoidCallback onTap;
-  const _CitizenReviewNotification({required this.count, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.notifications_active_rounded,
-              color: kSidebarPrimary, size: 18),
-          if (count > 0) ...[
-            const SizedBox(width: 3),
-            Text(
-              '$count',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
-        ],
       ),
     );
   }

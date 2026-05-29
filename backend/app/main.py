@@ -3,10 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from app.db.database import engine, Base
 from app.core.config import settings
-from app.api.routes import auth, trees, health_logs, users, storage, public, identify
+from app.api.routes import auth, trees, health_logs, users, storage, public, identify, evaluation, planting
 
 # Import all models
-from app.models import user, tree, health_log
+from app.models import user, tree, health_log, evaluation_result, planting_recommendation
 from app.models.unknown_species import UnknownSpecies
 
 # --- REMOVED THE BLOCKING LINE FROM HERE ---
@@ -85,6 +85,8 @@ app.include_router(health_logs.router, prefix="/api/health-logs", tags=["Health 
 app.include_router(storage.router,     prefix="/api/storage",     tags=["Storage"])
 app.include_router(public.router,      prefix="/api/public",      tags=["Public"])
 app.include_router(identify.router,    prefix="/api/ai",          tags=["AI Identification"])
+app.include_router(evaluation.router,  prefix="/api/evaluation",  tags=["Evaluation"])
+app.include_router(planting.router,    prefix="/api/planting",    tags=["Planting Recommendations"])
 
 
 @app.get("/")
