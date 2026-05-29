@@ -11,7 +11,8 @@ import '../services/theme.dart';
 import '../widgets/widgets.dart';
 
 class PlantingRecommendationsScreen extends StatefulWidget {
-  const PlantingRecommendationsScreen({super.key});
+  final bool focusReview;
+  const PlantingRecommendationsScreen({super.key, this.focusReview = false});
 
   @override
   State<PlantingRecommendationsScreen> createState() =>
@@ -99,6 +100,14 @@ class _PlantingRecommendationsScreenState
     }
     final note = noteCtrl.text.trim();
     noteCtrl.dispose();
+    if (!approved && note.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Please add a reason before rejecting.'),
+        backgroundColor: kPoor,
+      ));
+      return;
+    }
     final existingReason = item.reason?.trim() ?? '';
     final decision = approved ? 'Approved' : 'Rejected';
     final reason = [
@@ -136,6 +145,7 @@ class _PlantingRecommendationsScreenState
     final visibleRecords = isManager
         ? _records.where((item) => item.status != 'pending').toList()
         : _records.where((item) => item.status != 'approved').toList();
+    final showReviewFirst = widget.focusReview && isManager;
     return Scaffold(
       backgroundColor: kBackground,
       appBar: AppBar(
@@ -158,40 +168,7 @@ class _PlantingRecommendationsScreenState
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
                 children: [
-                  TextField(
-                    controller: _barangayCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'Focus barangay',
-                      hintText: 'Optional, e.g. Brgy. San Francisco',
-                      prefixIcon: const Icon(Icons.location_on_outlined),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.search_rounded),
-                        onPressed: _load,
-                      ),
-                    ),
-                    onSubmitted: (_) => _load(),
-                  ),
-                  const SizedBox(height: 16),
-                  _AddPlantPrompt(
-                    isManager: isManager,
-                    onTap: () => _openCreateSheet(),
-                  ),
-                  const SizedBox(height: 16),
-                  const _SectionTitle('Suggested Trees to Plant'),
-                  const SizedBox(height: 10),
-                  if (_suggestions.isEmpty)
-                    const EmptyState(
-                      message: 'No planting suggestions yet.',
-                      icon: Icons.eco_outlined,
-                    )
-                  else
-                    ..._suggestions.map((item) => _SuggestionCard(
-                          item: item,
-                          canAdd: isManager,
-                          onAdd: () => _openCreateSheet(suggestion: item),
-                        )),
-                  if (isManager && pendingRecords.isNotEmpty) ...[
-                    const SizedBox(height: 20),
+                  if (showReviewFirst && pendingRecords.isNotEmpty) ...[
                     const _SectionTitle('Citizen Suggestions for Review'),
                     const SizedBox(height: 10),
                     ...pendingRecords.map((item) => _PlantingRecordCard(
@@ -200,6 +177,57 @@ class _PlantingRecommendationsScreenState
                           onApprove: () => _reviewRequest(item, true),
                           onReject: () => _reviewRequest(item, false),
                         )),
+                    const SizedBox(height: 20),
+                  ],
+                  if (!showReviewFirst) ...[
+                    TextField(
+                      controller: _barangayCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'Focus barangay',
+                        hintText: 'Optional, e.g. Brgy. San Francisco',
+                        prefixIcon: const Icon(Icons.location_on_outlined),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.search_rounded),
+                          onPressed: _load,
+                        ),
+                      ),
+                      onSubmitted: (_) => _load(),
+                    ),
+                    const SizedBox(height: 16),
+                    _AddPlantPrompt(
+                      isManager: isManager,
+                      onTap: () => _openCreateSheet(),
+                    ),
+                    const SizedBox(height: 16),
+                    const _SectionTitle('Suggested Trees to Plant'),
+                    const SizedBox(height: 10),
+                    if (_suggestions.isEmpty)
+                      const EmptyState(
+                        message: 'No planting suggestions yet.',
+                        icon: Icons.eco_outlined,
+                      )
+                    else
+                      ..._suggestions.map((item) => _SuggestionCard(
+                            item: item,
+                            canAdd: isManager,
+                            onAdd: () => _openCreateSheet(suggestion: item),
+                          )),
+                    if (isManager && pendingRecords.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      const _SectionTitle('Citizen Suggestions for Review'),
+                      const SizedBox(height: 10),
+                      ...pendingRecords.map((item) => _PlantingRecordCard(
+                            item: item,
+                            isManager: true,
+                            onApprove: () => _reviewRequest(item, true),
+                            onReject: () => _reviewRequest(item, false),
+                          )),
+                    ],
+                  ] else if (pendingRecords.isEmpty) ...[
+                    const EmptyState(
+                      message: 'No suggested plants waiting for review.',
+                      icon: Icons.task_alt_rounded,
+                    ),
                   ],
                   const SizedBox(height: 20),
                   _SectionTitle(
@@ -641,7 +669,8 @@ class _PhotoStrip extends StatelessWidget {
           return InkWell(
             onTap: () => _showPlantPhotoDetail(
               context,
-              imageUrl: url,
+              imageUrls: urls,
+              initialIndex: index,
               title: title,
               subtitle: subtitle,
               description: description,
@@ -723,11 +752,17 @@ class _AreaReason extends StatelessWidget {
 }
 
 List<String> _imageUrlsFor(Map<String, dynamic> item) {
+  final photoUrl = (item['photo_url'] ?? item['photoUrl'] ?? '')
+      .toString()
+      .trim();
   final provided = item['image_urls'];
   if (provided is List) {
-    final urls = provided
-        .map((e) => e.toString())
+    final urls = [
+      if (photoUrl.isNotEmpty && photoUrl != 'null') photoUrl,
+      ...provided.map((e) => e.toString()),
+    ]
         .where((e) => e.trim().isNotEmpty)
+        .where((e) => e != 'null')
         .toList();
     if (urls.isNotEmpty) return urls;
   }
@@ -742,10 +777,14 @@ List<String> _imageUrlsFor(Map<String, dynamic> item) {
     '$name leaves',
     '$name seeds',
   ];
-  return terms
+  final generated = terms
       .map((term) =>
           'https://tse1.mm.bing.net/th?q=${Uri.encodeComponent('$term tree')}')
       .toList();
+  return [
+    if (photoUrl.isNotEmpty && photoUrl != 'null') photoUrl,
+    ...generated,
+  ];
 }
 
 class _PlantingRecordCard extends StatelessWidget {
@@ -786,7 +825,13 @@ class _PlantingRecordCard extends StatelessWidget {
                 child: InkWell(
                   onTap: () => _showPlantPhotoDetail(
                     context,
-                    imageUrl: item.photoUrl,
+                    imageUrls: [
+                      if ((item.photoUrl ?? '').isNotEmpty) item.photoUrl!,
+                      ..._imageUrlsFor({
+                        'species_name': item.speciesName,
+                        'scientific_name': item.scientificName ?? '',
+                      }),
+                    ],
                     title: item.speciesName,
                     subtitle: item.barangay ?? item.scientificName,
                     description: item.reason,
@@ -900,11 +945,16 @@ class _StatusChip extends StatelessWidget {
 
 void _showPlantPhotoDetail(
   BuildContext context, {
-  required String? imageUrl,
+  required List<String> imageUrls,
+  int initialIndex = 0,
   required String title,
   String? subtitle,
   String? description,
 }) {
+  final urls = imageUrls.where((url) => url.trim().isNotEmpty).toList();
+  final pageController = PageController(
+    initialPage: urls.isEmpty ? 0 : initialIndex.clamp(0, urls.length - 1),
+  );
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -948,33 +998,37 @@ void _showPlantPhotoDetail(
                 ),
               ),
             const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: imageUrl == null || imageUrl.isEmpty
-                  ? Container(
-                      height: 260,
-                      color: kPrimary.withOpacity(0.08),
-                      child: const Icon(
-                        Icons.eco_outlined,
-                        color: kPrimary,
-                        size: 48,
-                      ),
-                    )
-                  : Image.network(
-                      imageUrl,
-                      height: 260,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        height: 260,
-                        color: kPrimary.withOpacity(0.08),
-                        child: const Icon(
-                          Icons.eco_outlined,
-                          color: kPrimary,
-                          size: 48,
+            SizedBox(
+              height: 270,
+              child: urls.isEmpty
+                  ? _PlantPhotoFallback(height: 270)
+                  : PageView.builder(
+                      controller: pageController,
+                      itemCount: urls.length,
+                      itemBuilder: (_, index) => Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(18),
+                          child: Image.network(
+                            urls[index],
+                            height: 270,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) =>
+                                const _PlantPhotoFallback(height: 270),
+                          ),
                         ),
                       ),
                     ),
             ),
+            if (urls.length > 1) ...[
+              const SizedBox(height: 8),
+              const Center(
+                child: Text(
+                  'Swipe photos',
+                  style: TextStyle(color: kMutedFg, fontSize: 12),
+                ),
+              ),
+            ],
             const SizedBox(height: 14),
             Text(
               (description ?? '').trim().isEmpty
@@ -991,6 +1045,24 @@ void _showPlantPhotoDetail(
       ),
     ),
   );
+}
+
+class _PlantPhotoFallback extends StatelessWidget {
+  final double height;
+  const _PlantPhotoFallback({required this.height});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: height,
+      color: kPrimary.withOpacity(0.08),
+      child: const Icon(
+        Icons.eco_outlined,
+        color: kPrimary,
+        size: 48,
+      ),
+    );
+  }
 }
 
 class _ReviewDecisionSheet extends StatelessWidget {

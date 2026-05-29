@@ -861,7 +861,7 @@ class _PlantingSuggestionCard extends StatelessWidget {
       child: InkWell(
         onTap: () => _showExplorePlantDetail(
           context,
-          imageUrl: photo,
+          imageUrls: _suggestionPhotos(item, name),
           title: name,
           subtitle: area,
           description: reason,
@@ -944,21 +944,40 @@ class _PlantingSuggestionCard extends StatelessWidget {
 }
 
 String _firstSuggestionPhoto(Map<String, dynamic> item, String name) {
+  return _suggestionPhotos(item, name).first;
+}
+
+List<String> _suggestionPhotos(Map<String, dynamic> item, String name) {
+  final photoUrl = (item['photo_url'] ?? item['photoUrl'] ?? '')
+      .toString()
+      .trim();
   final images = item['image_urls'];
-  if (images is List && images.isNotEmpty) {
-    final first = images.first.toString();
-    if (first.isNotEmpty) return first;
+  if (images is List) {
+    final urls = [
+      if (photoUrl.isNotEmpty && photoUrl != 'null') photoUrl,
+      ...images.map((e) => e.toString()),
+    ]
+        .where((e) => e.trim().isNotEmpty)
+        .where((e) => e != 'null')
+        .toList();
+    if (urls.isNotEmpty) return urls;
   }
-  return 'https://tse1.mm.bing.net/th?q=${Uri.encodeComponent('$name tree seedling')}';
+  return [
+    if (photoUrl.isNotEmpty && photoUrl != 'null') photoUrl,
+    'https://tse1.mm.bing.net/th?q=${Uri.encodeComponent('$name tree seedling')}',
+    'https://tse1.mm.bing.net/th?q=${Uri.encodeComponent('$name tree leaves')}',
+    'https://tse1.mm.bing.net/th?q=${Uri.encodeComponent('$name tree seeds')}',
+  ];
 }
 
 void _showExplorePlantDetail(
   BuildContext context, {
-  required String imageUrl,
+  required List<String> imageUrls,
   required String title,
   required String subtitle,
   required String description,
 }) {
+  final pageController = PageController();
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -967,13 +986,13 @@ void _showExplorePlantDetail(
       initialChildSize: 0.7,
       minChildSize: 0.42,
       maxChildSize: 0.92,
-      builder: (_, controller) => Container(
+      builder: (_, scrollController) => Container(
         decoration: const BoxDecoration(
           color: kBackground,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: ListView(
-          controller: controller,
+          controller: scrollController,
           padding: const EdgeInsets.fromLTRB(18, 14, 18, 22),
           children: [
             Row(
@@ -1001,23 +1020,37 @@ void _showExplorePlantDetail(
               ),
             ),
             const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: CachedNetworkImage(
-                imageUrl: imageUrl,
-                height: 260,
-                fit: BoxFit.cover,
-                errorWidget: (_, __, ___) => Container(
-                  height: 260,
-                  color: kPrimary.withOpacity(0.08),
-                  child: const Icon(
-                    Icons.eco_outlined,
-                    color: kPrimary,
-                    size: 48,
+            SizedBox(
+              height: 260,
+              child: PageView.builder(
+                controller: pageController,
+                itemCount: imageUrls.length,
+                itemBuilder: (_, index) => ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: CachedNetworkImage(
+                    imageUrl: imageUrls[index],
+                    height: 260,
+                    fit: BoxFit.cover,
+                    errorWidget: (_, __, ___) => Container(
+                      height: 260,
+                      color: kPrimary.withOpacity(0.08),
+                      child: const Icon(
+                        Icons.eco_outlined,
+                        color: kPrimary,
+                        size: 48,
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
+            if (imageUrls.length > 1) ...[
+              const SizedBox(height: 8),
+              const Center(
+                child: Text('Swipe photos',
+                    style: TextStyle(color: kMutedFg, fontSize: 12)),
+              ),
+            ],
             const SizedBox(height: 14),
             Text(
               description,

@@ -86,6 +86,8 @@ class _UnknownReviewScreenState extends State<UnknownReviewScreen> {
                 children: [
                   Row(
                     children: [
+                      _UnknownPhoto(item: item, size: 58),
+                      const SizedBox(width: 12),
                       const Expanded(
                         child: Text('Review Submission',
                             style: TextStyle(
@@ -250,18 +252,7 @@ class _ReviewTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: reviewed ? kMuted : Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                reviewed ? Icons.check_circle_outline : Icons.help_outline,
-                color: reviewed ? kHealthy : Colors.orange.shade800,
-              ),
-            ),
+            _UnknownPhoto(item: item, size: 48),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -282,4 +273,45 @@ class _ReviewTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class _UnknownPhoto extends StatelessWidget {
+  final dynamic item;
+  final double size;
+  const _UnknownPhoto({required this.item, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    final url = _unknownPhotoUrl(item);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: url.isEmpty
+          ? Container(
+              width: size,
+              height: size,
+              color: kPrimary.withOpacity(0.08),
+              child: const Icon(Icons.eco_outlined, color: kPrimary),
+            )
+          : Image.network(
+              url,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                width: size,
+                height: size,
+                color: kPrimary.withOpacity(0.08),
+                child: const Icon(Icons.eco_outlined, color: kPrimary),
+              ),
+            ),
+    );
+  }
+}
+
+String _unknownPhotoUrl(dynamic item) {
+  for (final key in ['photo_url', 'image_url', 'photoUrl', 'image']) {
+    final value = item[key]?.toString() ?? '';
+    if (value.isNotEmpty && value != 'null') return value;
+  }
+  return '';
 }
