@@ -83,7 +83,7 @@ class _AdminMainShellState extends State<AdminMainShell> {
       const TreeListScreen(),
       AIIdentifyScreen(onBack: _goHome),
       MapScreen(onBack: _goHome, refreshKey: _mapRefreshKey),
-      const ProfileScreen(),
+      const ProfileScreen(toolsOnly: true),
     ];
 
     return Scaffold(
@@ -149,7 +149,7 @@ class _PublicMainShellState extends State<PublicMainShell> {
       MapScreen(onBack: _goHome),
       AIIdentifyScreen(onBack: _goHome),
       ScanQRScreen(onBack: _goHome),
-      const ProfileScreen(),
+      const ProfileScreen(toolsOnly: true),
     ];
 
     return Scaffold(

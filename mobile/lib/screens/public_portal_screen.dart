@@ -13,7 +13,7 @@ import '../widgets/widgets.dart';
 import 'map_screen.dart';
 import 'community_structure_screen.dart';
 import 'endangered_trees_screen.dart';
-import 'project_evaluation_screen.dart';
+import 'planting_recommendations_screen.dart';
 import 'profile_screen.dart';
 
 class PublicPortalScreen extends StatefulWidget {
@@ -31,6 +31,7 @@ class PublicPortalScreen extends StatefulWidget {
 class _PublicPortalScreenState extends State<PublicPortalScreen> {
   List<TreeModel> _trees = [];
   Map<String, dynamic>? _stats;
+  List<Map<String, dynamic>> _plantingSuggestions = [];
   List<dynamic> _reviewedUnknown = [];
   bool _reviewNotificationSeen = false;
   bool _loading = true;
@@ -53,6 +54,7 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
     try {
       final treeData = await api.getPublicTrees();
       final statsData = await api.getCommunityStructure();
+      final plantingData = await api.getPlantingSuggestions();
       List<dynamic> reviewedUnknown = [];
       try {
         final mine = await api.getMyUnknownSpecies();
@@ -62,6 +64,10 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
       setState(() {
         _trees = treeData.map((j) => TreeModel.fromJson(j)).toList();
         _stats = statsData;
+        _plantingSuggestions = (plantingData['suggestions'] as List? ?? [])
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
         _reviewedUnknown = reviewedUnknown;
         _loading = false;
       });
@@ -155,7 +161,7 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
                       _buildSearchResultsPanel(),
                     ],
                     const SizedBox(height: 12),
-                    _buildAssignmentCard(),
+                    _buildPlantingPreview(),
                     const SizedBox(height: 12),
                     Row(
                       children: [
@@ -265,83 +271,67 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
     );
   }
 
-  void _openEvaluation() {
+  void _openPlanting() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const ProjectEvaluationScreen()),
+      MaterialPageRoute(builder: (_) => const PlantingRecommendationsScreen()),
     );
   }
 
-  Widget _buildAssignmentCard() {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: _openEvaluation,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: kSidebarBg,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: kSidebarBg.withOpacity(0.12),
-                blurRadius: 14,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
+  Widget _buildPlantingPreview() {
+    final suggestions = _plantingSuggestions.take(3).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader('Suggested Plants', 'Open', onTap: _openPlanting),
+        const SizedBox(height: 12),
+        if (suggestions.isEmpty)
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _openPlanting,
+              borderRadius: BorderRadius.circular(18),
+              child: Container(
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: kSidebarPrimary.withOpacity(0.14),
-                  borderRadius: BorderRadius.circular(13),
-                  border: Border.all(color: kSidebarPrimary.withOpacity(0.22)),
+                  color: kSidebarBg,
+                  borderRadius: BorderRadius.circular(18),
                 ),
-                child: const Icon(
-                  Icons.fact_check_rounded,
-                  color: kSidebarPrimary,
-                ),
-              ),
-              const SizedBox(width: 13),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: const Row(
                   children: [
-                    Text(
-                      'Project Evaluation',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
+                    Icon(Icons.eco_outlined,
+                        color: kSidebarPrimary, size: 28),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Add user suggested plants for your area',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                     ),
-                    SizedBox(height: 3),
-                    Text(
-                      'Requirements, algorithms, insights, and model results',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: kSidebarText,
-                        fontSize: 11.5,
-                        height: 1.25,
-                      ),
-                    ),
+                    Icon(Icons.chevron_right_rounded,
+                        color: kSidebarPrimary),
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
-              const Icon(Icons.chevron_right_rounded,
-                  color: kSidebarPrimary, size: 22),
-            ],
+            ),
+          )
+        else
+          SizedBox(
+            height: 178,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: suggestions.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (_, index) => _PlantingSuggestionCard(
+                item: suggestions[index],
+                onTap: _openPlanting,
+              ),
+            ),
           ),
-        ),
-      ),
+      ],
     );
   }
 
@@ -857,6 +847,109 @@ class _ProfileHeaderButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class _PlantingSuggestionCard extends StatelessWidget {
+  final Map<String, dynamic> item;
+  final VoidCallback onTap;
+  const _PlantingSuggestionCard({required this.item, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final name = item['species_name']?.toString() ?? 'Suggested plant';
+    final area = item['recommended_area']?.toString() ?? 'Recommended area';
+    final reason = item['area_reason']?.toString() ??
+        item['reason']?.toString() ??
+        'Recommended for local canopy balance.';
+    final photo = _firstSuggestionPhoto(item, name);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          width: 210,
+          decoration: BoxDecoration(
+            color: kCard,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: kBorder),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CachedNetworkImage(
+                imageUrl: photo,
+                height: 82,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorWidget: (_, __, ___) => Container(
+                  height: 82,
+                  color: kPrimary.withOpacity(0.08),
+                  child: const Icon(Icons.eco_outlined, color: kPrimary),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      area,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: kPrimary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 11,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      reason,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: kMutedFg,
+                        fontSize: 10.5,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _firstSuggestionPhoto(Map<String, dynamic> item, String name) {
+  final images = item['image_urls'];
+  if (images is List && images.isNotEmpty) {
+    final first = images.first.toString();
+    if (first.isNotEmpty) return first;
+  }
+  return 'https://tse1.mm.bing.net/th?q=${Uri.encodeComponent('$name tree seedling')}';
 }
 
 class _CitizenNotificationButton extends StatelessWidget {

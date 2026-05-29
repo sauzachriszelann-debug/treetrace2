@@ -18,14 +18,10 @@ import 'tree_detail_screen.dart';
 import 'scan_qr_screen.dart';
 import 'community_structure_screen.dart';
 import 'endangered_trees_screen.dart';
-import 'users_screen.dart';
 import 'unknown_review_screen.dart';
-import 'qr_labels_screen.dart';
 import 'health_logs_screen.dart';
-import 'project_evaluation_screen.dart';
-import 'reports_tools_screen.dart';
-import 'planting_recommendations_screen.dart';
 import 'tree_list_screen.dart';
+import 'profile_screen.dart';
 
 
 
@@ -282,76 +278,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 ),
                               )),
                       _DashboardActionButton(
-                          label: 'Users',
-                          icon: Icons.people_alt_rounded,
-                          onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const UsersScreen(),
-                                ),
-                              )),
-                      _DashboardActionButton(
-                          label: 'Unknown',
-                          icon: Icons.help_outline_rounded,
-                          onTap: () async {
-                            await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const UnknownReviewScreen(),
-                              ),
-                            );
-                            if (mounted) {
-                              setState(() {
-                                _pendingReviews = 0;
-                                _reviewNotificationSeen = true;
-                              });
-                            }
-                          }),
-                      _DashboardActionButton(
-                          label: 'QR Labels',
-                          icon: Icons.qr_code_2_rounded,
-                          onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const QrLabelsScreen(),
-                                ),
-                              )),
-                      _DashboardActionButton(
                           label: 'Health',
                           icon: Icons.health_and_safety_outlined,
                           onTap: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => const HealthLogsScreen(),
-                                ),
-                              )),
-                      _DashboardActionButton(
-                          label: 'Reports',
-                          icon: Icons.summarize_rounded,
-                          onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const ReportsToolsScreen(),
-                                ),
-                              )),
-                      _DashboardActionButton(
-                          label: 'Planting',
-                          icon: Icons.eco_outlined,
-                          onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      const PlantingRecommendationsScreen(),
-                                ),
-                              )),
-                      _DashboardActionButton(
-                          label: 'Evaluation',
-                          icon: Icons.fact_check_outlined,
-                          onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      const ProjectEvaluationScreen(),
                                 ),
                               )),
                     ],
@@ -704,18 +636,25 @@ class _RoleIconBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 32,
-      height: 32,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white.withOpacity(0.18)),
+    return InkWell(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ProfileScreen()),
       ),
-      child: const Icon(
-        Icons.person_outline_rounded,
-        color: kPrimary,
-        size: 17,
+      customBorder: const CircleBorder(),
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white.withOpacity(0.18)),
+        ),
+        child: const Icon(
+          Icons.person_outline_rounded,
+          color: kPrimary,
+          size: 17,
+        ),
       ),
     );
   }

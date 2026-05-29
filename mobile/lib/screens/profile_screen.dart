@@ -7,14 +7,14 @@ import '../services/theme.dart';
 import '../models/models.dart';
 import 'upgrade_screen.dart';
 import 'project_evaluation_screen.dart';
-import 'planting_recommendations_screen.dart';
 import 'unknown_review_screen.dart';
 import 'users_screen.dart';
 import 'qr_labels_screen.dart';
 import 'reports_tools_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  final bool toolsOnly;
+  const ProfileScreen({super.key, this.toolsOnly = false});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -55,6 +55,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final user = auth.user;
+    if (widget.toolsOnly) {
+      return Scaffold(
+        backgroundColor: kBackground,
+        appBar: AppBar(title: const Text('More')),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 110),
+          children: [
+            _buildSectionTitle(user?.role == 'citizen'
+                ? 'Citizen Tools'
+                : 'Field Tools'),
+            _buildMoreActions(auth),
+            const SizedBox(height: 24),
+            _buildSectionTitle('Field Sync'),
+            _buildOfflineSyncCard(context),
+          ],
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: kBackground,
@@ -70,11 +88,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   _buildSectionTitle('Account Information'),
                   _buildAccountCard(user),
-                  const SizedBox(height: 24),
-                  _buildSectionTitle(user?.role == 'citizen'
-                      ? 'Citizen More'
-                      : 'Field Tools'),
-                  _buildMoreActions(auth),
                   const SizedBox(height: 24),
                   _buildSectionTitle('Field Sync'),
                   _buildOfflineSyncCard(context),
@@ -322,16 +335,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final isCitizen = auth.user?.role == 'citizen';
     final actions = isCitizen
         ? [
-            _MoreAction(
-              'Planting',
-              Icons.eco_outlined,
-              () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const PlantingRecommendationsScreen(),
-                ),
-              ),
-            ),
             _MoreAction(
               'Evaluation',
               Icons.fact_check_outlined,
