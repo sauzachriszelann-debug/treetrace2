@@ -11,6 +11,7 @@ import 'unknown_review_screen.dart';
 import 'users_screen.dart';
 import 'qr_labels_screen.dart';
 import 'reports_tools_screen.dart';
+import 'offline_sync_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final bool toolsOnly;
@@ -333,9 +334,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
             ),
-            _MoreAction('Field Sync', Icons.sync_rounded, () {
-              _syncNow();
-            }),
+            _MoreAction('Field Sync', Icons.sync_rounded, _openFieldSync),
             _MoreAction('History', Icons.history_rounded, _showHistorySheet),
             _MoreAction(
               'Expert Reviews',
@@ -386,9 +385,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
             ),
-            _MoreAction('Field Sync', Icons.sync_rounded, () {
-              _syncNow();
-            }),
+            _MoreAction('Field Sync', Icons.sync_rounded, _openFieldSync),
           ];
 
     return GridView.builder(
@@ -406,16 +403,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Future<void> _syncNow() async {
-    final synced = await api.syncOfflineQueue();
+  Future<void> _openFieldSync() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const OfflineSyncScreen()),
+    );
     _refreshQueue();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(synced > 0
-          ? 'Synced $synced offline record${synced == 1 ? '' : 's'}.'
-          : 'No offline records synced yet.'),
-      backgroundColor: synced > 0 ? kHealthy : kMutedFg,
-    ));
   }
 
   void _showHistorySheet() {
@@ -645,7 +638,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 8),
             Text(
               count > 0
-                  ? 'Saved offline records will upload automatically when your signal returns.'
+                  ? 'Review saved offline records first. Only verified items will upload.'
                   : 'Offline tree and unknown-species submissions are ready for remote barangay work.',
               style: const TextStyle(color: kMutedFg, fontSize: 12, height: 1.35),
             ),
@@ -654,10 +647,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               width: double.infinity,
               child: OutlinedButton.icon(
                 onPressed: () async {
-                  await _syncNow();
+                  await _openFieldSync();
                 },
-                icon: const Icon(Icons.sync),
-                label: const Text('Sync Now'),
+                icon: const Icon(Icons.rule_folder_outlined),
+                label: Text(count > 0 ? 'Review & Sync' : 'Open Field Sync'),
               ),
             ),
           ]),

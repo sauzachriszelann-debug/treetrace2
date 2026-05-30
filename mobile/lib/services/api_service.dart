@@ -48,11 +48,9 @@ class ApiService {
     ));
 
     _connectivitySub ??= _connectivity.onConnectivityChanged.listen((result) {
-      if (!result.contains(ConnectivityResult.none)) {
-        syncOfflineQueue();
-      }
+      // Offline records are reviewed by the user before upload.
+      // Connectivity changes no longer trigger automatic sync.
     });
-    syncOfflineQueue();
   }
 
   Future<bool> isOnline() async {
@@ -84,8 +82,35 @@ class ApiService {
       'type': type,
       'payload': payload,
       'photo_path': photoPath,
+      'verified': false,
       'created_at': DateTime.now().toIso8601String(),
     });
+    await _writeQueue(queue);
+  }
+
+  Future<List<Map<String, dynamic>>> offlineQueue() async => _readQueue();
+
+  Future<void> setOfflineActionVerified(int id, bool verified) async {
+    final queue = await _readQueue();
+    for (final item in queue) {
+      if (item['id'] == id) {
+        item['verified'] = verified;
+      }
+    }
+    await _writeQueue(queue);
+  }
+
+  Future<void> verifyAllOfflineActions() async {
+    final queue = await _readQueue();
+    for (final item in queue) {
+      item['verified'] = true;
+    }
+    await _writeQueue(queue);
+  }
+
+  Future<void> deleteOfflineAction(int id) async {
+    final queue = await _readQueue();
+    queue.removeWhere((item) => item['id'] == id);
     await _writeQueue(queue);
   }
 
@@ -126,6 +151,10 @@ class ApiService {
     final remaining = <Map<String, dynamic>>[];
     var synced = 0;
     for (final item in queue) {
+      if (item['verified'] != true) {
+        remaining.add(item);
+        continue;
+      }
       try {
         final payload = Map<String, dynamic>.from(item['payload'] ?? {});
         final photoPath = item['photo_path'] as String?;

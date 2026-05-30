@@ -151,7 +151,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
         submitted = true;
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Saved offline. Unknown species will sync later.'),
+              content: Text('Saved offline. Review it in Field Sync before uploading.'),
               backgroundColor: kHealthy));
         }
       }

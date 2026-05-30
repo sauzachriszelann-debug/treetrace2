@@ -546,7 +546,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(await api.isOnline()
                 ? 'Tree saved!'
-                : 'Saved offline. It will sync when signal returns.'),
+                : 'Saved offline. Review it in Field Sync before uploading.'),
             backgroundColor: kHealthy));
       }
     } catch (e) {

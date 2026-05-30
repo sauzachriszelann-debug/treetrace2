@@ -349,7 +349,7 @@ class _PlantingFormSheetState extends State<_PlantingFormSheet> {
             ? (widget.isManager
                 ? 'Planting recommendation saved.'
                 : 'Suggestion sent for admin review.')
-            : 'Saved offline. It will sync when internet returns.'),
+            : 'Saved offline. Review it in Field Sync before uploading.'),
         backgroundColor: kHealthy,
       ));
     } catch (e) {
