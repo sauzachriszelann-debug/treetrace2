@@ -13,5 +13,6 @@ runs/
 scratch/
 timbervision/
 backend/models/*.pt
+!backend/models/tree_trunk_segmentation.pt
 yolov8n-seg.pt
 *.zip

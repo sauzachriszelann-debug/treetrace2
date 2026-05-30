@@ -10,10 +10,15 @@ from app.db.database import get_db
 from app.models.user import User, UserRole
 from app.models.unknown_species import UnknownSpecies
 from app.core.security import get_current_user, require_admin
-from app.services.ai_identify import identify_tree_from_url, _pipeline_with_status, measure_dbh_from_base64
+from app.services.ai_identify import identify_tree_from_url, _pipeline_with_status, measure_dbh_from_base64, get_dbh_runtime_status
 from app.services.species_db import get_all_protected, lookup_species, PHILIPPINE_ENDANGERED_SPECIES
 
 router = APIRouter()
+
+
+@router.get("/dbh-status")
+async def dbh_status():
+    return get_dbh_runtime_status()
 
 AI_DAILY_LIMITS = {
     "free": 10,

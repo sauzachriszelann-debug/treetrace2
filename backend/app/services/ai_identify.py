@@ -37,6 +37,35 @@ YOLO_DBH_MODEL_PATH = Path(__file__).resolve().parents[2] / "models" / "tree_tru
 _YOLO_DBH_MODEL = None
 ENABLE_YOLO_DBH = os.getenv("ENABLE_YOLO_DBH", "").lower() in {"1", "true", "yes", "on"}
 
+
+def get_dbh_runtime_status() -> dict:
+    dependencies = {}
+    for package, module_name in (
+        ("ultralytics", "ultralytics"),
+        ("opencv-python-headless", "cv2"),
+        ("numpy", "numpy"),
+    ):
+        try:
+            __import__(module_name)
+            dependencies[package] = True
+        except Exception:
+            dependencies[package] = False
+
+    model_exists = YOLO_DBH_MODEL_PATH.exists()
+    return {
+        "enabled": ENABLE_YOLO_DBH,
+        "ready": ENABLE_YOLO_DBH and model_exists and all(dependencies.values()),
+        "model_found": model_exists,
+        "model_size_mb": round(YOLO_DBH_MODEL_PATH.stat().st_size / (1024 * 1024), 2)
+        if model_exists
+        else None,
+        "dependencies": dependencies,
+        "how_to_enable": (
+            "Set ENABLE_YOLO_DBH=true, deploy backend/models/tree_trunk_segmentation.pt, "
+            "and install backend/requirements-yolo.txt."
+        ),
+    }
+
 IDENTIFY_PROMPT = """\
 You are Dr. Maria Santos, a senior botanist at DENR with 20 years identifying Philippine trees.
 
