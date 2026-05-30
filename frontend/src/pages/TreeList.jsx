@@ -10,11 +10,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Search, Plus, TreePine } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 
 export default function TreeList() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch]             = useState("");
-  const [healthFilter, setHealthFilter] = useState("all");
+  const [healthFilter, setHealthFilter] = useState(searchParams.get("health") || "all");
   const { user } = useAuth();
   const canAddOfficialTree = user?.role !== "citizen";
 
@@ -28,20 +30,22 @@ export default function TreeList() {
       t.common_name?.toLowerCase().includes(search.toLowerCase()) ||
       t.scientific_name?.toLowerCase().includes(search.toLowerCase()) ||
       t.barangay?.toLowerCase().includes(search.toLowerCase());
-    const matchHealth = healthFilter === "all" || t.health_status === healthFilter;
+    const matchHealth = healthFilter === "attention"
+      ? t.health_status === "Fair" || t.health_status === "Poor"
+      : healthFilter === "all" || t.health_status === healthFilter;
     return matchSearch && matchHealth;
   });
 
   return (
-    <div className="p-8">
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h1 className="font-fraunces text-3xl font-semibold">Tree Inventory</h1>
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="font-fraunces text-2xl font-semibold sm:text-3xl">Tree Inventory</h1>
           <p className="text-muted-foreground mt-1">{trees.length} trees recorded</p>
         </div>
         {canAddOfficialTree && (
-          <Link to="/add-tree">
-            <Button className="flex items-center gap-2">
+          <Link to="/add-tree" className="w-full sm:w-auto">
+            <Button className="flex w-full items-center gap-2 sm:w-auto">
               <Plus className="w-4 h-4" />
               Add Tree
             </Button>
@@ -50,8 +54,8 @@ export default function TreeList() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 mb-6">
-        <div className="relative flex-1 max-w-sm">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row">
+        <div className="relative flex-1 sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Search by name, species, barangay…"
@@ -60,8 +64,14 @@ export default function TreeList() {
             className="pl-9"
           />
         </div>
-        <Select value={healthFilter} onValueChange={setHealthFilter}>
-          <SelectTrigger className="w-40">
+        <Select
+          value={healthFilter}
+          onValueChange={(value) => {
+            setHealthFilter(value);
+            setSearchParams(value === "all" ? {} : { health: value });
+          }}
+        >
+          <SelectTrigger className="w-full sm:w-40">
             <SelectValue placeholder="Health Status" />
           </SelectTrigger>
           <SelectContent>
@@ -69,6 +79,7 @@ export default function TreeList() {
             <SelectItem value="Healthy">Healthy</SelectItem>
             <SelectItem value="Fair">Fair</SelectItem>
             <SelectItem value="Poor">Poor</SelectItem>
+            <SelectItem value="attention">Need Attention</SelectItem>
           </SelectContent>
         </Select>
       </div>

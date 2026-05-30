@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
 
 // Layout
@@ -27,6 +27,8 @@ import UnknownSpeciesReview from "@/pages/UnknownSpeciesReview";
 import ReportsAndTools from "@/pages/ReportsAndTools";
 import ProjectEvaluation from "@/pages/ProjectEvaluation";
 import SystemHome from "@/pages/SystemHome";
+import PlantingRecommendations from "@/pages/PlantingRecommendations";
+import FieldSync from "@/pages/FieldSync";
 
 // Public pages (no auth, no sidebar)
 import PublicTreeProfile from "@/pages/PublicTreeProfile";
@@ -65,6 +67,8 @@ export default function App() {
           <Route path="unknown-species" element={<UnknownSpeciesReview />} />
           <Route path="reports"     element={<ReportsAndTools />} />
           <Route path="evaluation"  element={<ProjectEvaluation />} />
+          <Route path="planting"    element={<PlantingRecommendations />} />
+          <Route path="field-sync"  element={<FieldSync />} />
 
           {/* Admin-only (backend enforces, frontend just shows/hides nav) */}
           <Route path="qr-manager"  element={<QRManager />} />

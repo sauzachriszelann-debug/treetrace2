@@ -18,8 +18,8 @@ export function useOfflineSync() {
 
   // Track online/offline
   useEffect(() => {
-    const goOnline  = () => { setIsOnline(true);  toast.success("Back online! Syncing..."); };
-    const goOffline = () => { setIsOnline(false); toast.warning("You are offline. Changes will sync when reconnected."); };
+    const goOnline  = () => { setIsOnline(true);  toast.success("Back online. Review Field Sync before uploading."); };
+    const goOffline = () => { setIsOnline(false); toast.warning("You are offline. Saved changes will wait for review."); };
     window.addEventListener("online",  goOnline);
     window.addEventListener("offline", goOffline);
     return () => {
@@ -33,21 +33,15 @@ export function useOfflineSync() {
     localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
   }, [queue]);
 
-  // Auto-sync when coming back online
-  useEffect(() => {
-    if (isOnline && queue.length > 0) {
-      syncQueue();
-    }
-  }, [isOnline]);
-
   const addToQueue = useCallback((action) => {
     const entry = {
       id:        Date.now(),
       timestamp: new Date().toISOString(),
+      verified: false,
       ...action,
     };
     setQueue((q) => [...q, entry]);
-    toast.info("Saved offline. Will sync when connected.");
+    toast.info("Saved offline. Review it in Field Sync before uploading.");
     return entry;
   }, []);
 
@@ -59,6 +53,10 @@ export function useOfflineSync() {
     const remaining = [];
 
     for (const item of queue) {
+      if (!item.verified) {
+        remaining.push(item);
+        continue;
+      }
       try {
         if (item.type === "CREATE_TREE") {
           await treesApi.create(item.payload);
@@ -66,6 +64,9 @@ export function useOfflineSync() {
           await treesApi.update(item.treeId, item.payload);
         } else if (item.type === "CREATE_HEALTH_LOG") {
           await healthLogsApi.create(item.payload);
+        } else if (item.type === "CREATE_PLANTING_RECOMMENDATION") {
+          const { plantingApi } = await import("@/api/planting");
+          await plantingApi.create(item.payload);
         }
         succeeded++;
       } catch {
@@ -77,9 +78,21 @@ export function useOfflineSync() {
     setQueue(remaining);
     setSyncing(false);
 
-    if (succeeded > 0) toast.success(`Synced ${succeeded} offline record${succeeded > 1 ? "s" : ""}!`);
+    if (succeeded > 0) toast.success(`Synced ${succeeded} verified offline record${succeeded > 1 ? "s" : ""}!`);
     if (failed    > 0) toast.error(`${failed} record${failed > 1 ? "s" : ""} failed to sync.`);
   }, [queue, syncing]);
+
+  const setVerified = useCallback((id, verified) => {
+    setQueue((q) => q.map((item) => item.id === id ? { ...item, verified } : item));
+  }, []);
+
+  const verifyAll = useCallback(() => {
+    setQueue((q) => q.map((item) => ({ ...item, verified: true })));
+  }, []);
+
+  const removeFromQueue = useCallback((id) => {
+    setQueue((q) => q.filter((item) => item.id !== id));
+  }, []);
 
   const clearQueue = useCallback(() => {
     setQueue([]);
@@ -93,6 +106,9 @@ export function useOfflineSync() {
     syncing,
     addToQueue,
     syncQueue,
+    setVerified,
+    verifyAll,
+    removeFromQueue,
     clearQueue,
   };
 }
