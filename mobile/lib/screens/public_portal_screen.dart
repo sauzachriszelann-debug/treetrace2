@@ -134,6 +134,12 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
     final totalTrees = _stats?['total_trees'] ?? _trees.length;
     final totalSpecies = _stats?['total_species'] ?? 0;
     final endangeredCount = _stats?['total_endangered'] ?? 0;
+    final healthy = _trees.where((t) => t.healthStatus == 'Healthy').length;
+    final fair = _trees.where((t) => t.healthStatus == 'Fair').length;
+    final poor = _trees.where((t) => t.healthStatus == 'Poor').length;
+    final attentionTrees = _trees
+        .where((t) => t.healthStatus == 'Fair' || t.healthStatus == 'Poor')
+        .toList();
     final searching = _search.trim().isNotEmpty;
 
     return Scaffold(
@@ -162,10 +168,34 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
                     Row(
                       children: [
                         _StatCard('Total Trees', '$totalTrees',
-                            Icons.analytics_outlined, kPrimary),
+                            Icons.analytics_outlined, kPrimary,
+                            onTap: () =>
+                                _showPublicTreeList('All Trees', _trees)),
                         const SizedBox(width: 10),
                         _StatCard('Species', '$totalSpecies',
-                            Icons.eco_outlined, Colors.teal),
+                            Icons.eco_outlined, Colors.teal,
+                            onTap: _openFullReport),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        _StatCard('Healthy', '$healthy', Icons.eco_outlined,
+                            kHealthy,
+                            onTap: () => _showPublicTreeList(
+                                  'Healthy Trees',
+                                  _trees
+                                      .where((t) =>
+                                          t.healthStatus == 'Healthy')
+                                      .toList(),
+                                )),
+                        const SizedBox(width: 10),
+                        _StatCard('Need Attention', '${fair + poor}',
+                            Icons.warning_amber_rounded, kFair,
+                            onTap: () => _showPublicTreeList(
+                                  'Trees Needing Attention',
+                                  attentionTrees,
+                                )),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -267,6 +297,75 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
     );
   }
 
+  void _showPublicTreeList(String title, List<TreeModel> trees) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.78,
+        minChildSize: 0.45,
+        maxChildSize: 0.94,
+        builder: (_, controller) => Container(
+          decoration: const BoxDecoration(
+            color: kBackground,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 14, 10, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '$title (${trees.length})',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: trees.isEmpty
+                    ? const EmptyState(
+                        message: 'No trees found for this card.',
+                        icon: Icons.forest_outlined,
+                      )
+                    : ListView.builder(
+                        controller: controller,
+                        padding: const EdgeInsets.fromLTRB(18, 0, 18, 24),
+                        itemCount: trees.length,
+                        itemBuilder: (_, index) => TreeListItem(
+                          tree: trees[index],
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => PublicTreeProfileScreen(
+                                  treeId: trees[index].id,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _openPlanting() {
     Navigator.push(
       context,
@@ -354,6 +453,12 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
                 name: b['barangay'],
                 shannon: b['shannon_index'].toString(),
                 count: b['total_trees'].toString(),
+                onTap: () => _showPublicTreeList(
+                  '${b['barangay']} Trees',
+                  _trees
+                      .where((tree) => tree.barangay == b['barangay'])
+                      .toList(),
+                ),
               );
             },
           ),
@@ -379,35 +484,46 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
                 final total = _trees.length;
                 final count = s['count'] as int;
                 final ratio = total > 0 ? count / total : 0.0;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(s['name'],
-                              style: const TextStyle(
-                                  fontSize: 12, fontWeight: FontWeight.w700)),
-                          Text('$count trees',
-                              style: const TextStyle(
-                                  fontSize: 11,
-                                  color: kMutedFg,
-                                  fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: LinearProgressIndicator(
-                          value: ratio,
-                          backgroundColor: kBackground,
-                          color: kPrimary,
-                          minHeight: 6,
+                final speciesTrees = _trees
+                    .where((tree) => tree.commonName == s['name'])
+                    .toList();
+                return InkWell(
+                  onTap: () => _showPublicTreeList(
+                    '${s['name']} Trees',
+                    speciesTrees,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(s['name'],
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700)),
+                            Text('$count trees',
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    color: kMutedFg,
+                                    fontWeight: FontWeight.w600)),
+                          ],
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: LinearProgressIndicator(
+                            value: ratio,
+                            backgroundColor: kBackground,
+                            color: kPrimary,
+                            minHeight: 6,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               }),
@@ -1259,47 +1375,57 @@ class _StatCard extends StatelessWidget {
   final String label, value;
   final IconData icon;
   final Color color;
-  const _StatCard(this.label, this.value, this.icon, this.color);
+  final VoidCallback? onTap;
+  const _StatCard(this.label, this.value, this.icon, this.color, {this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: kCard,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: kBorder),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.02),
-                blurRadius: 10,
-                offset: const Offset(0, 4))
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8)),
-              child: Icon(icon, color: color, size: 16),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: kCard,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: kBorder),
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withOpacity(0.02),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4))
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(value,
-                style: GoogleFonts.inter(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: kForeground)),
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 9,
-                    color: kMutedFg,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.2)),
-          ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                      color: color.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8)),
+                  child: Icon(icon, color: color, size: 16),
+                ),
+                const SizedBox(height: 8),
+                Text(value,
+                    style: GoogleFonts.inter(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: kForeground)),
+                Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 9,
+                        color: kMutedFg,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.2)),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1308,41 +1434,71 @@ class _StatCard extends StatelessWidget {
 
 class _BarangayDiversityCard extends StatelessWidget {
   final String name, shannon, count;
-  const _BarangayDiversityCard(
-      {required this.name, required this.shannon, required this.count});
+  final VoidCallback? onTap;
+  const _BarangayDiversityCard({
+    required this.name,
+    required this.shannon,
+    required this.count,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 140,
-      margin: const EdgeInsets.only(right: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: kCard,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: kBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(name,
-              style: const TextStyle(
+        child: Container(
+          width: 140,
+          margin: const EdgeInsets.only(right: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: kCard,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: kBorder),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: const TextStyle(
                   fontWeight: FontWeight.w800,
                   fontSize: 13,
-                  color: kForeground),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis),
-          const Spacer(),
-          const Text('Shannon H\'',
-              style: TextStyle(
-                  color: kMutedFg, fontSize: 10, fontWeight: FontWeight.w800)),
-          Text(shannon,
-              style: const TextStyle(
-                  color: kPrimary, fontSize: 18, fontWeight: FontWeight.w900)),
-          Text('$count trees',
-              style: const TextStyle(
-                  color: kMutedFg, fontSize: 10, fontWeight: FontWeight.w600)),
-        ],
+                  color: kForeground,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const Spacer(),
+              const Text(
+                'Shannon H\'',
+                style: TextStyle(
+                  color: kMutedFg,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Text(
+                shannon,
+                style: const TextStyle(
+                  color: kPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              Text(
+                '$count trees',
+                style: const TextStyle(
+                  color: kMutedFg,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

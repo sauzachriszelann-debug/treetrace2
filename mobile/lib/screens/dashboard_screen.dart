@@ -112,6 +112,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   }
 
+  Future<void> _openTreeInventory({
+    String status = 'all',
+    bool attentionOnly = false,
+  }) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TreeListScreen(
+          initialStatus: status,
+          initialAttentionOnly: attentionOnly,
+        ),
+      ),
+    );
+    _load();
+  }
+
 
 
   @override
@@ -373,35 +389,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                     children: [
 
-                      _CompactStatsCard(title: 'Total Trees',
-
+                      _CompactStatsCard(
+                          title: 'Total Trees',
                           value: '${_trees.length}',
+                          icon: Icons.park,
+                          color: kPrimary,
+                          onTap: () => _openTreeInventory()),
 
-                          icon: Icons.park, color: kPrimary),
-
-                      _CompactStatsCard(title: 'Healthy',
-
+                      _CompactStatsCard(
+                          title: 'Healthy',
                           value: '$healthy',
+                          icon: Icons.eco,
+                          color: kHealthy,
+                          onTap: () =>
+                              _openTreeInventory(status: 'Healthy')),
 
-                          icon: Icons.eco, color: kHealthy),
-
-                      _CompactStatsCard(title: 'Need Attention',
-
+                      _CompactStatsCard(
+                          title: 'Need Attention',
                           value: '${fair + poor}',
-
                           subtitle: '$fair Fair, $poor Poor',
+                          icon: Icons.warning_amber_rounded,
+                          color: kFair,
+                          onTap: () =>
+                              _openTreeInventory(attentionOnly: true)),
 
-                          icon: Icons.warning_amber_rounded, color: kFair),
-
-                      _CompactStatsCard(title: 'Carbon Stock',
-
+                      _CompactStatsCard(
+                          title: 'Carbon Stock',
                           value: '${(carbon / 1000).toStringAsFixed(2)} t',
-
                           subtitle: 'Total CO2 equivalent',
-
                           icon: Icons.cloud_outlined,
-
-                          color: Colors.blue.shade600),
+                          color: Colors.blue.shade600,
+                          onTap: () => _openTreeInventory()),
 
                     ],
 
@@ -454,15 +472,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                     child: Column(children: [
 
-                      _HealthBar('Healthy', healthy, _trees.length, kHealthy),
+                      _HealthBar('Healthy', healthy, _trees.length, kHealthy,
+                          onTap: () =>
+                              _openTreeInventory(status: 'Healthy')),
 
                       const SizedBox(height: 10),
 
-                      _HealthBar('Fair', fair, _trees.length, kFair),
+                      _HealthBar('Fair', fair, _trees.length, kFair,
+                          onTap: () => _openTreeInventory(status: 'Fair')),
 
                       const SizedBox(height: 10),
 
-                      _HealthBar('Poor', poor, _trees.length, kPoor),
+                      _HealthBar('Poor', poor, _trees.length, kPoor,
+                          onTap: () => _openTreeInventory(status: 'Poor')),
 
                       const SizedBox(height: 12),
 
@@ -1214,12 +1236,14 @@ class _CompactStatsCard extends StatelessWidget {
   final String? subtitle;
   final IconData icon;
   final Color color;
+  final VoidCallback? onTap;
   const _CompactStatsCard({
     required this.title,
     required this.value,
     this.subtitle,
     required this.icon,
     required this.color,
+    this.onTap,
   });
 
   @override
@@ -1228,66 +1252,74 @@ class _CompactStatsCard extends StatelessWidget {
       data: MediaQuery.of(context).copyWith(
         textScaler: const TextScaler.linear(1),
       ),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: kCard,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: kBorder),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: kMutedFg,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: kForeground,
-                    ),
-                  ),
-                  if (subtitle != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 1),
-                      child: Text(
-                        subtitle!,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: kCard,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: kBorder),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: kMutedFg, fontSize: 8),
+                        style: const TextStyle(
+                          color: kMutedFg,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                ],
-              ),
+                      const SizedBox(height: 2),
+                      Text(
+                        value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: kForeground,
+                        ),
+                      ),
+                      if (subtitle != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 1),
+                          child: Text(
+                            subtitle!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                color: kMutedFg, fontSize: 8),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 7),
+                Container(
+                  width: 31,
+                  height: 31,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: color, size: 17),
+                ),
+              ],
             ),
-            const SizedBox(width: 7),
-            Container(
-              width: 31,
-              height: 31,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: color, size: 17),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -1769,8 +1801,10 @@ class _HealthBar extends StatelessWidget {
   final int total;
 
   final Color color;
+  final VoidCallback? onTap;
 
-  const _HealthBar(this.label, this.count, this.total, this.color);
+  const _HealthBar(this.label, this.count, this.total, this.color,
+      {this.onTap});
 
 
 
@@ -1780,7 +1814,12 @@ class _HealthBar extends StatelessWidget {
 
     final pct = total == 0 ? 0.0 : count / total;
 
-    return Row(children: [
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(children: [
 
       SizedBox(width: 56,
 
@@ -1816,7 +1855,9 @@ class _HealthBar extends StatelessWidget {
 
               fontWeight: FontWeight.w600)),
 
-    ]);
+        ]),
+      ),
+    );
 
   }
 

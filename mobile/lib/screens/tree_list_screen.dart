@@ -7,7 +7,13 @@ import 'tree_detail_screen.dart';
 import 'add_tree_screen.dart';
 
 class TreeListScreen extends StatefulWidget {
-  const TreeListScreen({super.key});
+  final String initialStatus;
+  final bool initialAttentionOnly;
+  const TreeListScreen({
+    super.key,
+    this.initialStatus = 'all',
+    this.initialAttentionOnly = false,
+  });
   @override
   State<TreeListScreen> createState() => _TreeListScreenState();
 }
@@ -18,10 +24,13 @@ class _TreeListScreenState extends State<TreeListScreen> {
   bool _loading = true;
   String _search = '';
   String _status = 'all';
+  bool _attentionOnly = false;
 
   @override
   void initState() {
     super.initState();
+    _status = widget.initialStatus;
+    _attentionOnly = widget.initialAttentionOnly;
     _load();
   }
 
@@ -46,7 +55,9 @@ class _TreeListScreenState extends State<TreeListScreen> {
             t.commonName.toLowerCase().contains(q) ||
             (t.scientificName?.toLowerCase().contains(q) ?? false) ||
             (t.barangay?.toLowerCase().contains(q) ?? false);
-        final matchesHealth = _status == 'all' || t.healthStatus == _status;
+        final matchesHealth = _attentionOnly
+            ? t.healthStatus == 'Fair' || t.healthStatus == 'Poor'
+            : _status == 'all' || t.healthStatus == _status;
         return matchesSearch && matchesHealth;
       }).toList();
     });
@@ -138,21 +149,36 @@ class _TreeListScreenState extends State<TreeListScreen> {
                       physics: const BouncingScrollPhysics(),
                       child: Row(
                         children: [
-                          for (final s in ['all', 'Healthy', 'Fair', 'Poor'])
+                          for (final s in [
+                            'all',
+                            'Healthy',
+                            'Fair',
+                            'Poor',
+                            'Attention'
+                          ])
                             Padding(
                               padding: const EdgeInsets.only(right: 8),
                               child: _StatusChip(
-                                label: s == 'all' ? 'All Trees' : s,
-                                selected: _status == s,
+                                label: s == 'all'
+                                    ? 'All Trees'
+                                    : s == 'Attention'
+                                        ? 'Need Attention'
+                                        : s,
+                                selected: s == 'Attention'
+                                    ? _attentionOnly
+                                    : !_attentionOnly && _status == s,
                                 color: s == 'Healthy'
                                     ? kHealthy
                                     : s == 'Fair'
                                         ? kFair
                                         : s == 'Poor'
                                             ? kPoor
-                                            : kPrimary,
+                                            : s == 'Attention'
+                                                ? kFair
+                                                : kPrimary,
                                 onTap: () {
-                                  _status = s;
+                                  _attentionOnly = s == 'Attention';
+                                  if (!_attentionOnly) _status = s;
                                   _filter();
                                 },
                               ),
