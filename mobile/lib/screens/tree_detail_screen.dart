@@ -106,6 +106,10 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
                 )),
                 HealthBadge(tree.healthStatus),
               ]),
+              if (tree.isProtected || const ['CR', 'EN', 'VU'].contains(tree.statusCode)) ...[
+                const SizedBox(height: 14),
+                _ConservationWarning(tree: tree),
+              ],
               if (canManage) ...[
                 const SizedBox(height: 14),
                 _buildManagementActions(canDeleteTree),
@@ -702,6 +706,78 @@ class _ActionTile extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ConservationWarning extends StatelessWidget {
+  final TreeModel tree;
+
+  const _ConservationWarning({required this.tree});
+
+  @override
+  Widget build(BuildContext context) {
+    final code = tree.statusCode;
+    final critical = code == 'CR';
+    final endangered = code == 'EN';
+    final color = critical
+        ? kPoor
+        : endangered
+            ? Colors.orange.shade800
+            : Colors.amber.shade800;
+    final bg = critical
+        ? Colors.red.shade50
+        : endangered
+            ? Colors.orange.shade50
+            : Colors.amber.shade50;
+    final title = critical
+        ? 'Do not cut: critically endangered'
+        : endangered
+            ? 'Protected species: cutting prohibited'
+            : 'Vulnerable species: handle with care';
+    final cuttingRule = tree.cuttingAllowed
+        ? 'allowed only with proper permit review'
+        : 'strictly prohibited without DENR clearance';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            critical || endangered
+                ? Icons.shield_outlined
+                : Icons.warning_amber_rounded,
+            color: color,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13)),
+                const SizedBox(height: 4),
+                Text(
+                  '${tree.commonName} is listed as ${tree.endangeredStatus}. '
+                  'Cutting or transporting this tree is $cuttingRule.',
+                  style: const TextStyle(
+                      color: kForeground, fontSize: 12, height: 1.35),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

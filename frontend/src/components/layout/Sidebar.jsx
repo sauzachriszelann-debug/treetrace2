@@ -3,7 +3,7 @@ import {
   LayoutDashboard, TreePine, Map, Plus, QrCode,
   Users, BarChart3, LogOut, Leaf, ScanLine, Globe,
   Network, WifiOff,
-  FileText, SearchCheck, ClipboardCheck, X, Sprout, CloudUpload,
+  FileText, SearchCheck, X, Sprout, CloudUpload,
 } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
@@ -16,7 +16,6 @@ const navItems = [
   { label: "Add Tree", icon: Plus, path: "/add-tree" },
   { label: "Community", icon: Network, path: "/community" },
   { label: "Planting", icon: Sprout, path: "/planting" },
-  { label: "Evaluation", icon: ClipboardCheck, path: "/evaluation" },
   { label: "Field Sync", icon: CloudUpload, path: "/field-sync" },
   { label: "QR Scanner", icon: ScanLine, path: "/scan" },
   { label: "Public Portal", icon: Globe, path: "/public" },

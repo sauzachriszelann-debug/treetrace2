@@ -15,6 +15,10 @@ class TreeModel {
   final String? photoUrl;
   final String? qrCodeUrl;
   final String? notes;
+  final String endangeredStatus;
+  final String statusCode;
+  final bool isProtected;
+  final bool cuttingAllowed;
   final DateTime? createdAt;
 
   TreeModel({
@@ -33,6 +37,10 @@ class TreeModel {
     this.photoUrl,
     this.qrCodeUrl,
     this.notes,
+    this.endangeredStatus = 'Not Listed',
+    this.statusCode = 'NL',
+    this.isProtected = false,
+    this.cuttingAllowed = true,
     this.createdAt,
   });
 
@@ -52,6 +60,10 @@ class TreeModel {
         photoUrl: j['photo_url'],
         qrCodeUrl: j['qr_code_url'],
         notes: j['notes'],
+        endangeredStatus: j['endangered_status'] ?? 'Not Listed',
+        statusCode: j['status_code'] ?? 'NL',
+        isProtected: j['protected'] == true,
+        cuttingAllowed: j['cutting_allowed'] != false,
         createdAt:
             j['created_at'] != null ? DateTime.tryParse(j['created_at']) : null,
       );

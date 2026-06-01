@@ -59,6 +59,10 @@ class TreeOut(BaseModel):
     date_recorded: Optional[date] = None
     notes: Optional[str] = None
     recorded_by_id: Optional[int] = None
+    endangered_status: str = "Not Listed"
+    status_code: str = "NL"
+    protected: bool = False
+    cutting_allowed: bool = True
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

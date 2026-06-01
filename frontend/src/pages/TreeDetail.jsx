@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowLeft, MapPin, Ruler, Leaf, Calendar,
-  Edit, Trash2, Activity, Plus,
+  Edit, Trash2, Activity, Plus, AlertTriangle, ShieldAlert,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -32,6 +32,8 @@ export default function TreeDetail() {
     queryKey: ["tree", id],
     queryFn: () => treesApi.get(id),
   });
+  const isProtectedTree =
+    tree?.protected || ["CR", "EN", "VU"].includes(tree?.status_code);
 
   const { data: logs = [] } = useQuery({
     queryKey: ["healthlogs", id],
@@ -90,7 +92,7 @@ export default function TreeDetail() {
 
   if (isLoading) {
     return (
-      <div className="p-8">
+      <div className="p-4 sm:p-6 lg:p-8">
         <div className="h-8 w-48 bg-muted rounded animate-pulse mb-4" />
         <div className="h-64 bg-muted rounded-xl animate-pulse" />
       </div>
@@ -98,11 +100,11 @@ export default function TreeDetail() {
   }
 
   if (!tree) {
-    return <div className="p-8 text-center text-muted-foreground">Tree not found.</div>;
+    return <div className="p-4 text-center text-muted-foreground sm:p-6 lg:p-8">Tree not found.</div>;
   }
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
+    <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
       <Link
         to="/trees"
         className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm mb-6 transition-colors"
@@ -112,10 +114,10 @@ export default function TreeDetail() {
       </Link>
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <h1 className="font-fraunces text-3xl font-semibold">{tree.common_name}</h1>
+      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className="mb-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <h1 className="break-words font-fraunces text-2xl font-semibold sm:text-3xl">{tree.common_name}</h1>
             <HealthBadge status={tree.health_status} />
           </div>
           {tree.scientific_name && (
@@ -125,7 +127,7 @@ export default function TreeDetail() {
         </div>
 
         {/* Endangered Warning */}
-                  {tree.protected && (
+                  {false && tree.protected && (
                     <div className={`mt-4 p-4 rounded-xl border-2 flex items-start gap-3 ${
                       tree.status_code === "CR" ? "border-red-400 bg-red-50" :
                       tree.status_code === "EN" ? "border-orange-400 bg-orange-50" :
@@ -149,7 +151,7 @@ export default function TreeDetail() {
                     </div>
                   )}
 
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           {canManageOfficialTree && (
             <Button
               variant="outline"
@@ -176,13 +178,13 @@ export default function TreeDetail() {
       </div>
 
       {editing ? (
-        <div className="bg-card border border-border rounded-xl p-6 shadow-sm mb-6">
+      <div className="mb-6 rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
           <h2 className="font-fraunces text-xl mb-4">Edit Tree Record</h2>
           <TreeForm initial={tree} onSubmit={handleUpdate} loading={saving} />
         </div>
       ) : (
         <Tabs defaultValue="details">
-          <TabsList className="mb-4">
+          <TabsList className="mb-4 h-auto w-full flex-wrap justify-start">
             <TabsTrigger value="details">Details</TabsTrigger>
             <TabsTrigger value="health">Health Logs ({logs.length})</TabsTrigger>
             <TabsTrigger value="qr">QR Code</TabsTrigger>
@@ -190,6 +192,7 @@ export default function TreeDetail() {
 
           {/* Details Tab */}
           <TabsContent value="details">
+            {isProtectedTree && <ConservationWarning tree={tree} />}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Photo */}
               <div className="lg:col-span-1">
@@ -217,7 +220,7 @@ export default function TreeDetail() {
                   <CardHeader>
                     <CardTitle className="font-fraunces text-base">Measurements</CardTitle>
                   </CardHeader>
-                  <CardContent className="grid grid-cols-2 gap-4 text-sm">
+                  <CardContent className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
                     <Info label="DBH"          value={tree.dbh_cm    ? `${tree.dbh_cm} cm`    : "—"} icon={Ruler} />
                     <Info label="Height"       value={tree.height_m  ? `${tree.height_m} m`   : "—"} icon={Ruler} />
                     <Info label="Biomass"      value={tree.biomass_kg ? `${tree.biomass_kg} kg` : "—"} icon={Leaf} />
@@ -264,13 +267,13 @@ export default function TreeDetail() {
           {/* Health Logs Tab */}
           <TabsContent value="health">
             <div className="space-y-4">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="font-fraunces text-xl">Health Assessment History</h2>
                 {canManageOfficialTree && (
                   <Button
                     size="sm"
                     onClick={() => setShowLogForm(!showLogForm)}
-                    className="flex items-center gap-2"
+                    className="flex w-full items-center gap-2 sm:w-auto"
                   >
                     <Plus className="w-4 h-4" />
                     Add Assessment
@@ -290,7 +293,7 @@ export default function TreeDetail() {
               <div className="space-y-3">
                 {logs.map((log) => (
                   <div key={log.id} className="bg-card border border-border rounded-xl p-4">
-                    <div className="flex justify-between items-start mb-2">
+                    <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <p className="font-medium text-sm">
                           {log.assessed_date
@@ -341,6 +344,36 @@ function Info({ label, value, icon: Icon }) {
       <div>
         <span className="text-muted-foreground">{label}: </span>
         <span className="font-medium">{value}</span>
+      </div>
+    </div>
+  );
+}
+
+function ConservationWarning({ tree }) {
+  const code = tree.status_code || "VU";
+  const critical = code === "CR";
+  const endangered = code === "EN";
+  const tone = critical
+    ? "border-red-300 bg-red-50 text-red-900"
+    : endangered
+      ? "border-orange-300 bg-orange-50 text-orange-900"
+      : "border-amber-300 bg-amber-50 text-amber-900";
+  const Icon = critical || endangered ? ShieldAlert : AlertTriangle;
+  const title = critical
+    ? "Do not cut: critically endangered"
+    : endangered
+      ? "Protected species: cutting prohibited"
+      : "Vulnerable species: handle with care";
+
+  return (
+    <div className={`mb-5 flex items-start gap-3 rounded-xl border p-4 ${tone}`}>
+      <Icon className="mt-0.5 h-5 w-5 flex-shrink-0" />
+      <div>
+        <p className="font-semibold">{title}</p>
+        <p className="mt-1 text-sm opacity-85">
+          {tree.common_name} is listed as <strong>{tree.endangered_status || "Protected"}</strong>.{" "}
+          Cutting or transporting this tree is {tree.cutting_allowed ? "allowed only with proper permit review" : "strictly prohibited without DENR clearance"}.
+        </p>
       </div>
     </div>
   );

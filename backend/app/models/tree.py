@@ -56,3 +56,28 @@ class Tree(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     health_logs = relationship("HealthLog", back_populates="tree", cascade="all, delete-orphan")
+
+    def _conservation_info(self):
+        from app.services.species_db import lookup_species
+
+        return (
+            lookup_species(self.common_name or "")
+            or lookup_species(self.scientific_name or "")
+            or {}
+        )
+
+    @property
+    def endangered_status(self):
+        return self._conservation_info().get("status", "Not Listed")
+
+    @property
+    def status_code(self):
+        return self._conservation_info().get("status_code", "NL")
+
+    @property
+    def protected(self):
+        return bool(self._conservation_info().get("protected", False))
+
+    @property
+    def cutting_allowed(self):
+        return bool(self._conservation_info().get("cutting_allowed", True))
