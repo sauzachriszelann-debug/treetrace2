@@ -11,6 +11,10 @@ from app.models.user import User, UserRole
 from app.models.unknown_species import UnknownSpecies
 from app.core.security import get_current_user, require_admin
 from app.services.ai_identify import identify_tree_from_url, _pipeline_with_status, measure_dbh_from_base64, get_dbh_runtime_status
+from app.services.local_species_classifier import (
+    classify_species_from_image,
+    local_species_model_status,
+)
 from app.services.species_db import get_all_protected, lookup_species, PHILIPPINE_ENDANGERED_SPECIES
 
 router = APIRouter()
@@ -19,6 +23,11 @@ router = APIRouter()
 @router.get("/dbh-status")
 async def dbh_status():
     return get_dbh_runtime_status()
+
+
+@router.get("/species-model-status")
+async def species_model_status():
+    return local_species_model_status()
 
 AI_DAILY_LIMITS = {
     "free": 10,
@@ -162,6 +171,13 @@ async def identify_tree(
     contents = await file.read()
     image_data = base64.standard_b64encode(contents).decode("utf-8")
     image_bytes = base64.standard_b64decode(image_data)
+    local_model = local_species_model_status()
+    if local_model.get("ready"):
+        try:
+            return classify_species_from_image(image_bytes)
+        except Exception:
+            # Keep the existing online AI pipeline available if local inference fails.
+            pass
     try:
         result = await _pipeline_with_status(image_bytes, image_data, file.content_type)
         return result
