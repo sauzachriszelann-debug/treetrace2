@@ -293,6 +293,7 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
     final heightCtrl =
         TextEditingController(text: tree.heightM?.toString() ?? '');
     final notesCtrl = TextEditingController();
+    var queuedOffline = false;
 
     final saved = await showModalBottomSheet<bool>(
       context: context,
@@ -367,7 +368,7 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
                       final now = DateTime.now();
                       final date =
                           '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-                      await api.createHealthLog({
+                      final payload = <String, dynamic>{
                         'tree_id': tree.id,
                         'condition': conditionCtrl.value,
                         'assessed_date': date,
@@ -376,11 +377,47 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
                         'notes': notesCtrl.text.trim().isEmpty
                             ? null
                             : notesCtrl.text.trim(),
-                      });
+                      };
+                      if (await api.isOnline()) {
+                        await api.createHealthLog(payload);
+                      } else {
+                        await api.queueOfflineAction(
+                          'CREATE_HEALTH_LOG',
+                          payload,
+                        );
+                        queuedOffline = true;
+                      }
                       if (sheetContext.mounted) {
                         Navigator.pop(sheetContext, true);
                       }
                     } catch (e) {
+                      final errorText = e.toString().toLowerCase();
+                      final shouldQueue = errorText.contains('connection') ||
+                          errorText.contains('failed host lookup') ||
+                          errorText.contains('socketexception');
+                      if (shouldQueue) {
+                        final now = DateTime.now();
+                        final date =
+                            '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+                        await api.queueOfflineAction(
+                          'CREATE_HEALTH_LOG',
+                          <String, dynamic>{
+                            'tree_id': tree.id,
+                            'condition': conditionCtrl.value,
+                            'assessed_date': date,
+                            'dbh_cm': double.tryParse(dbhCtrl.text.trim()),
+                            'height_m': double.tryParse(heightCtrl.text.trim()),
+                            'notes': notesCtrl.text.trim().isEmpty
+                                ? null
+                                : notesCtrl.text.trim(),
+                          },
+                        );
+                        queuedOffline = true;
+                        if (sheetContext.mounted) {
+                          Navigator.pop(sheetContext, true);
+                        }
+                        return;
+                      }
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                           content: Text('Could not save health log: $e'),
@@ -400,11 +437,15 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
     );
 
     if (saved == true) {
-      await _load();
+      if (!queuedOffline) {
+        await _load();
+      }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Health log saved.'),
-          backgroundColor: kHealthy,
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(queuedOffline
+              ? 'Health log saved offline. Review it in Field Sync before uploading.'
+              : 'Health log saved.'),
+          backgroundColor: queuedOffline ? kFair : kHealthy,
         ));
       }
     }

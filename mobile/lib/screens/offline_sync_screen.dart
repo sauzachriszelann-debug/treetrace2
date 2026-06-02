@@ -99,7 +99,7 @@ class _OfflineSyncScreenState extends State<OfflineSyncScreen> {
                   if (_items.isEmpty)
                     const EmptyState(
                       message: 'No offline records waiting for sync.',
-                      subtitle: 'New offline trees, unknown species, and planting suggestions will appear here for review.',
+                      subtitle: 'New offline trees, health logs, unknown species, and planting suggestions will appear here for review.',
                       icon: Icons.cloud_done_outlined,
                     )
                   else
@@ -378,6 +378,8 @@ String _labelFor(String type) {
   switch (type) {
     case 'CREATE_TREE':
       return 'Tree inventory';
+    case 'CREATE_HEALTH_LOG':
+      return 'Health log';
     case 'SUBMIT_UNKNOWN':
       return 'Unknown species review';
     case 'CREATE_PLANTING_RECOMMENDATION':
@@ -391,6 +393,8 @@ IconData _iconFor(String type) {
   switch (type) {
     case 'CREATE_TREE':
       return Icons.forest_outlined;
+    case 'CREATE_HEALTH_LOG':
+      return Icons.monitor_heart_outlined;
     case 'SUBMIT_UNKNOWN':
       return Icons.science_outlined;
     case 'CREATE_PLANTING_RECOMMENDATION':

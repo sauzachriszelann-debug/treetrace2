@@ -165,6 +165,8 @@ class ApiService {
             payload['photo_url'] = await uploadPhoto(File(photoPath));
           }
           await createTree(payload);
+        } else if (item['type'] == 'CREATE_HEALTH_LOG') {
+          await createHealthLog(payload);
         } else if (item['type'] == 'SUBMIT_UNKNOWN') {
           if (photoPath != null &&
               photoPath.isNotEmpty &&
