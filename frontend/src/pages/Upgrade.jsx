@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   Building2, CheckCircle2, Crown, FileDown, Leaf, Loader2,
-  Map, PieChart, Sparkles, Sprout, Users,
+  Map, PieChart, Sprout, Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,10 +66,10 @@ export default function Upgrade() {
   };
 
   return (
-    <div className="p-8 max-w-6xl mx-auto space-y-7">
+    <div className="mx-auto max-w-6xl space-y-7 p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="font-fraunces text-3xl font-semibold text-foreground">
+          <h1 className="font-fraunces text-2xl font-semibold text-foreground sm:text-3xl">
             Revenue Streams & Pricing
           </h1>
           <p className="text-muted-foreground mt-1 max-w-2xl">
@@ -106,7 +106,7 @@ export default function Upgrade() {
       </section>
 
       <Card className="border-primary/20 bg-primary/5">
-        <CardContent className="p-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <CardContent className="flex flex-col gap-4 p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="font-semibold">
               {isInstitutional ? "Your account has institutional access." : isPro ? "Your account is already Pro." : requested ? "Upgrade request pending." : "Request Professional access"}
@@ -135,7 +135,7 @@ function PlanCard({ plan }) {
       !plan.featured && !plan.dark ? plan.tone : "",
     ].join(" ")}>
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <Badge variant={plan.featured || plan.dark ? "secondary" : "outline"}>{plan.badge}</Badge>
           <Icon className="w-5 h-5 opacity-80" />
         </div>

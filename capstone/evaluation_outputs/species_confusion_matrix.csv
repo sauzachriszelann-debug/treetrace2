@@ -1,0 +1,19 @@
+Actual / Predicted,Acacia,Baobab Tree,Brazilian copal,Crape-jasmine,Mahogany,Mango,Molave,Narra,Persimmon,Platymiscium,Raintree,Rauvolfia,Santol,Tamarind,Tasmanian bluegum,Teak,White-willow,Yakal
+Acacia,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0
+Baobab Tree,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+Brazilian copal,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+Crape-jasmine,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+Mahogany,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0
+Mango,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0
+Molave,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0
+Narra,0,0,0,0,1,0,0,2,0,0,0,0,0,0,0,0,0,0
+Persimmon,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0
+Platymiscium,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0
+Raintree,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0
+Rauvolfia,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0
+Santol,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0
+Tamarind,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0
+Tasmanian bluegum,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0
+Teak,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0
+White-willow,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0
+Yakal,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2

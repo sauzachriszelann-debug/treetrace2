@@ -44,7 +44,7 @@ export default function AIIdentify() {
   };
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
+    <div className="mx-auto max-w-4xl p-4 sm:p-6 lg:p-8">
       <Link
         to="/trees"
         className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm mb-6 transition-colors"
@@ -54,7 +54,7 @@ export default function AIIdentify() {
       </Link>
 
       <div className="mb-6">
-        <h1 className="font-fraunces text-3xl font-semibold">AI Identify a Tree</h1>
+        <h1 className="font-fraunces text-2xl font-semibold sm:text-3xl">AI Identify a Tree</h1>
         <p className="text-muted-foreground mt-2 max-w-2xl">
           Upload a photo and let the AI suggest the species, diameter, and height.
           {isCitizen
@@ -63,7 +63,7 @@ export default function AIIdentify() {
         </p>
       </div>
 
-      <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
         <TreeForm
           onSubmit={handleSubmit}
           loading={loading}

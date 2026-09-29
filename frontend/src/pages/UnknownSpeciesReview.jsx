@@ -76,15 +76,15 @@ export default function UnknownSpeciesReview() {
   };
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
+    <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
-        <h1 className="font-fraunces text-3xl font-semibold">Unknown Species Review</h1>
+        <h1 className="font-fraunces text-2xl font-semibold sm:text-3xl">Unknown Species Review</h1>
         <p className="text-muted-foreground mt-1">
           Review community-submitted tree photos, identify species, and build the local TreeTrace knowledge base.
         </p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
         <Metric label="Total" value={counts.total} />
         <Metric label="Pending" value={counts.pending} />
         <Metric label="Identified" value={counts.identified} />
@@ -127,7 +127,7 @@ export default function UnknownSpeciesReview() {
               <Card key={entry.id}>
                 <CardContent className="p-4 space-y-4">
                   <div className="flex items-start justify-between gap-3">
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <h2 className="font-semibold">Submission #{entry.id}</h2>
                         <StatusBadge entry={entry} />
@@ -196,15 +196,15 @@ export default function UnknownSpeciesReview() {
                     />
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
-                    <Button onClick={() => review(entry, "identified")} disabled={savingId === entry.id}>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                    <Button className="w-full sm:w-auto" onClick={() => review(entry, "identified")} disabled={savingId === entry.id}>
                       {savingId === entry.id && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                       Approve Identification
                     </Button>
-                    <Button variant="outline" onClick={() => review(entry, "closed")} disabled={savingId === entry.id}>
+                    <Button className="w-full sm:w-auto" variant="outline" onClick={() => review(entry, "closed")} disabled={savingId === entry.id}>
                       Close Unresolved
                     </Button>
-                    <Button variant="ghost" onClick={() => review(entry, "reopen")} disabled={savingId === entry.id}>
+                    <Button className="w-full sm:w-auto" variant="ghost" onClick={() => review(entry, "reopen")} disabled={savingId === entry.id}>
                       <RotateCcw className="w-4 h-4 mr-2" />
                       Reopen
                     </Button>

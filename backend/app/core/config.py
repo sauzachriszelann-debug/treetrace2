@@ -47,6 +47,7 @@ class Settings(BaseSettings):
 
     # Anthropic — AI identification
     ANTHROPIC_API_KEY: str = ""
+    ENABLE_YOLO_DBH: bool = False
 
     # Pl@ntNet — Free botanical identification API (500 req/day free)
     PLANTNET_API_KEY: str = "2b10i4RHoL4hnlBaJ6f7jyVb"

@@ -59,12 +59,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
         Navigator.of(context).popUntil((route) => route.isFirst);
       } else {
         setState(
-              () => _error = 'Registration worked. Please sign in again.',
+          () => _error = 'Registration worked. Please sign in again.',
         );
       }
     } catch (e) {
       setState(
-            () => _error = e.toString().contains('already')
+        () => _error = e.toString().contains('already')
             ? 'Email already registered.'
             : 'Registration failed. Please try again.',
       );
@@ -184,7 +184,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           keyboardType: TextInputType.emailAddress,
                           textInputAction: TextInputAction.next,
                           decoration: const InputDecoration(
-                            hintText: 'you@example.com',
+                            hintText: 'Enter your email address',
                             prefixIcon: Icon(
                               Icons.email_outlined,
                               size: 18,
@@ -264,18 +264,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ),
                             child: _loading
                                 ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
                                 : const Text(
-                              'Create Account',
-                              style:
-                              TextStyle(fontWeight: FontWeight.w900),
-                            ),
+                                    'Create Account',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.w900),
+                                  ),
                           ),
                         ),
                         const SizedBox(height: 16),

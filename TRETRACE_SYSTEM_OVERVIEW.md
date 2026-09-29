@@ -453,6 +453,7 @@ Main pages:
 - Admin Users
 - Reports and Tools
 - Unknown Species Review
+- Project Evaluation
 
 ### Flutter Mobile App
 
@@ -488,6 +489,22 @@ Main screens:
 - DBH Measure
 - Upgrade
 - Profile
+
+### Assignment and Model Evaluation Page
+
+The system includes a Project Evaluation page for the data mining assignment requirements. It lists the expected deliverables, required app pages, data mining techniques, meaningful outputs, and a model evaluation results table that can be used for final presentation.
+
+Documentation file:
+
+```text
+capstone/DATA_MINING_ASSIGNMENT_REQUIREMENTS.md
+```
+
+Web page:
+
+```text
+/evaluation
+```
 
 ### Backend API
 

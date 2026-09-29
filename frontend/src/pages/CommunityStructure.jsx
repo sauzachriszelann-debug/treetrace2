@@ -5,17 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MapPin, TreePine, AlertTriangle, Leaf } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, Cell, PieChart, Pie, Legend,
+  ResponsiveContainer, Cell, PieChart, Pie,
 } from "recharts";
 import { Link } from "react-router-dom";
-
-const STATUS_COLORS = {
-  CR: "#d32f2f",
-  EN: "#f57c00",
-  VU: "#fbc02d",
-  LC: "#388e3c",
-  NL: "#9e9e9e",
-};
 
 export default function CommunityStructure() {
   const { data, isLoading } = useQuery({
@@ -25,8 +17,8 @@ export default function CommunityStructure() {
 
   if (isLoading) {
     return (
-      <div className="p-8">
-        <h1 className="font-fraunces text-3xl font-semibold mb-6">Community Structure</h1>
+      <div className="p-4 sm:p-6 lg:p-8">
+        <h1 className="mb-6 font-fraunces text-2xl font-semibold sm:text-3xl">Community Structure</h1>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-28 bg-muted rounded-xl animate-pulse" />
@@ -46,16 +38,16 @@ export default function CommunityStructure() {
     }));
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
-        <h1 className="font-fraunces text-3xl font-semibold">Community Structure</h1>
+        <h1 className="font-fraunces text-2xl font-semibold sm:text-3xl">Community Structure</h1>
         <p className="text-muted-foreground mt-1">
           Biodiversity analysis and species distribution across Panabo City
         </p>
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard icon={TreePine} label="Total Trees"   value={data?.total_trees    || 0} color="text-primary" />
         <StatCard icon={Leaf}     label="Species"       value={data?.total_species  || 0} color="text-emerald-600" />
         <StatCard
@@ -149,9 +141,9 @@ export default function CommunityStructure() {
                 <Link
                   key={tree.tree_id}
                   to={`/trees/${tree.tree_id}`}
-                  className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors border border-border"
+                  className="flex flex-col gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
                     <div
                       className="w-3 h-3 rounded-full flex-shrink-0"
                       style={{ backgroundColor: tree.iucn_color }}

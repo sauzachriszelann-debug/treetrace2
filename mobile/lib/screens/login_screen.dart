@@ -97,9 +97,9 @@ class _LoginScreenState extends State<LoginScreen> {
             curve: Curves.easeInOut,
             child: _error != null
                 ? Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: _ErrorBox(message: _error!),
-            )
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _ErrorBox(message: _error!),
+                  )
                 : const SizedBox.shrink(),
           ),
 
@@ -111,7 +111,7 @@ class _LoginScreenState extends State<LoginScreen> {
             textInputAction: TextInputAction.next,
             style: const TextStyle(fontWeight: FontWeight.w500),
             decoration: _buildInputDecoration(
-              hintText: 'you@example.com',
+              hintText: 'Enter your email',
               prefixIcon: Icons.email_outlined,
             ),
           ),
@@ -173,21 +173,21 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               child: _loading
                   ? const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2.5,
-                ),
-              )
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2.5,
+                      ),
+                    )
                   : const Text(
-                'Sign In',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.5,
-                ),
-              ),
+                      'Sign In',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
             ),
           ),
 

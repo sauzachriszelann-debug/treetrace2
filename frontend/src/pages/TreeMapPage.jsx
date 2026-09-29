@@ -39,9 +39,9 @@ function InternalTreeMap() {
   const geoTrees = trees.filter((t) => t.lat && t.lng);
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
-        <h1 className="font-fraunces text-3xl font-semibold">Tree Map</h1>
+        <h1 className="font-fraunces text-2xl font-semibold sm:text-3xl">Tree Map</h1>
         <p className="text-muted-foreground mt-1">
           {isLoading
             ? "Loading…"
@@ -50,7 +50,7 @@ function InternalTreeMap() {
       </div>
 
       {/* Summary bar */}
-      <div className="flex gap-4 mb-4 text-sm">
+      <div className="mb-4 flex flex-wrap gap-3 text-sm sm:gap-4">
         {[
           { label: "Healthy", color: "bg-emerald-500" },
           { label: "Fair", color: "bg-amber-500" },
@@ -63,8 +63,7 @@ function InternalTreeMap() {
         ))}
       </div>
 
-      <div className="rounded-xl overflow-hidden border border-border shadow-sm"
-        style={{ height: "calc(100vh - 260px)" }}>
+      <div className="h-[60vh] overflow-hidden rounded-xl border border-border shadow-sm sm:h-[calc(100vh-260px)]">
         <MapContainer
           center={DEFAULT_CENTER}
           zoom={13}

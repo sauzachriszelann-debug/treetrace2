@@ -1,0 +1,7 @@
+path: C:/Users/Chris Zel Ann/Documents/Treetrace/yolo_dataset
+train: images/train
+val: images/val
+
+names:
+  0: trunk
+  1: reference_object

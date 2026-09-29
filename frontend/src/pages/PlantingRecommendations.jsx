@@ -108,53 +108,53 @@ export default function PlantingRecommendations() {
         </div>
       </div>
 
-      {(focusReview || pending.length > 0) && (
+      {focusReview && (
         <section className="mb-8">
           <h2 className="mb-3 text-lg font-semibold">Citizen Suggestions for Review</h2>
-          {pending.length === 0 ? (
-            <Card><CardContent className="p-6 text-muted-foreground">No suggested plants waiting for review.</CardContent></Card>
-          ) : (
-            <div className="grid gap-4 lg:grid-cols-2">
-              {pending.map((item) => (
-                <PlantingRecord key={item.id} item={item} onGallery={setGallery}>
-                  {rejecting?.id === item.id && (
-                    <Textarea
-                      className="mt-3"
-                      placeholder="Reason for rejection"
-                      value={rejecting.reason}
-                      onChange={(e) => setRejecting({ id: item.id, reason: e.target.value })}
-                    />
-                  )}
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Button variant="outline" onClick={() => setRejecting({ id: item.id, reason: "" })}>
-                      <X className="mr-2 h-4 w-4" /> Reject
-                    </Button>
-                    {rejecting?.id === item.id && <Button variant="destructive" onClick={() => review(item, false)}>Confirm Reject</Button>}
-                    <Button onClick={() => review(item, true)}><Check className="mr-2 h-4 w-4" /> Approve</Button>
-                  </div>
-                </PlantingRecord>
-              ))}
-            </div>
-          )}
+          <ReviewQueue
+            pending={pending}
+            rejecting={rejecting}
+            setRejecting={setRejecting}
+            review={review}
+            setGallery={setGallery}
+            fullWidth
+          />
         </section>
       )}
 
       {!focusReview && (
         <>
-          <Card className="mb-8">
-            <CardHeader><CardTitle className="font-fraunces">Add Official Recommendation</CardTitle></CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-2">
-              <Input placeholder="Tree to plant" value={draft.species_name || ""} onChange={(e) => setDraft({ ...draft, species_name: e.target.value })} />
-              <Input placeholder="Scientific name" value={draft.scientific_name || ""} onChange={(e) => setDraft({ ...draft, scientific_name: e.target.value })} />
-              <Input placeholder="Barangay / area" value={draft.barangay || ""} onChange={(e) => setDraft({ ...draft, barangay: e.target.value })} />
-              <Input type="file" accept="image/*" onChange={(e) => setPhoto(e.target.files?.[0] || null)} />
-              <Textarea className="md:col-span-2" placeholder="Why needed in this area?" value={draft.reason || ""} onChange={(e) => setDraft({ ...draft, reason: e.target.value })} />
-              <Button className="md:col-span-2" onClick={() => saveRecommendation()} disabled={saving}>
-                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-                Save Recommendation
-              </Button>
-            </CardContent>
-          </Card>
+          <section className="mb-8 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,520px)]">
+            <Card>
+              <CardHeader><CardTitle className="font-fraunces">Add Official Recommendation</CardTitle></CardHeader>
+              <CardContent className="grid gap-3 md:grid-cols-2">
+                <Input placeholder="Tree to plant" value={draft.species_name || ""} onChange={(e) => setDraft({ ...draft, species_name: e.target.value })} />
+                <Input placeholder="Scientific name" value={draft.scientific_name || ""} onChange={(e) => setDraft({ ...draft, scientific_name: e.target.value })} />
+                <Input placeholder="Barangay / area" value={draft.barangay || ""} onChange={(e) => setDraft({ ...draft, barangay: e.target.value })} />
+                <Input type="file" accept="image/*" onChange={(e) => setPhoto(e.target.files?.[0] || null)} />
+                <Textarea className="md:col-span-2" placeholder="Why needed in this area?" value={draft.reason || ""} onChange={(e) => setDraft({ ...draft, reason: e.target.value })} />
+                <Button className="md:col-span-2" onClick={() => saveRecommendation()} disabled={saving}>
+                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                  Save Recommendation
+                </Button>
+              </CardContent>
+            </Card>
+
+            <section>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold">Citizen Suggestions for Review</h2>
+                <Badge variant="outline">{pending.length} pending</Badge>
+              </div>
+              <ReviewQueue
+                pending={pending}
+                rejecting={rejecting}
+                setRejecting={setRejecting}
+                review={review}
+                setGallery={setGallery}
+                scrollable
+              />
+            </section>
+          </section>
 
           <section className="mb-8">
             <h2 className="mb-3 text-lg font-semibold">Suggested Trees to Plant</h2>
@@ -175,6 +175,50 @@ export default function PlantingRecommendations() {
       </section>
 
       <PhotoGallery gallery={gallery} onClose={() => setGallery(null)} />
+    </div>
+  );
+}
+
+function ReviewQueue({
+  pending,
+  rejecting,
+  setRejecting,
+  review,
+  setGallery,
+  scrollable = false,
+  fullWidth = false,
+}) {
+  if (pending.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-muted-foreground">No suggested plants waiting for review.</CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className={`${scrollable ? "max-h-[540px] overflow-y-auto pr-2" : ""}`}>
+      <div className={`grid gap-4 ${fullWidth ? "lg:grid-cols-2" : ""}`}>
+        {pending.map((item) => (
+          <PlantingRecord key={item.id} item={item} onGallery={setGallery}>
+            {rejecting?.id === item.id && (
+              <Textarea
+                className="mt-3"
+                placeholder="Reason for rejection"
+                value={rejecting.reason}
+                onChange={(e) => setRejecting({ id: item.id, reason: e.target.value })}
+              />
+            )}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => setRejecting({ id: item.id, reason: "" })}>
+                <X className="mr-2 h-4 w-4" /> Reject
+              </Button>
+              {rejecting?.id === item.id && <Button variant="destructive" onClick={() => review(item, false)}>Confirm Reject</Button>}
+              <Button onClick={() => review(item, true)}><Check className="mr-2 h-4 w-4" /> Approve</Button>
+            </div>
+          </PlantingRecord>
+        ))}
+      </div>
     </div>
   );
 }

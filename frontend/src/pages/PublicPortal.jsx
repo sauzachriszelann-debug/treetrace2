@@ -84,7 +84,7 @@ export default function PublicPortal() {
   return (
     <div className="min-h-screen bg-background">
       {/* Hero header */}
-      <header className="bg-[#2d5a27] text-white px-8 pt-8 pb-10">
+      <header className="bg-[#2d5a27] px-4 pb-8 pt-6 text-white sm:px-8 sm:pb-10 sm:pt-8">
         <div className="max-w-5xl mx-auto">
           <div className="inline-flex items-center gap-2 bg-white/15 rounded-lg px-3 py-1.5 mb-5">
             <div className="w-6 h-6 bg-white/20 rounded-md flex items-center justify-center">
@@ -92,7 +92,7 @@ export default function PublicPortal() {
             </div>
             <span className="text-white/90 text-sm font-medium">TreeTrace · Public Portal</span>
           </div>
-          <h1 className="font-fraunces text-4xl md:text-5xl font-bold leading-tight mb-3">
+          <h1 className="mb-3 font-fraunces text-3xl font-bold leading-tight sm:text-4xl md:text-5xl">
             Panabo City<br />Tree Inventory
           </h1>
           <p className="text-white/75 text-base max-w-lg mb-6">
@@ -110,7 +110,7 @@ export default function PublicPortal() {
       </header>
 
       {/* Controls bar */}
-      <div className="bg-[#f5f5f0] border-b border-border px-8 py-4">
+      <div className="border-b border-border bg-[#f5f5f0] px-4 py-4 sm:px-8">
         <div className="max-w-5xl mx-auto space-y-3">
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative flex-1 min-w-[220px]">
@@ -123,7 +123,7 @@ export default function PublicPortal() {
               />
             </div>
             <Select value={statusFilter} onValueChange={setStatus}>
-              <SelectTrigger className="w-40 bg-white">
+              <SelectTrigger className="w-full bg-white sm:w-40">
                 <SelectValue placeholder="All Status" />
               </SelectTrigger>
               <SelectContent>
@@ -134,7 +134,7 @@ export default function PublicPortal() {
               </SelectContent>
             </Select>
             <Button
-              className="bg-[#2d5a27] hover:bg-[#234820] text-white flex items-center gap-2"
+              className="flex w-full items-center gap-2 bg-[#2d5a27] text-white hover:bg-[#234820] sm:w-auto"
               onClick={() => navigate("/scan")}
             >
               <ScanLine className="w-4 h-4" />
@@ -142,7 +142,7 @@ export default function PublicPortal() {
             </Button>
           </div>
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-1 bg-white rounded-lg border border-border p-1">
               <button
                 onClick={() => setView("map")}
@@ -161,7 +161,7 @@ export default function PublicPortal() {
                 <List className="w-4 h-4" /> List View
               </button>
             </div>
-            <div className="flex items-center gap-4 text-sm">
+            <div className="flex flex-wrap items-center gap-3 text-sm sm:gap-4">
               <span className="flex items-center gap-1.5 text-muted-foreground">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> Healthy
               </span>
@@ -180,7 +180,7 @@ export default function PublicPortal() {
       </div>
 
       {/* Content */}
-      <div className="max-w-5xl mx-auto px-8 py-6">
+      <div className="mx-auto max-w-5xl px-4 py-5 sm:px-8 sm:py-6">
         {isLoading ? (
           <div className="flex items-center justify-center h-64 text-muted-foreground">
             <div className="text-center">
@@ -244,7 +244,7 @@ export default function PublicPortal() {
                 <Link
                   key={tree.id}
                   to={`/public/tree/${tree.id}`}
-                  className="flex items-center gap-4 bg-white border border-border rounded-xl p-4 hover:shadow-sm hover:border-[#2d5a27]/30 transition-all group"
+                  className="group flex items-center gap-3 rounded-xl border border-border bg-white p-3 transition-all hover:border-[#2d5a27]/30 hover:shadow-sm sm:gap-4 sm:p-4"
                 >
                   <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-muted">
                     {tree.photo_url ? (

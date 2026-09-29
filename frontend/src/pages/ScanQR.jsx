@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Html5Qrcode } from "html5-qrcode";
-import { ScanLine, X, CheckCircle2, QrCode } from "lucide-react";
+import { ScanLine, X, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -78,9 +78,9 @@ export default function ScanQR() {
   };
 
   return (
-    <div className="p-8 max-w-lg mx-auto">
+    <div className="mx-auto max-w-lg p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
-        <h1 className="font-fraunces text-3xl font-semibold">QR Scanner</h1>
+        <h1 className="font-fraunces text-2xl font-semibold sm:text-3xl">QR Scanner</h1>
         <p className="text-muted-foreground mt-1">
           Scan a tree's QR code to view its profile
         </p>
@@ -91,10 +91,10 @@ export default function ScanQR() {
         <div
           id="qr-reader"
           className="w-full bg-black"
-          style={{ minHeight: 300 }}
+          style={{ minHeight: 280 }}
         />
 
-        <div className="p-6 space-y-4">
+        <div className="space-y-4 p-4 sm:p-6">
           {error && (
             <div className="flex items-start gap-2 text-sm text-destructive bg-destructive/10 p-3 rounded-lg">
               <X className="w-4 h-4 mt-0.5 flex-shrink-0" />

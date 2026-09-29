@@ -18,20 +18,16 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> init() async {
     final startedAt = DateTime.now();
-    print("DEBUG: AuthProvider.init() started");
     try {
       final token = await api.getToken();
-      print("DEBUG: Token found: ${token != null}");
       if (token != null) {
-        print("DEBUG: Fetching user info...");
         final data = await api.getMe().timeout(const Duration(seconds: 10));
-        print("DEBUG: User data received: $data");
         _user = UserModel.fromJson(data);
       }
     } on TimeoutException {
-      print("DEBUG: AuthProvider.init() timed out after 10 seconds");
+      debugPrint('AuthProvider init timed out after 10 seconds.');
     } catch (e) {
-      print("DEBUG: AuthProvider.init() error: $e");
+      debugPrint('AuthProvider init error: $e');
       await api.clearToken();
     } finally {
       final elapsed = DateTime.now().difference(startedAt);
@@ -40,7 +36,6 @@ class AuthProvider extends ChangeNotifier {
         await Future.delayed(minimumSplashTime - elapsed);
       }
       _loading = false;
-      print("DEBUG: AuthProvider.init() finished, loading=false");
       notifyListeners();
     }
   }
@@ -66,7 +61,7 @@ class AuthProvider extends ChangeNotifier {
       } else {
         _lastError = 'Login failed. Please try again.';
       }
-      debugPrint('DEBUG: login failed: $error');
+      debugPrint('Login failed: $error');
       return false;
     }
   }

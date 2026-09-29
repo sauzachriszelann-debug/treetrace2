@@ -394,11 +394,11 @@ export default function TreeForm({
   const isAiLoading = aiStatus === "identifying" || aiStatus === "estimating";
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-8">
 
       {/* ── Tree Photo ── */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Label>Tree Photo</Label>
           {/* AI Species Identification button — top right of photo section */}
           <Button
@@ -509,7 +509,7 @@ export default function TreeForm({
               </div>
             )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="common_name">Common Name *</Label>
           <Input
@@ -532,101 +532,103 @@ export default function TreeForm({
       </div>
 
       {/* ── Measurements ── */}
-      <div className="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="circumference_cm">Manual DBH Calculator</Label>
-          <p className="text-xs text-muted-foreground">
-            Measure trunk circumference at 1.3 meters above ground. DBH is calculated automatically.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <Label htmlFor="circumference_cm" className="text-xs text-muted-foreground">
-              Circumference at breast height (cm)
-            </Label>
-            <Input
-              id="circumference_cm"
-              type="number"
-              min="0"
-              step="0.01"
-              value={circumferenceCm}
-              onChange={(e) => calculateDbhFromCircumference(e.target.value)}
-              placeholder="e.g., 94.25"
-            />
-          </div>
-          <div className="rounded-md bg-background/80 border border-border px-3 py-2 text-xs text-muted-foreground flex items-center">
-            DBH = circumference / pi. This is the recommended field method for accurate records.
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <Label>AI Photo DBH Estimate</Label>
-            <p className="text-xs text-muted-foreground">
-              Optional estimate. Use a ruler, A4 paper, phone, or known distance for better results.
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+        <div className="space-y-4 rounded-xl border border-emerald-200 bg-emerald-50/60 p-5">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="circumference_cm">Manual DBH Calculator</Label>
+            <p className="text-sm text-muted-foreground">
+              Measure trunk circumference at 1.3 meters above ground. DBH is calculated automatically.
             </p>
           </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={handleAIEstimate}
-            disabled={!photoFile || isAiLoading}
-            className="flex items-center gap-1.5 text-xs w-fit"
-          >
-            {aiStatus === "estimating" ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Ruler className="w-3.5 h-3.5" />
-            )}
-            Measure from Photo
-          </Button>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">Visible scale reference</Label>
-            <Select value={dbhReference} onValueChange={setDbhReference}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(DBH_REFERENCES).map(([value, option]) => (
-                  <SelectItem key={value} value={value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="dbh_distance" className="text-xs text-muted-foreground">
-              Camera distance, meters
-            </Label>
-            <Input
-              id="dbh_distance"
-              type="number"
-              min="0"
-              step="0.1"
-              value={dbhDistance}
-              onChange={(e) => setDbhDistance(e.target.value)}
-              placeholder="Optional"
-            />
+          <div className="grid grid-cols-1 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="circumference_cm" className="text-xs text-muted-foreground">
+                Circumference at breast height (cm)
+              </Label>
+              <Input
+                id="circumference_cm"
+                type="number"
+                min="0"
+                step="0.01"
+                value={circumferenceCm}
+                onChange={(e) => calculateDbhFromCircumference(e.target.value)}
+                placeholder="e.g., 94.25"
+              />
+            </div>
+            <div className="rounded-md bg-background/80 border border-border px-3 py-3 text-sm text-muted-foreground">
+              DBH = circumference / pi. This is the recommended field method for accurate records.
+            </div>
           </div>
         </div>
-        {dbhResult && (
-          <div className="rounded-md bg-background/80 border border-border px-3 py-2 text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">
-              {dbhResult.segmentation_used ? "YOLO segmentation" : "AI-assisted estimate"}
-              {" - "}
-              {dbhResult.confidence || "AI"} confidence
-            </span>
-            {dbhResult.distance_estimate_m ? ` - estimated distance ${dbhResult.distance_estimate_m} m` : ""}
-            {dbhResult.method ? ` - ${dbhResult.method}` : ""}
-            {dbhResult.accuracy_note ? ` - ${dbhResult.accuracy_note}` : ""}
+
+        <div className="space-y-4 rounded-xl border border-border bg-muted/30 p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <Label>AI Photo DBH Estimate</Label>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Optional estimate. Use a ruler, A4 paper, phone, or known distance for better results.
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleAIEstimate}
+              disabled={!photoFile || isAiLoading}
+              className="flex w-fit items-center gap-1.5 text-xs"
+            >
+              {aiStatus === "estimating" ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Ruler className="w-3.5 h-3.5" />
+              )}
+              Measure from Photo
+            </Button>
           </div>
-        )}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Visible scale reference</Label>
+              <Select value={dbhReference} onValueChange={setDbhReference}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(DBH_REFERENCES).map(([value, option]) => (
+                    <SelectItem key={value} value={value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dbh_distance" className="text-xs text-muted-foreground">
+                Camera distance, meters
+              </Label>
+              <Input
+                id="dbh_distance"
+                type="number"
+                min="0"
+                step="0.1"
+                value={dbhDistance}
+                onChange={(e) => setDbhDistance(e.target.value)}
+                placeholder="Optional"
+              />
+            </div>
+          </div>
+          {dbhResult && (
+            <div className="rounded-md bg-background/80 border border-border px-3 py-3 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">
+                {dbhResult.segmentation_used ? "YOLO segmentation" : "AI-assisted estimate"}
+                {" - "}
+                {dbhResult.confidence || "AI"} confidence
+              </span>
+              {dbhResult.distance_estimate_m ? ` - estimated distance ${dbhResult.distance_estimate_m} m` : ""}
+              {dbhResult.method ? ` - ${dbhResult.method}` : ""}
+              {dbhResult.accuracy_note ? ` - ${dbhResult.accuracy_note}` : ""}
+            </div>
+          )}
+        </div>
       </div>
 
       {form.dbh_cm && (
@@ -635,7 +637,7 @@ export default function TreeForm({
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="dbh_cm">DBH (cm)</Label>
           <Input
@@ -675,7 +677,7 @@ export default function TreeForm({
       )}
 
       {/* ── Health & Date ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
         <div className="space-y-2">
           <Label>Health Status *</Label>
           <Select value={form.health_status} onValueChange={(v) => set("health_status", v)}>
@@ -700,7 +702,7 @@ export default function TreeForm({
 
       {/* ── Location ── */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Label>GPS Location</Label>
           <Button
             type="button"
@@ -718,7 +720,7 @@ export default function TreeForm({
             {gpsLoading ? "Getting Location…" : "Capture GPS"}
           </Button>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Input
             placeholder="Latitude"
             value={form.lat}
@@ -739,7 +741,7 @@ export default function TreeForm({
           value={form.barangay}
           onChange={(e) => set("barangay", e.target.value)}
         />
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Input
             placeholder="City"
             value={form.city}
@@ -768,7 +770,7 @@ export default function TreeForm({
       <Button
         type="submit"
         disabled={loading || photoLoading}
-        className="w-full flex items-center gap-2"
+        className="ml-auto flex w-auto min-w-44 items-center gap-2 px-6"
       >
         {(loading || photoLoading) && <Loader2 className="w-4 h-4 animate-spin" />}
         {photoLoading ? "Uploading photo…" : loading ? savingLabel : submitLabel}

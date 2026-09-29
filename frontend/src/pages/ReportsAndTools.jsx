@@ -284,15 +284,15 @@ export default function ReportsAndTools() {
   };
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
+    <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
-        <h1 className="font-fraunces text-3xl font-semibold">Reports, Revenue, and Field Tools</h1>
+        <h1 className="font-fraunces text-2xl font-semibold sm:text-3xl">Reports, Revenue, and Field Tools</h1>
         <p className="text-muted-foreground mt-1">
           Export inventory data, print QR labels, show business viability, and plan field visits.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-5">
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
         <Metric label="Total Trees" value={trees.length} />
         <Metric label="Species Recorded" value={reportSummary.speciesCount} />
         <Metric label="GPS Tagged" value={reportSummary.gpsTagged} />
@@ -308,12 +308,12 @@ export default function ReportsAndTools() {
             <p className="text-sm text-muted-foreground">
               Download CSV for Excel or print a clean report that can be saved as PDF from the browser.
             </p>
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={downloadInventoryCsv}>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <Button className="w-full sm:w-auto" onClick={downloadInventoryCsv}>
                 <Download className="w-4 h-4 mr-2" />
                 Download Inventory CSV
               </Button>
-              <Button variant="outline" onClick={printInventoryReport}>
+              <Button className="w-full sm:w-auto" variant="outline" onClick={printInventoryReport}>
                 <FileText className="w-4 h-4 mr-2" />
                 Print / Save PDF Report
               </Button>
@@ -329,7 +329,7 @@ export default function ReportsAndTools() {
             <p className="text-sm text-muted-foreground">
               Generate printable QR labels with the TreeTrace name, species name, tree ID, and public profile link.
             </p>
-            <Button onClick={generateQrSheet}>
+            <Button className="w-full sm:w-auto" onClick={generateQrSheet}>
               <Printer className="w-4 h-4 mr-2" />
               Print QR Labels
             </Button>
@@ -341,7 +341,7 @@ export default function ReportsAndTools() {
             <CardTitle className="flex items-center gap-2"><TrendingUp className="w-5 h-5" /> Business Model Proof</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
               <Metric label="Pro Users" value={analytics?.business?.pro_users ?? 0} />
               <Metric label="Upgrade Requests" value={analytics?.business?.upgrade_requests ?? 0} />
               <Metric label="Institutional Accounts" value={analytics?.business?.institutional_accounts ?? 0} />
@@ -372,7 +372,7 @@ export default function ReportsAndTools() {
             <CardTitle className="flex items-center gap-2"><Users className="w-5 h-5" /> User Analytics</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
               <Metric label="Total Users" value={analytics?.total_users ?? 0} />
               <Metric label="Active Users" value={analytics?.active_users ?? 0} />
               <Metric label="AI Uses Today" value={analytics?.ai_identifications_today ?? 0} />
@@ -405,7 +405,7 @@ export default function ReportsAndTools() {
                 onChange={(e) => setRouteParams((p) => ({ ...p, limit: e.target.value }))}
               />
             </div>
-            <Button onClick={buildRoute}>Build Route</Button>
+            <Button className="w-full sm:w-auto" onClick={buildRoute}>Build Route</Button>
             {route && (
               <div className="rounded-lg border p-3 max-h-72 overflow-auto">
                 <p className="font-medium text-sm mb-2">

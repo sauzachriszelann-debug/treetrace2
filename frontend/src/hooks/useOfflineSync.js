@@ -5,15 +5,21 @@ import { toast } from "sonner";
 
 const QUEUE_KEY = "treetrace_offline_queue";
 
+const readQueue = () => {
+  try {
+    return JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]");
+  } catch {
+    return [];
+  }
+};
+
+const writeQueue = (queue) => {
+  localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+};
+
 export function useOfflineSync() {
   const [isOnline, setIsOnline]   = useState(navigator.onLine);
-  const [queue, setQueue]         = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]");
-    } catch {
-      return [];
-    }
-  });
+  const [queue, setQueue]         = useState(readQueue);
   const [syncing, setSyncing]     = useState(false);
 
   // Track online/offline
@@ -30,7 +36,7 @@ export function useOfflineSync() {
 
   // Persist queue to localStorage
   useEffect(() => {
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+    writeQueue(queue);
   }, [queue]);
 
   const addToQueue = useCallback((action) => {
@@ -40,7 +46,10 @@ export function useOfflineSync() {
       verified: false,
       ...action,
     };
-    setQueue((q) => [...q, entry]);
+    const latestQueue = readQueue();
+    const nextQueue = [...latestQueue, entry];
+    writeQueue(nextQueue);
+    setQueue(nextQueue);
     toast.info("Saved offline. Review it in Field Sync before uploading.");
     return entry;
   }, []);

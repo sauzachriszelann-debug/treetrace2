@@ -18,21 +18,19 @@ TreeTrace is designed as a practical data mining mobile application because it d
 
 ## General Objective
 
-To develop a mobile tree monitoring application that uses data mining techniques, AI-assisted image classification, YOLO-supported trunk detection, and biodiversity analytics to help users identify, measure, record, analyze, and protect trees in a community-based inventory system.
+To develop a mobile tree monitoring application (TreeTrace) that uses data mining techniques, AI-assisted image classification, YOLO-supported trunk detection, and biodiversity analytics to help users identify, measure, record, analyze, and protect trees in a community-based inventory system.
 
 ## Specific Objectives
 
-1. **Tree Inventory Data Collection:** Implement a mobile data input feature that allows users to add tree records with common name, scientific name, DBH, height, health status, barangay, GPS location, notes, and tree photo.
+1. **To integrate GPS-based mapping and geospatial monitoring features** that enable users to capture tree locations, identify species distribution, and visualize community structure through an interactive map interface.
 
-2. **AI-Assisted Species Identification:** Develop an AI Tree Scanner that processes tree images and returns species predictions, scientific name, confidence level, and conservation information.
+2. **To conduct a comparative analysis of at least three computer vision algorithms** (specifically YOLOv8, YOLOv5, and Faster R-CNN) to implement an AI-assisted tree identification module that analyzes tree images, determines conservation status (common, endangered, or protected), and supports expert review of unknown species.
 
-3. **DBH Measurement Support:** Integrate a DBH Measure feature that helps estimate tree diameter at breast height using image-based guidance, trunk/reference detection, and manual validation support.
+3. **To evaluate the candidate algorithms using at least three performance metrics** (specifically Mean Average Precision [mAP@0.5], Inference Latency, and F1-Score) to mathematically determine and select the optimal model for real-time mobile deployment.
 
-4. **Conservation Classification:** Apply classification rules to identify trees as Least Concern, Vulnerable, Endangered, Protected, or requiring special conservation attention.
+4. **To enable field workers and administrators to monitor tree health conditions and generate carbon stock estimation results** using tree measurement data such as diameter at breast height (DBH), height, biomass, and carbon values for environmental assessment and carbon sequestration monitoring.
 
-5. **Community Structure and Visualization:** Provide dashboards, maps, biodiversity summaries, species distribution, barangay breakdown, carbon estimates, and conservation alerts.
-
-6. **Model Evaluation and Testing:** Present evaluation results using test rows that compare actual vs predicted species, actual vs predicted conservation status, actual vs predicted DBH, scan success, app success, and latency.
+5. **To develop a QR code-based public monitoring feature linked to tree profiles, and evaluate the usability, reliability, offline data storage, and synchronization capabilities** of the overall TreeTrace system in supporting field-based flora inventory.
 
 # IV. System Scope and Limitations
 

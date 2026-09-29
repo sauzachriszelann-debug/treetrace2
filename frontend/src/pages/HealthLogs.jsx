@@ -28,9 +28,9 @@ export default function HealthLogs() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
-        <h1 className="font-fraunces text-3xl font-semibold">Health Logs</h1>
+        <h1 className="font-fraunces text-2xl font-semibold sm:text-3xl">Health Logs</h1>
         <p className="text-muted-foreground mt-1">
           All tree health assessments — {logs.length} records
         </p>
@@ -53,8 +53,8 @@ export default function HealthLogs() {
           {logs.map((log) => (
             <Card key={log.id} className="border-border">
               <CardContent className="p-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-4">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex min-w-0 items-start gap-4">
                     {/* Date */}
                     <div className="text-center min-w-[50px]">
                       <p className="text-xs text-muted-foreground">
@@ -74,7 +74,7 @@ export default function HealthLogs() {
                       </p>
                     </div>
 
-                    <div className="border-l border-border pl-4">
+                    <div className="min-w-0 border-l border-border pl-4">
                       <Link
                         to={`/trees/${log.tree_id}`}
                         className="font-medium text-foreground hover:text-primary transition-colors"
@@ -85,7 +85,7 @@ export default function HealthLogs() {
                         Assessed by {log.assessed_by || "Unknown"}
                       </p>
                       {log.notes && (
-                        <p className="text-sm mt-1 text-foreground/80">{log.notes}</p>
+                        <p className="mt-1 break-words text-sm text-foreground/80">{log.notes}</p>
                       )}
                       {(log.dbh_cm || log.height_m) && (
                         <p className="text-xs text-muted-foreground mt-1">
@@ -97,7 +97,7 @@ export default function HealthLogs() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 ml-4 flex-shrink-0">
+                  <div className="flex flex-shrink-0 items-center justify-between gap-3 sm:ml-4 sm:justify-end">
                     <HealthBadge status={log.condition} />
                     <Button
                       variant="ghost"

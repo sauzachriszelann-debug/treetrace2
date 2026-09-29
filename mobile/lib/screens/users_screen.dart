@@ -37,7 +37,6 @@ class _UsersScreenState extends State<UsersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final admins = _users.where((u) => u['role'] == 'admin').length;
     final workers = _users.where((u) => u['role'] == 'field_worker').length;
     final citizens = _users.where((u) => u['role'] == 'citizen').length;
     final pending = _users.where((u) => u['upgrade_requested'] == true).length;

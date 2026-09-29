@@ -1,7 +1,6 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { publicApiService } from "@/api/publicApi";
-import HealthBadge from "@/components/trees/HealthBadge";
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import {

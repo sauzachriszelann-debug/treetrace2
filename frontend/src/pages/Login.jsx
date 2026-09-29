@@ -28,7 +28,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[#07130c] relative flex items-center justify-center px-4 overflow-hidden text-white">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#07130c] px-4 py-8 text-white">
       {/* Ambient background glows */}
       <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-emerald-900/15 blur-[130px] pointer-events-none" />
       <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] rounded-full bg-primary/10 blur-[130px] pointer-events-none" />
@@ -43,12 +43,12 @@ export default function Login() {
 
       <div className="w-full max-w-md relative z-10">
         {/* Logo */}
-        <div className="flex items-center gap-3 mb-8 justify-center">
+        <div className="mb-6 flex items-center justify-center gap-3 sm:mb-8">
           <div className="w-11 h-11 bg-primary rounded-xl flex items-center justify-center shadow-lg shadow-primary/20 border border-primary/20">
             <Leaf className="w-6 h-6 text-primary-foreground animate-pulse" />
           </div>
           <div>
-            <h1 className="font-fraunces text-3xl font-semibold text-emerald-400 leading-none">
+            <h1 className="font-fraunces text-2xl font-semibold leading-none text-emerald-400 sm:text-3xl">
               TreeTrace
             </h1>
             <p className="text-muted-foreground text-xs mt-1 uppercase tracking-wider">Geo-Spatial Inventory</p>
@@ -56,7 +56,7 @@ export default function Login() {
         </div>
 
         {/* Card */}
-        <div className="bg-[#0b1f13]/80 border border-white/5 backdrop-blur-2xl rounded-2xl p-8 shadow-2xl transition-all duration-300 hover:shadow-emerald-950/40 hover:border-emerald-500/20">
+        <div className="rounded-2xl border border-white/5 bg-[#0b1f13]/80 p-5 shadow-2xl backdrop-blur-2xl transition-all duration-300 hover:border-emerald-500/20 hover:shadow-emerald-950/40 sm:p-8">
           <h2 className="font-fraunces text-2xl font-semibold tracking-wide text-white mb-1.5">Sign in</h2>
           <p className="text-muted-foreground/80 text-sm mb-6">
             Enter your credentials to access the dashboard
@@ -70,7 +70,7 @@ export default function Login() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
+                placeholder="Enter Your Email"
                 required
                 autoComplete="email"
                 className="bg-black/30 border-white/10 text-white placeholder:text-muted-foreground/40 focus:border-primary/50 focus-visible:ring-primary/20 h-10 px-3"

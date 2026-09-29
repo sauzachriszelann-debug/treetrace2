@@ -49,7 +49,7 @@ export default function AdminUsers() {
   const roleStr = String(me?.role ?? "").toLowerCase();
   if (me && !roleStr.includes("admin")) {
     return (
-      <div className="p-8 flex items-center justify-center h-96">
+      <div className="flex h-96 items-center justify-center p-4 sm:p-6 lg:p-8">
         <div className="text-center text-muted-foreground">
           <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
           <p className="font-medium text-foreground">Access Restricted</p>
@@ -145,25 +145,25 @@ export default function AdminUsers() {
   const upgradeCount  = users.filter((u) => u.upgrade_requested).length;
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
+    <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
       {/* Header */}
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h1 className="font-fraunces text-3xl font-semibold">User Management</h1>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="font-fraunces text-2xl font-semibold sm:text-3xl">User Management</h1>
           <p className="text-muted-foreground mt-1">
-            {activeCount} active · {adminCount} admin{adminCount !== 1 ? "s" : ""} · {upgradeCount} upgrade request{upgradeCount !== 1 ? "s" : ""}
+            {activeCount} active / {adminCount} admin{adminCount !== 1 ? "s" : ""} / {upgradeCount} upgrade request{upgradeCount !== 1 ? "s" : ""}
           </p>
         </div>
 
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger asChild>
-            <Button className="flex items-center gap-2">
+            <Button className="flex w-full items-center gap-2 sm:w-auto">
               <UserPlus className="w-4 h-4" />
               Add User
             </Button>
           </DialogTrigger>
 
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="font-fraunces text-xl">Add New User</DialogTitle>
             </DialogHeader>
@@ -175,11 +175,11 @@ export default function AdminUsers() {
                   <CheckCircle2 className="w-8 h-8 text-emerald-500 flex-shrink-0" />
                   <div>
                     <p className="font-semibold text-emerald-800">Account created!</p>
-                    <p className="text-sm text-emerald-700">{created.full_name} · {created.email}</p>
+                    <p className="text-sm text-emerald-700">{created.full_name} / {created.email}</p>
                   </div>
                 </div>
 
-                {/* Temp password panel — only shown if password was auto-generated */}
+                {/* Temp password panel, only shown if password was auto-generated */}
                 {created.temp_password ? (
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
@@ -202,7 +202,7 @@ export default function AdminUsers() {
                       </Button>
                     </div>
                     <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-2">
-                      ⚠️ A welcome email with these credentials has been sent to <strong>{created.email}</strong> (if email is configured). Copy and keep this password — it won't be shown again.
+                      A welcome email with these credentials has been sent to <strong>{created.email}</strong> (if email is configured). Copy and keep this password because it will not be shown again.
                     </p>
                   </div>
                 ) : (
@@ -211,7 +211,7 @@ export default function AdminUsers() {
                   </p>
                 )}
 
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <Button
                     className="flex-1"
                     onClick={() => { resetForm(); setOpen(false); }}
@@ -306,7 +306,7 @@ export default function AdminUsers() {
 
                 <Button type="submit" className="w-full" disabled={saving}>
                   {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                  {saving ? "Creating…" : "Create Account"}
+                  {saving ? "Creating..." : "Create Account"}
                 </Button>
               </form>
             )}
@@ -327,7 +327,7 @@ export default function AdminUsers() {
           <p>No users yet. Click "Add User" to create the first account.</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {users.map((u) => {
             const isAdmin = String(u.role).includes("admin");
             const isInstitutional = String(u.role).includes("admin") || String(u.role).includes("field_worker");
@@ -335,9 +335,9 @@ export default function AdminUsers() {
             return (
               <Card key={u.id} className={`border-border ${!u.is_active ? "opacity-60" : ""}`}>
                 <CardContent className="p-4">
-                  <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     {/* Avatar + info */}
-                    <div className="flex items-center gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
                         isAdmin ? "bg-amber-100" : "bg-primary/10"
                       }`}>
@@ -345,9 +345,9 @@ export default function AdminUsers() {
                           {u.full_name?.charAt(0)?.toUpperCase() || u.email?.charAt(0)?.toUpperCase() || "U"}
                         </span>
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-medium text-sm">{u.full_name || "—"}</p>
+                          <p className="font-medium text-sm">{u.full_name || "-"}</p>
                           {u.id === me?.id && (
                             <Badge variant="outline" className="text-xs px-1.5 py-0">You</Badge>
                           )}
@@ -361,22 +361,22 @@ export default function AdminUsers() {
                             <Badge className="text-xs px-1.5 py-0 bg-emerald-600">Upgrade requested</Badge>
                           )}
                         </div>
-                        <p className="text-muted-foreground text-xs">{u.email}</p>
+                        <p className="break-all text-xs text-muted-foreground">{u.email}</p>
                         <p className="text-muted-foreground text-xs">
-                          AI today: {u.ai_identifications_today ?? 0}{u.subscription_plan === "pro" || isInstitutional ? " · unlimited" : " / 3 free"}
+                          AI today: {u.ai_identifications_today ?? 0}{u.subscription_plan === "pro" || isInstitutional ? " / unlimited" : " / 3 free"}
                         </p>
                       </div>
                     </div>
 
                     {/* Controls */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap lg:w-auto lg:items-center lg:justify-end">
                       {u.id !== me?.id && u.is_active ? (
                         <>
                           <Select
                             value={String(u.role).split(".").pop()}
                             onValueChange={(v) => handleRoleChange(u.id, v)}
                           >
-                            <SelectTrigger className="w-36 h-8 text-xs">
+                            <SelectTrigger className="h-8 w-full text-xs sm:w-36">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -388,7 +388,7 @@ export default function AdminUsers() {
                             value={u.subscription_plan || "free"}
                             onValueChange={(v) => handlePlanChange(u.id, v)}
                           >
-                            <SelectTrigger className="w-28 h-8 text-xs">
+                            <SelectTrigger className="h-8 w-full text-xs sm:w-28">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>

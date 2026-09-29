@@ -4,7 +4,7 @@ import { treesApi } from "@/api/trees";
 import { storageApi } from "@/api/storage";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, QrCode, CheckCircle, Loader2, Download, Printer, TreePine } from "lucide-react";
+import { Search, QrCode, Loader2, Download, Printer, TreePine } from "lucide-react";
 import { toast } from "sonner";
 import QRCode from "qrcode";
 
@@ -89,9 +89,9 @@ export default function QRManager() {
     :                  "bg-red-500";
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
-        <h1 className="font-fraunces text-3xl font-semibold flex items-center gap-3">
+        <h1 className="flex items-center gap-3 font-fraunces text-2xl font-semibold sm:text-3xl">
           <QrCode className="w-7 h-7" />
           QR Code Manager
         </h1>
@@ -100,9 +100,9 @@ export default function QRManager() {
         </p>
       </div>
 
-      <div className="flex gap-6" style={{ height: "calc(100vh - 200px)" }}>
+      <div className="flex flex-col gap-4 lg:min-h-[calc(100vh-200px)] lg:flex-row lg:gap-6">
         {/* ── Left: Tree list ── */}
-        <div className="w-80 flex flex-col flex-shrink-0 bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+        <div className="flex max-h-[45vh] w-full flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm lg:max-h-none lg:w-80 lg:flex-shrink-0">
           {/* Search */}
           <div className="p-3 border-b border-border">
             <div className="relative">
@@ -164,9 +164,9 @@ export default function QRManager() {
         </div>
 
         {/* ── Right: QR panel ── */}
-        <div className="flex-1 bg-card border border-border rounded-xl shadow-sm overflow-auto">
+        <div className="min-h-[420px] flex-1 overflow-auto rounded-xl border border-border bg-card shadow-sm">
           {selected ? (
-            <div className="p-8 flex flex-col items-center justify-start h-full">
+            <div className="flex h-full flex-col items-center justify-start p-4 sm:p-6 lg:p-8">
               {/* Tree photo + info */}
               <div className="w-full max-w-sm">
                 {selected.photo_url && (
@@ -179,7 +179,7 @@ export default function QRManager() {
                   </div>
                 )}
 
-                <h2 className="font-fraunces text-2xl font-semibold text-center mb-1">
+                <h2 className="mb-1 text-center font-fraunces text-xl font-semibold sm:text-2xl">
                   {selected.common_name}
                 </h2>
                 {selected.scientific_name && (
@@ -189,7 +189,7 @@ export default function QRManager() {
                 )}
 
                 {/* QR Code */}
-                <div className="flex flex-col items-center gap-4 p-6 bg-white rounded-xl border border-border shadow-sm">
+                <div className="flex flex-col items-center gap-4 rounded-xl border border-border bg-white p-4 shadow-sm sm:p-6">
                   {qrDataUrl ? (
                     <img
                       src={selected.qr_code_url || qrDataUrl}
@@ -210,7 +210,7 @@ export default function QRManager() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-2 mt-4">
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                   <Button
                     variant="outline"
                     className="flex-1 flex items-center gap-2"
@@ -251,7 +251,7 @@ export default function QRManager() {
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
+            <div className="flex h-full items-center justify-center p-6 text-muted-foreground">
               <div className="text-center">
                 <QrCode className="w-16 h-16 mx-auto mb-4 opacity-20" />
                 <p className="font-medium">Select a tree to generate its QR code</p>
