@@ -1,22 +1,21 @@
-from pydantic_settings import BaseSettings
 from typing import Optional
+
+from pydantic import model_validator
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     # App
     APP_NAME: str = "TreeTrace"
-    SECRET_KEY: str = "change-me-in-production-use-a-long-random-string"
+    # Runtime secrets must come from the environment. TESTING is only for the
+    # isolated in-memory test suite and must never be enabled in deployment.
+    TESTING: bool = False
+    SECRET_KEY: Optional[str] = None
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
     # Frontend URL (used in email links)
     FRONTEND_URL: str = "http://localhost:5173"
-
-    # Database — MySQL
-    #DATABASE_URL: str = "mysql+pymysql://root:password@localhost:3306/treetrace"
-
-    #Database - Aiven
-    #DATABASE_URL: str = ""
 
     # Database
     DATABASE_URL: str = ""
@@ -48,8 +47,11 @@ class Settings(BaseSettings):
     # Anthropic — AI identification
     ANTHROPIC_API_KEY: str = ""
 
-    # Pl@ntNet — Free botanical identification API (500 req/day free)
-    PLANTNET_API_KEY: str = "2b10i4RHoL4hnlBaJ6f7jyVb"
+    # Optional local YOLO segmentation for DBH estimation
+    ENABLE_YOLO_DBH: bool = False
+
+    # Pl@ntNet — provided by the environment when enabled.
+    PLANTNET_API_KEY: str = ""
 
     # Resend — transactional email (free: 3,000/month)
     # Sign up at https://resend.com → API Keys → Create Key
@@ -57,6 +59,12 @@ class Settings(BaseSettings):
     # Must be a verified sender domain in Resend (or use onboarding@resend.dev for testing)
     EMAIL_FROM: str = "TreeTrace <onboarding@resend.dev>"
     EMAIL_FROM_NAME: str = "TreeTrace"
+
+    @model_validator(mode="after")
+    def require_secret_key_outside_tests(self) -> "Settings":
+        if not self.TESTING and not self.SECRET_KEY:
+            raise ValueError("SECRET_KEY must be set in the environment.")
+        return self
 
     class Config:
         env_file = ".env"

@@ -162,7 +162,8 @@ class ApiService {
           if (photoPath != null &&
               photoPath.isNotEmpty &&
               File(photoPath).existsSync()) {
-            payload['photo_url'] = await uploadPhoto(File(photoPath));
+            payload['photo_url'] =
+                await uploadPhoto(File(photoPath), purpose: 'tree_photo');
           }
           await createTree(payload);
         } else if (item['type'] == 'CREATE_HEALTH_LOG') {
@@ -171,14 +172,21 @@ class ApiService {
           if (photoPath != null &&
               photoPath.isNotEmpty &&
               File(photoPath).existsSync()) {
-            payload['photo_url'] = await uploadPhoto(File(photoPath)) ?? '';
+            payload['photo_url'] = await uploadPhoto(
+                  File(photoPath),
+                  purpose: 'unknown_species',
+                ) ??
+                '';
           }
           await submitUnknownSpecies(payload);
         } else if (item['type'] == 'CREATE_PLANTING_RECOMMENDATION') {
           if (photoPath != null &&
               photoPath.isNotEmpty &&
               File(photoPath).existsSync()) {
-            payload['photo_url'] = await uploadPhoto(File(photoPath));
+            payload['photo_url'] = await uploadPhoto(
+              File(photoPath),
+              purpose: 'planting_submission',
+            );
           }
           await createPlantingRecommendation(payload);
         }
@@ -315,7 +323,7 @@ class ApiService {
 
   Future<Map<String, dynamic>> updateTree(
       int id, Map<String, dynamic> data) async {
-    final res = await _dio.put('/trees/$id', data: data);
+    final res = await _dio.patch('/trees/$id', data: data);
     return res.data;
   }
 
@@ -324,9 +332,14 @@ class ApiService {
   }
 
   // ── Health Logs ───────────────────────────────────────────────────────────
-  Future<List<dynamic>> getHealthLogs({int limit = 50}) async {
-    final res =
-        await _dio.get('/health-logs/', queryParameters: {'limit': limit});
+  Future<List<dynamic>> getHealthLogs({int limit = 50, int? treeId}) async {
+    final res = await _dio.get(
+      '/health-logs/',
+      queryParameters: {
+        'limit': limit,
+        if (treeId != null) 'tree_id': treeId,
+      },
+    );
     return res.data;
   }
 
@@ -412,11 +425,24 @@ class ApiService {
   }
 
   // ── Upload photo ──────────────────────────────────────────────────────────
-  Future<String?> uploadPhoto(File file) async {
+  DioMediaType _imageContentType(File file) {
+    final extension = file.path.split('.').last.toLowerCase();
+    return switch (extension) {
+      'jpg' || 'jpeg' => DioMediaType('image', 'jpeg'),
+      'png' => DioMediaType('image', 'png'),
+      'webp' => DioMediaType('image', 'webp'),
+      'gif' => DioMediaType('image', 'gif'),
+      _ => DioMediaType('application', 'octet-stream'),
+    };
+  }
+
+  Future<String?> uploadPhoto(File file, {required String purpose}) async {
     try {
       final formData = FormData.fromMap({
         'file': await MultipartFile.fromFile(file.path,
-            filename: file.path.split('/').last),
+            filename: file.path.split('/').last,
+            contentType: _imageContentType(file)),
+        'purpose': purpose,
       });
       final res = await _dio.post(
         '/storage/upload-photo',
@@ -435,7 +461,8 @@ class ApiService {
     return res.data;
   }
 
-  Future<Map<String, dynamic>> getPlantingSuggestions({String? barangay}) async {
+  Future<Map<String, dynamic>> getPlantingSuggestions(
+      {String? barangay}) async {
     final res = await _dio.get(
       '/planting/suggestions',
       queryParameters: {

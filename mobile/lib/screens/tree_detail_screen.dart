@@ -20,33 +20,40 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
   bool _loading = true;
 
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   Future<void> _load() async {
     try {
-      final t = await api.getPublicTree(widget.treeId.toString());
+      final t = await api.getTree(widget.treeId);
       List<dynamic> l = [];
       try {
-        l = await api.getTreeHealthLogs(widget.treeId);
+        l = await api.getHealthLogs(treeId: widget.treeId);
       } catch (_) {}
       setState(() {
         _tree = TreeModel.fromJson(t);
         _logs = l.map((j) => HealthLogModel.fromJson(j)).toList();
         _loading = false;
       });
-    } catch (_) { setState(() => _loading = false); }
+    } catch (_) {
+      setState(() => _loading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return Scaffold(
-      appBar: AppBar(),
-      body: const Center(child: CircularProgressIndicator(color: kPrimary)),
-    );
-    if (_tree == null) return Scaffold(
-      appBar: AppBar(),
-      body: const EmptyState(message: 'Tree not found'),
-    );
+    if (_loading)
+      return Scaffold(
+        appBar: AppBar(),
+        body: const Center(child: CircularProgressIndicator(color: kPrimary)),
+      );
+    if (_tree == null)
+      return Scaffold(
+        appBar: AppBar(),
+        body: const EmptyState(message: 'Tree not found'),
+      );
 
     final tree = _tree!;
     final role = context.read<AuthProvider>().user?.role;
@@ -63,17 +70,21 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
             titlePadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
             title: Text(tree.commonName,
                 style: const TextStyle(
-                    color: Colors.white, fontSize: 16,
+                    color: Colors.white,
+                    fontSize: 16,
                     fontWeight: FontWeight.w700)),
             background: tree.photoUrl != null
                 ? Stack(fit: StackFit.expand, children: [
                     Image.network(tree.photoUrl!, fit: BoxFit.cover),
-                    Container(decoration: BoxDecoration(
+                    Container(
+                        decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [Colors.transparent,
-                          Colors.black.withOpacity(0.65)],
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.65)
+                        ],
                       ),
                     )),
                   ])
@@ -81,32 +92,37 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
           ),
         ),
 
-        SliverToBoxAdapter(child: Padding(
+        SliverToBoxAdapter(
+            child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Name + health badge
               Row(children: [
-                Expanded(child: Column(
+                Expanded(
+                    child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(tree.commonName, style: GoogleFonts.inter(
-                        fontSize: 22, fontWeight: FontWeight.w800,
-                        color: kForeground)),
+                    Text(tree.commonName,
+                        style: GoogleFonts.inter(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: kForeground)),
                     if (tree.scientificName != null)
                       Text(tree.scientificName!,
                           style: const TextStyle(
-                              fontSize: 14, color: kMutedFg,
+                              fontSize: 14,
+                              color: kMutedFg,
                               fontStyle: FontStyle.italic)),
                     Text('ID: ${tree.id}',
-                        style: const TextStyle(
-                            fontSize: 12, color: kMutedFg)),
+                        style: const TextStyle(fontSize: 12, color: kMutedFg)),
                   ],
                 )),
                 HealthBadge(tree.healthStatus),
               ]),
-              if (tree.isProtected || const ['CR', 'EN', 'VU'].contains(tree.statusCode)) ...[
+              if (tree.isProtected ||
+                  const ['CR', 'EN', 'VU'].contains(tree.statusCode)) ...[
                 const SizedBox(height: 14),
                 _ConservationWarning(tree: tree),
               ],
@@ -125,20 +141,30 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
                   border: Border.all(color: kBorder),
                 ),
                 child: Column(children: [
-                  _infoRow(Icons.location_on_outlined, 'Barangay',
-                      tree.barangay),
-                  _infoRow(Icons.location_city_outlined, 'City',
-                      tree.city),
-                  _infoRow(Icons.straighten, 'DBH',
+                  _infoRow(
+                      Icons.location_on_outlined, 'Barangay', tree.barangay),
+                  _infoRow(Icons.location_city_outlined, 'City', tree.city),
+                  _infoRow(
+                      Icons.straighten,
+                      'DBH',
                       tree.dbhCm != null
-                          ? '${tree.dbhCm!.toStringAsFixed(1)} cm' : null),
-                  _infoRow(Icons.height, 'Height',
+                          ? '${tree.dbhCm!.toStringAsFixed(1)} cm'
+                          : null),
+                  _infoRow(
+                      Icons.height,
+                      'Height',
                       tree.heightM != null
-                          ? '${tree.heightM!.toStringAsFixed(1)} m' : null),
-                  _infoRow(Icons.eco_outlined, 'Carbon Stock',
+                          ? '${tree.heightM!.toStringAsFixed(1)} m'
+                          : null),
+                  _infoRow(
+                      Icons.eco_outlined,
+                      'Carbon Stock',
                       tree.carbonKg != null
-                          ? '${tree.carbonKg!.toStringAsFixed(2)} kg' : null),
-                  _infoRow(Icons.gps_fixed, 'GPS',
+                          ? '${tree.carbonKg!.toStringAsFixed(2)} kg'
+                          : null),
+                  _infoRow(
+                      Icons.gps_fixed,
+                      'GPS',
                       tree.lat != null
                           ? '${tree.lat!.toStringAsFixed(5)}, ${tree.lng!.toStringAsFixed(5)}'
                           : null),
@@ -153,8 +179,7 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
                       ),
                       child: Text(tree.notes!,
                           style: const TextStyle(
-                              fontSize: 13, color: kForeground,
-                              height: 1.5)),
+                              fontSize: 13, color: kForeground, height: 1.5)),
                     ),
                   ],
                 ]),
@@ -162,81 +187,86 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
 
               // Health logs
               SectionHeader('Health History',
-                action: canManage
-                    ? OutlinedButton.icon(
-                        onPressed: _showAddHealthLogSheet,
-                        icon: const Icon(Icons.add_rounded, size: 15),
-                        label: const Text('Add'),
-                        style: OutlinedButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          foregroundColor: kPrimary,
-                          side: const BorderSide(color: kBorder),
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                        ),
-                      )
-                    : Text('${_logs.length} records',
-                        style: const TextStyle(fontSize: 12, color: kMutedFg))),
+                  action: canManage
+                      ? OutlinedButton.icon(
+                          onPressed: _showAddHealthLogSheet,
+                          icon: const Icon(Icons.add_rounded, size: 15),
+                          label: const Text('Add'),
+                          style: OutlinedButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            foregroundColor: kPrimary,
+                            side: const BorderSide(color: kBorder),
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                          ),
+                        )
+                      : Text('${_logs.length} records',
+                          style:
+                              const TextStyle(fontSize: 12, color: kMutedFg))),
 
               if (_logs.isEmpty)
-                const EmptyState(message: 'No health logs yet',
-                    icon: Icons.history_outlined)
+                const EmptyState(
+                    message: 'No health logs yet', icon: Icons.history_outlined)
               else
                 ..._logs.map((log) => Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: kCard,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: kBorder),
-                  ),
-                  child: Row(children: [
-                    Container(
-                      width: 38, height: 38,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: healthColor(log.condition).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
+                        color: kCard,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: kBorder),
                       ),
-                      child: Icon(
-                        log.condition == 'Healthy'
-                            ? Icons.check_circle_outline
-                            : log.condition == 'Fair'
-                                ? Icons.warning_amber_outlined
-                                : Icons.cancel_outlined,
-                        color: healthColor(log.condition), size: 18),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(children: [
-                          HealthBadge(log.condition, small: true),
-                          const Spacer(),
-                          Text(log.assessedDate,
-                              style: const TextStyle(
-                                  fontSize: 11, color: kMutedFg)),
-                        ]),
-                        if (log.notes != null && log.notes!.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(log.notes!,
-                              style: const TextStyle(
-                                  fontSize: 12, color: kMutedFg)),
-                        ],
-                        if (log.dbhCm != null)
-                          Text('DBH: ${log.dbhCm!.toStringAsFixed(1)} cm'
-                              '${log.heightM != null ? '  ·  H: ${log.heightM!.toStringAsFixed(1)} m' : ''}',
-                              style: const TextStyle(
-                                  fontSize: 11, color: kMutedFg)),
-                      ],
+                      child: Row(children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: healthColor(log.condition).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                              log.condition == 'Healthy'
+                                  ? Icons.check_circle_outline
+                                  : log.condition == 'Fair'
+                                      ? Icons.warning_amber_outlined
+                                      : Icons.cancel_outlined,
+                              color: healthColor(log.condition),
+                              size: 18),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                            child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(children: [
+                              HealthBadge(log.condition, small: true),
+                              const Spacer(),
+                              Text(log.assessedDate,
+                                  style: const TextStyle(
+                                      fontSize: 11, color: kMutedFg)),
+                            ]),
+                            if (log.notes != null && log.notes!.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(log.notes!,
+                                  style: const TextStyle(
+                                      fontSize: 12, color: kMutedFg)),
+                            ],
+                            if (log.dbhCm != null)
+                              Text(
+                                  'DBH: ${log.dbhCm!.toStringAsFixed(1)} cm'
+                                  '${log.heightM != null ? '  ·  H: ${log.heightM!.toStringAsFixed(1)} m' : ''}',
+                                  style: const TextStyle(
+                                      fontSize: 11, color: kMutedFg)),
+                          ],
+                        )),
+                        if (canManage)
+                          IconButton(
+                            tooltip: 'Delete log',
+                            icon: const Icon(Icons.delete_outline_rounded,
+                                color: kPoor),
+                            onPressed: () => _deleteHealthLog(log.id),
+                          ),
+                      ]),
                     )),
-                    if (canManage)
-                      IconButton(
-                        tooltip: 'Delete log',
-                        icon: const Icon(Icons.delete_outline_rounded,
-                            color: kPoor),
-                        onPressed: () => _deleteHealthLog(log.id),
-                      ),
-                  ]),
-                )),
               const SizedBox(height: 24),
             ],
           ),
@@ -293,6 +323,10 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
     final heightCtrl =
         TextEditingController(text: tree.heightM?.toString() ?? '');
     final notesCtrl = TextEditingController();
+    final measurementErrors = ValueNotifier<Map<String, String?>>({
+      'dbh': null,
+      'height': null,
+    });
     var queuedOffline = false;
 
     final saved = await showModalBottomSheet<bool>(
@@ -334,24 +368,32 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
                   },
                 ),
                 const SizedBox(height: 10),
-                Row(children: [
-                  Expanded(
-                    child: TextField(
-                      controller: dbhCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'DBH (cm)'),
+                ValueListenableBuilder<Map<String, String?>>(
+                  valueListenable: measurementErrors,
+                  builder: (_, errors, __) => Row(children: [
+                    Expanded(
+                      child: TextField(
+                        controller: dbhCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: 'DBH (cm)',
+                          errorText: errors['dbh'],
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      controller: heightCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration:
-                          const InputDecoration(labelText: 'Height (m)'),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextField(
+                        controller: heightCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: 'Height (m)',
+                          errorText: errors['height'],
+                        ),
+                      ),
                     ),
-                  ),
-                ]),
+                  ]),
+                ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: notesCtrl,
@@ -364,20 +406,40 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
                 const SizedBox(height: 16),
                 ElevatedButton.icon(
                   onPressed: () async {
+                    final dbhText = dbhCtrl.text.trim();
+                    final heightText = heightCtrl.text.trim();
+                    final dbhCm = double.tryParse(dbhText);
+                    final heightM = double.tryParse(heightText);
+                    final dbhError = dbhText.isEmpty
+                        ? null
+                        : dbhCm == null || !dbhCm.isFinite || dbhCm <= 0
+                            ? 'Enter a positive number.'
+                            : null;
+                    final heightError = heightText.isEmpty
+                        ? null
+                        : heightM == null || !heightM.isFinite || heightM <= 0
+                            ? 'Enter a positive number.'
+                            : null;
+                    measurementErrors.value = {
+                      'dbh': dbhError,
+                      'height': heightError,
+                    };
+                    if (dbhError != null || heightError != null) return;
+
+                    final now = DateTime.now();
+                    final date =
+                        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+                    final payload = <String, dynamic>{
+                      'tree_id': tree.id,
+                      'condition': conditionCtrl.value,
+                      'assessed_date': date,
+                      'dbh_cm': dbhCm,
+                      'height_m': heightM,
+                      'notes': notesCtrl.text.trim().isEmpty
+                          ? null
+                          : notesCtrl.text.trim(),
+                    };
                     try {
-                      final now = DateTime.now();
-                      final date =
-                          '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-                      final payload = <String, dynamic>{
-                        'tree_id': tree.id,
-                        'condition': conditionCtrl.value,
-                        'assessed_date': date,
-                        'dbh_cm': double.tryParse(dbhCtrl.text.trim()),
-                        'height_m': double.tryParse(heightCtrl.text.trim()),
-                        'notes': notesCtrl.text.trim().isEmpty
-                            ? null
-                            : notesCtrl.text.trim(),
-                      };
                       if (await api.isOnline()) {
                         await api.createHealthLog(payload);
                       } else {
@@ -396,21 +458,9 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
                           errorText.contains('failed host lookup') ||
                           errorText.contains('socketexception');
                       if (shouldQueue) {
-                        final now = DateTime.now();
-                        final date =
-                            '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
                         await api.queueOfflineAction(
                           'CREATE_HEALTH_LOG',
-                          <String, dynamic>{
-                            'tree_id': tree.id,
-                            'condition': conditionCtrl.value,
-                            'assessed_date': date,
-                            'dbh_cm': double.tryParse(dbhCtrl.text.trim()),
-                            'height_m': double.tryParse(heightCtrl.text.trim()),
-                            'notes': notesCtrl.text.trim().isEmpty
-                                ? null
-                                : notesCtrl.text.trim(),
-                          },
+                          payload,
                         );
                         queuedOffline = true;
                         if (sheetContext.mounted) {
@@ -436,6 +486,12 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
       ),
     );
 
+    conditionCtrl.dispose();
+    dbhCtrl.dispose();
+    heightCtrl.dispose();
+    notesCtrl.dispose();
+    measurementErrors.dispose();
+
     if (saved == true) {
       if (!queuedOffline) {
         await _load();
@@ -454,6 +510,8 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
   Future<void> _showEditTreeSheet() async {
     final tree = _tree;
     if (tree == null) return;
+    final originalDbhCm = tree.dbhCm;
+    final originalHeightM = tree.heightM;
     final nameCtrl = TextEditingController(text: tree.commonName);
     final sciCtrl = TextEditingController(text: tree.scientificName ?? '');
     final barangayCtrl = TextEditingController(text: tree.barangay ?? '');
@@ -464,111 +522,152 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
     final lngCtrl = TextEditingController(text: tree.lng?.toString() ?? '');
     final notesCtrl = TextEditingController(text: tree.notes ?? '');
     final healthCtrl = ValueNotifier<String>(tree.healthStatus);
+    final measurementErrors = ValueNotifier<Map<String, String?>>({
+      'dbh': null,
+      'height': null,
+    });
 
-    final saved = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          16,
-          16,
-          16,
-          MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+    bool? saved;
+    try {
+      saved = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            child: ValueListenableBuilder<String>(
-              valueListenable: healthCtrl,
-              builder: (_, health, __) => Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text('Edit Tree',
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: nameCtrl,
-                    decoration:
-                        const InputDecoration(labelText: 'Common Name'),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: sciCtrl,
-                    decoration:
-                        const InputDecoration(labelText: 'Scientific Name'),
-                  ),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<String>(
-                    value: health,
-                    decoration: const InputDecoration(labelText: 'Health'),
-                    items: ['Healthy', 'Fair', 'Poor']
-                        .map((item) =>
-                            DropdownMenuItem(value: item, child: Text(item)))
-                        .toList(),
-                    onChanged: (value) {
-                      if (value != null) healthCtrl.value = value;
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: barangayCtrl,
-                    decoration: const InputDecoration(labelText: 'Barangay'),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(children: [
-                    Expanded(
-                      child: TextField(
-                        controller: dbhCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'DBH'),
-                      ),
+        builder: (sheetContext) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+          ),
+          child: SafeArea(
+            child: SingleChildScrollView(
+              child: ValueListenableBuilder<String>(
+                valueListenable: healthCtrl,
+                builder: (_, health, __) => Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text('Edit Tree',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: nameCtrl,
+                      decoration:
+                          const InputDecoration(labelText: 'Common Name'),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: heightCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Height'),
-                      ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: sciCtrl,
+                      decoration:
+                          const InputDecoration(labelText: 'Scientific Name'),
                     ),
-                  ]),
-                  const SizedBox(height: 10),
-                  Row(children: [
-                    Expanded(
-                      child: TextField(
-                        controller: latCtrl,
-                        keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true, signed: true),
-                        decoration: const InputDecoration(labelText: 'Latitude'),
-                      ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      value: health,
+                      decoration: const InputDecoration(labelText: 'Health'),
+                      items: ['Healthy', 'Fair', 'Poor']
+                          .map((item) =>
+                              DropdownMenuItem(value: item, child: Text(item)))
+                          .toList(),
+                      onChanged: (value) {
+                        if (value != null) healthCtrl.value = value;
+                      },
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: lngCtrl,
-                        keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true, signed: true),
-                        decoration:
-                            const InputDecoration(labelText: 'Longitude'),
-                      ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: barangayCtrl,
+                      decoration: const InputDecoration(labelText: 'Barangay'),
                     ),
-                  ]),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: notesCtrl,
-                    maxLines: 3,
-                    decoration: const InputDecoration(labelText: 'Notes'),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: () async {
-                      if (nameCtrl.text.trim().isEmpty) return;
-                      try {
-                        await api.updateTree(tree.id, {
+                    const SizedBox(height: 10),
+                    ValueListenableBuilder<Map<String, String?>>(
+                      valueListenable: measurementErrors,
+                      builder: (_, errors, __) => Row(children: [
+                        Expanded(
+                          child: TextField(
+                            controller: dbhCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: 'DBH',
+                              errorText: errors['dbh'],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: heightCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: 'Height',
+                              errorText: errors['height'],
+                            ),
+                          ),
+                        ),
+                      ]),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Expanded(
+                        child: TextField(
+                          controller: latCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true, signed: true),
+                          decoration:
+                              const InputDecoration(labelText: 'Latitude'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: lngCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true, signed: true),
+                          decoration:
+                              const InputDecoration(labelText: 'Longitude'),
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: notesCtrl,
+                      maxLines: 3,
+                      decoration: const InputDecoration(labelText: 'Notes'),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        if (nameCtrl.text.trim().isEmpty) return;
+                        final dbhText = dbhCtrl.text.trim();
+                        final heightText = heightCtrl.text.trim();
+                        final dbhCm = double.tryParse(dbhText);
+                        final heightM = double.tryParse(heightText);
+                        final dbhError = dbhText.isEmpty
+                            ? originalDbhCm != null
+                                ? 'Restore the existing value or enter a new positive measurement.'
+                                : null
+                            : dbhCm == null || !dbhCm.isFinite || dbhCm <= 0
+                                ? 'Enter a positive number.'
+                                : null;
+                        final heightError = heightText.isEmpty
+                            ? originalHeightM != null
+                                ? 'Restore the existing value or enter a new positive measurement.'
+                                : null
+                            : heightM == null ||
+                                    !heightM.isFinite ||
+                                    heightM <= 0
+                                ? 'Enter a positive number.'
+                                : null;
+                        measurementErrors.value = {
+                          'dbh': dbhError,
+                          'height': heightError,
+                        };
+                        if (dbhError != null || heightError != null) return;
+
+                        final payload = <String, dynamic>{
                           'common_name': nameCtrl.text.trim(),
                           'scientific_name': sciCtrl.text.trim().isEmpty
                               ? null
@@ -577,36 +676,54 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
                           'barangay': barangayCtrl.text.trim().isEmpty
                               ? null
                               : barangayCtrl.text.trim(),
-                          'dbh_cm': double.tryParse(dbhCtrl.text.trim()),
-                          'height_m': double.tryParse(heightCtrl.text.trim()),
                           'lat': double.tryParse(latCtrl.text.trim()),
                           'lng': double.tryParse(lngCtrl.text.trim()),
                           'notes': notesCtrl.text.trim().isEmpty
                               ? null
                               : notesCtrl.text.trim(),
-                        });
-                        if (sheetContext.mounted) {
-                          Navigator.pop(sheetContext, true);
+                        };
+                        if (dbhCm != null && dbhCm != originalDbhCm) {
+                          payload['dbh_cm'] = dbhCm;
                         }
-                      } catch (e) {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text('Could not update tree: $e'),
-                            backgroundColor: kPoor,
-                          ));
+                        if (heightM != null && heightM != originalHeightM) {
+                          payload['height_m'] = heightM;
                         }
-                      }
-                    },
-                    icon: const Icon(Icons.save_outlined),
-                    label: const Text('Save Changes'),
-                  ),
-                ],
+                        try {
+                          await api.updateTree(tree.id, payload);
+                          if (sheetContext.mounted) {
+                            Navigator.pop(sheetContext, true);
+                          }
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content: Text('Could not update tree: $e'),
+                              backgroundColor: kPoor,
+                            ));
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.save_outlined),
+                      label: const Text('Save Changes'),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
-      ),
-    );
+      );
+    } finally {
+      nameCtrl.dispose();
+      sciCtrl.dispose();
+      barangayCtrl.dispose();
+      dbhCtrl.dispose();
+      heightCtrl.dispose();
+      latCtrl.dispose();
+      lngCtrl.dispose();
+      notesCtrl.dispose();
+      healthCtrl.dispose();
+      measurementErrors.dispose();
+    }
 
     if (saved == true) {
       await _load();
@@ -700,11 +817,13 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
       child: Row(children: [
         Icon(icon, size: 15, color: kMutedFg),
         const SizedBox(width: 10),
-        Text(label, style: const TextStyle(
-            fontSize: 13, color: kMutedFg, fontWeight: FontWeight.w500)),
+        Text(label,
+            style: const TextStyle(
+                fontSize: 13, color: kMutedFg, fontWeight: FontWeight.w500)),
         const Spacer(),
-        Text(value, style: const TextStyle(
-            fontSize: 13, fontWeight: FontWeight.w600, color: kForeground)),
+        Text(value,
+            style: const TextStyle(
+                fontSize: 13, fontWeight: FontWeight.w600, color: kForeground)),
       ]),
     );
   }

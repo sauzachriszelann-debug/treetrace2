@@ -4,13 +4,13 @@ from typing import List
 from app.db.database import get_db
 from app.models.tree import Tree
 from app.models.health_log import HealthLog
-from app.schemas.tree import TreeOut
-from app.schemas.health_log import HealthLogOut
+from app.schemas.tree import PublicTreeOut
+from app.schemas.health_log import PublicHealthLogOut
 
 router = APIRouter()
 
 
-@router.get("/tree/{tree_id}", response_model=TreeOut)
+@router.get("/tree/{tree_id}", response_model=PublicTreeOut)
 def public_get_tree(tree_id: str, db: Session = Depends(get_db)):
     """
     Public endpoint — no auth required.
@@ -30,7 +30,7 @@ def public_get_tree(tree_id: str, db: Session = Depends(get_db)):
     return tree
 
 
-@router.get("/tree/{tree_id}/health-logs", response_model=List[HealthLogOut])
+@router.get("/tree/{tree_id}/health-logs", response_model=List[PublicHealthLogOut])
 def public_get_tree_health_logs(tree_id: str, db: Session = Depends(get_db)):
     """
     Public health log history for a tree. No auth required.
@@ -47,29 +47,16 @@ def public_get_tree_health_logs(tree_id: str, db: Session = Depends(get_db)):
         .order_by(HealthLog.created_at.desc())
         .all()
     )
-    result = []
-    for log in logs:
-        result.append({
-            "id": log.id,
-            "tree_id": log.tree_id,
+    return [
+        {
             "condition": log.condition,
-            "notes": log.notes,
             "assessed_date": log.assessed_date,
-            "dbh_cm": log.dbh_cm,
-            "height_m": log.height_m,
-            "photo_url": log.photo_url,
-            "assessed_by_id": log.assessed_by_id,
-            "created_at": log.created_at,
-            "tree_common_name": log.tree.common_name if log.tree else None,
-            "assessed_by": (
-                log.assessor.full_name or log.assessor.email
-                if log.assessor else None
-            ),
-        })
-    return result
+        }
+        for log in logs
+    ]
 
 
-@router.get("/trees", response_model=List[TreeOut])
+@router.get("/trees", response_model=List[PublicTreeOut])
 def public_list_trees(db: Session = Depends(get_db)):
     """
     Public tree listing — GPS-tagged trees only (for map view).
@@ -83,7 +70,7 @@ def public_list_trees(db: Session = Depends(get_db)):
     )
 
 
-@router.get("/trees/all", response_model=List[TreeOut])
+@router.get("/trees/all", response_model=List[PublicTreeOut])
 def public_list_all_trees(db: Session = Depends(get_db)):
     """
     Public listing of ALL trees (including those without GPS).

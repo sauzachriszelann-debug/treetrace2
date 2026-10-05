@@ -89,6 +89,7 @@ export default function TreeForm({
   loading,
   submitLabel = "Save Tree Record",
   savingLabel = "Saving…",
+  photoUploadPurpose = "tree_photo",
 }) {
   const navigate = useNavigate();
   const fileRef = useRef(null);
@@ -121,6 +122,14 @@ export default function TreeForm({
   const [dbhResult, setDbhResult] = useState(null);
   const [circumferenceCm, setCircumferenceCm] = useState("");
   const [aiConservation, setAiConservation] = useState(null);
+  const originalMeasurements = useRef({
+    dbh_cm: initial.dbh_cm,
+    height_m: initial.height_m,
+  });
+  const [measurementErrors, setMeasurementErrors] = useState({
+    dbh_cm: null,
+    height_m: null,
+  });
 
   useEffect(() => {
     const { biomass, carbon } = calcBiomassCarbon(
@@ -130,7 +139,41 @@ export default function TreeForm({
     setComputed({ biomass, carbon });
   }, [form.dbh_cm, form.height_m]);
 
-  const set = (key, val) => setForm((f) => ({ ...f, [key]: val }));
+  const set = (key, val) => {
+    setForm((f) => ({ ...f, [key]: val }));
+    if (key === "dbh_cm" || key === "height_m") {
+      setMeasurementErrors((errors) => ({ ...errors, [key]: null }));
+    }
+  };
+
+  const getMeasurementUpdate = (key, label) => {
+    const value = String(form[key] ?? "").trim();
+    const originalValue = originalMeasurements.current[key];
+    const hasOriginalValue = originalValue !== null &&
+      originalValue !== undefined &&
+      String(originalValue).trim() !== "";
+
+    if (!value) {
+      return {
+        value: undefined,
+        error: hasOriginalValue
+          ? `Restore the existing ${label} or enter a new positive measurement.`
+          : null,
+      };
+    }
+
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return { value: undefined, error: `Enter a positive ${label}.` };
+    }
+
+    const originalNumber = Number(originalValue);
+    const isUnchanged = hasOriginalValue &&
+      Number.isFinite(originalNumber) &&
+      parsed === originalNumber;
+
+    return { value: isUnchanged ? undefined : parsed, error: null };
+  };
 
   const calculateDbhFromCircumference = (value) => {
     setCircumferenceCm(value);
@@ -364,12 +407,25 @@ export default function TreeForm({
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    const dbhUpdate = getMeasurementUpdate("dbh_cm", "DBH measurement");
+    const heightUpdate = getMeasurementUpdate("height_m", "height measurement");
+    const nextMeasurementErrors = {
+      dbh_cm: dbhUpdate.error,
+      height_m: heightUpdate.error,
+    };
+    setMeasurementErrors(nextMeasurementErrors);
+
+    if (dbhUpdate.error || heightUpdate.error) return;
+
     // Upload photo to Supabase if a new file was selected
     let finalPhotoUrl = form.photo_url;
     if (photoFile && !form.photo_url) {
       setPhotoLoading(true);
       try {
-        const { file_url } = await storageApi.uploadPhoto(photoFile);
+        const { file_url } = await storageApi.uploadPhoto(
+          photoFile,
+          photoUploadPurpose,
+        );
         finalPhotoUrl = file_url;
       } catch {
         toast.error("Photo upload failed. Saving without photo.");
@@ -378,16 +434,21 @@ export default function TreeForm({
       }
     }
 
-    const payload = {
-      ...form,
+    const payload = { ...form };
+    delete payload.dbh_cm;
+    delete payload.height_m;
+    delete payload.biomass_kg;
+    delete payload.carbon_kg;
+
+    Object.assign(payload, {
       photo_url: finalPhotoUrl || undefined,
-      dbh_cm: form.dbh_cm ? parseFloat(form.dbh_cm) : undefined,
-      height_m: form.height_m ? parseFloat(form.height_m) : undefined,
       lat: form.lat ? parseFloat(form.lat) : undefined,
       lng: form.lng ? parseFloat(form.lng) : undefined,
-      biomass_kg: computed.biomass || undefined,
-      carbon_kg: computed.carbon || undefined,
-    };
+    });
+
+    if (dbhUpdate.value !== undefined) payload.dbh_cm = dbhUpdate.value;
+    if (heightUpdate.value !== undefined) payload.height_m = heightUpdate.value;
+
     onSubmit(payload);
   };
 
@@ -645,7 +706,14 @@ export default function TreeForm({
             value={form.dbh_cm}
             onChange={(e) => set("dbh_cm", e.target.value)}
             placeholder="Diameter at Breast Height"
+            aria-invalid={Boolean(measurementErrors.dbh_cm)}
+            aria-describedby={measurementErrors.dbh_cm ? "dbh_cm_error" : undefined}
           />
+          {measurementErrors.dbh_cm && (
+            <p id="dbh_cm_error" className="text-sm text-destructive" role="alert">
+              {measurementErrors.dbh_cm}
+            </p>
+          )}
         </div>
         <div className="space-y-2">
           <Label htmlFor="height_m">Height (m)</Label>
@@ -656,7 +724,14 @@ export default function TreeForm({
             value={form.height_m}
             onChange={(e) => set("height_m", e.target.value)}
             placeholder="Estimated height"
+            aria-invalid={Boolean(measurementErrors.height_m)}
+            aria-describedby={measurementErrors.height_m ? "height_m_error" : undefined}
           />
+          {measurementErrors.height_m && (
+            <p id="height_m_error" className="text-sm text-destructive" role="alert">
+              {measurementErrors.height_m}
+            </p>
+          )}
         </div>
       </div>
 

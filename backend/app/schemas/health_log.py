@@ -1,6 +1,8 @@
-from pydantic import BaseModel
+import math
 from typing import Optional
 from datetime import date, datetime
+
+from pydantic import BaseModel, field_validator
 
 
 class HealthLogCreate(BaseModel):
@@ -11,6 +13,15 @@ class HealthLogCreate(BaseModel):
     dbh_cm: Optional[float] = None
     height_m: Optional[float] = None
     photo_url: Optional[str] = None
+
+    @field_validator("dbh_cm", "height_m")
+    @classmethod
+    def validate_measurement(cls, value: Optional[float]) -> Optional[float]:
+        if value is None:
+            return value
+        if not math.isfinite(value) or value <= 0:
+            raise ValueError("must be a finite positive number")
+        return value
 
 
 class HealthLogOut(BaseModel):
@@ -31,3 +42,8 @@ class HealthLogOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class PublicHealthLogOut(BaseModel):
+    condition: str
+    assessed_date: date

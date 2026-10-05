@@ -333,7 +333,10 @@ class _PlantingFormSheetState extends State<_PlantingFormSheet> {
     try {
       if (await api.isOnline()) {
         if (_photo != null)
-          payload['photo_url'] = await api.uploadPhoto(_photo!);
+          payload['photo_url'] = await api.uploadPhoto(
+            _photo!,
+            purpose: 'planting_submission',
+          );
         await api.createPlantingRecommendation(payload);
       } else {
         await api.queueOfflineAction(
@@ -752,18 +755,14 @@ class _AreaReason extends StatelessWidget {
 }
 
 List<String> _imageUrlsFor(Map<String, dynamic> item) {
-  final photoUrl = (item['photo_url'] ?? item['photoUrl'] ?? '')
-      .toString()
-      .trim();
+  final photoUrl =
+      (item['photo_url'] ?? item['photoUrl'] ?? '').toString().trim();
   final provided = item['image_urls'];
   if (provided is List) {
     final urls = [
       if (photoUrl.isNotEmpty && photoUrl != 'null') photoUrl,
       ...provided.map((e) => e.toString()),
-    ]
-        .where((e) => e.trim().isNotEmpty)
-        .where((e) => e != 'null')
-        .toList();
+    ].where((e) => e.trim().isNotEmpty).where((e) => e != 'null').toList();
     if (urls.isNotEmpty) return urls;
   }
   final name = (item['species_name'] ?? item['common_name'] ?? 'tree seedling')

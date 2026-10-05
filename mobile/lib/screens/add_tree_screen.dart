@@ -247,14 +247,16 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
       }
     } catch (_) {}
 
-    final onlineLocation =
-        phoneLocation?.barangay == null ? await _lookupOnlineLocation(lat, lng) : null;
+    final onlineLocation = phoneLocation?.barangay == null
+        ? await _lookupOnlineLocation(lat, lng)
+        : null;
     final barangay = phoneLocation?.barangay ??
         onlineLocation?.barangay ??
         _nearestPanaboBarangay(lat, lng);
     final city = phoneLocation?.city ?? onlineLocation?.city ?? 'Panabo City';
-    final province =
-        phoneLocation?.province ?? onlineLocation?.province ?? 'Davao del Norte';
+    final province = phoneLocation?.province ??
+        onlineLocation?.province ??
+        'Davao del Norte';
 
     return _ResolvedLocation(
       exactLocation: _cleanFullAddress([
@@ -280,9 +282,9 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
         'zoom': '18',
         'addressdetails': '1',
       });
-      final response = await http
-          .get(uri, headers: {'User-Agent': 'TreeTrace Mobile'})
-          .timeout(const Duration(seconds: 5));
+      final response = await http.get(uri, headers: {
+        'User-Agent': 'TreeTrace Mobile'
+      }).timeout(const Duration(seconds: 5));
       if (response.statusCode != 200) return null;
       final data = jsonDecode(response.body);
       if (data is! Map<String, dynamic>) return null;
@@ -381,6 +383,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     if (nearest == null || nearestKm > 18) return null;
     return 'Brgy. ${nearest.name}';
   }
+
   String? _firstCleanBarangay(List<String?> values) {
     for (final value in values) {
       final cleaned = _cleanBarangay(value);
@@ -453,8 +456,27 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
   bool _looksLikePlusCode(String value) =>
       RegExp(r'^[23456789CFGHJMPQRVWX]{4,}\+').hasMatch(value.trim());
 
+  String? _validateOptionalMeasurement(String? value, String label) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) return null;
+
+    final measurement = double.tryParse(text);
+    if (measurement == null || !measurement.isFinite || measurement <= 0) {
+      return '$label must be a finite positive number.';
+    }
+    return null;
+  }
+
+  double? _parseOptionalMeasurement(String value) {
+    final text = value.trim();
+    return text.isEmpty ? null : double.tryParse(text);
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+
+    final dbhCm = _parseOptionalMeasurement(_dbhCtrl.text);
+    final heightM = _parseOptionalMeasurement(_heightCtrl.text);
 
     final endangered = _checkEndangered(_nameCtrl.text.trim().toLowerCase());
     if (endangered != null) {
@@ -516,8 +538,8 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
         'barangay': _barangayCtrl.text.trim().isEmpty
             ? null
             : _barangayCtrl.text.trim(),
-        'dbh_cm': double.tryParse(_dbhCtrl.text),
-        'height_m': double.tryParse(_heightCtrl.text),
+        'dbh_cm': dbhCm,
+        'height_m': heightM,
         'lat': double.tryParse(_latCtrl.text),
         'lng': double.tryParse(_lngCtrl.text),
         'city': _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
@@ -530,7 +552,8 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
 
       if (await api.isOnline()) {
         if (_photo != null)
-          payload['photo_url'] = await api.uploadPhoto(_photo!);
+          payload['photo_url'] =
+              await api.uploadPhoto(_photo!, purpose: 'tree_photo');
         await api.createTree(payload);
         if (_addToEvaluation) {
           try {
@@ -707,6 +730,8 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
                   TextFormField(
                     controller: _dbhCtrl,
                     keyboardType: TextInputType.number,
+                    validator: (value) =>
+                        _validateOptionalMeasurement(value, 'DBH'),
                     decoration: InputDecoration(
                         hintText: '30',
                         prefixIcon: const Icon(Icons.straighten,
@@ -747,6 +772,8 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
                   TextFormField(
                     controller: _heightCtrl,
                     keyboardType: TextInputType.number,
+                    validator: (value) =>
+                        _validateOptionalMeasurement(value, 'Height'),
                     decoration: const InputDecoration(
                         hintText: '10',
                         prefixIcon:
@@ -785,8 +812,8 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
               maxLines: 2,
               decoration: const InputDecoration(
                   hintText: 'Auto-filled from GPS, or type Purok / landmark',
-                  prefixIcon: Icon(Icons.place_outlined,
-                      size: 18, color: kMutedFg)),
+                  prefixIcon:
+                      Icon(Icons.place_outlined, size: 18, color: kMutedFg)),
             ),
             const SizedBox(height: 12),
 
@@ -842,8 +869,8 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
                               decimal: true, signed: true),
                           decoration: const InputDecoration(
                             hintText: 'Longitude',
-                            prefixIcon: Icon(Icons.public,
-                                size: 18, color: kMutedFg),
+                            prefixIcon:
+                                Icon(Icons.public, size: 18, color: kMutedFg),
                           ),
                         ),
                       ),
@@ -979,8 +1006,8 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _AiPreviewPill(Icons.record_voice_over_outlined,
-                  _pronunciation(common)),
+              _AiPreviewPill(
+                  Icons.record_voice_over_outlined, _pronunciation(common)),
               _AiPreviewPill(Icons.shield_outlined, status),
               _AiPreviewPill(Icons.public_rounded, habitat),
             ],

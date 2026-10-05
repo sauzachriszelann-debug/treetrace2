@@ -17,13 +17,39 @@ Before editing, locate:
 
 Treat the FastAPI route and Pydantic schema as the API contract. Keep the endpoint path, HTTP method, payload keys, response shape, and error behavior aligned across each affected client.
 
+- Use `PATCH /api/trees/{tree_id}` for partial tree updates. Do not add a duplicate `PUT` route for a client mismatch unless backward compatibility is explicitly required.
+- Compare every affected React and Flutter client with the FastAPI route before considering a cross-platform change complete.
+
+## Tree Measurement Contract
+
+- DBH is measured in centimeters; height is measured in meters.
+- For normal tree updates, omit unchanged DBH and height. A supplied measurement must be finite and greater than zero; explicit `null` is not a valid update operation.
+- New tree creation may omit or explicitly use `null` for DBH and height because measurements can legitimately be unknown.
+- Biomass and carbon are server-owned derived values. Normal React and Flutter tree create/update requests must not submit them as client-controlled values.
+
+## Client Consistency
+
+- React and Flutter must follow the same backend data contract even when their UI implementations differ.
+- Treat client validation as UX support; backend validation remains authoritative.
+- Inspect actual request payloads. Matching screens do not prove matching API behavior.
+
 ## Preserve TreeTrace Rules
 
 - Apply authorization in the backend. UI role checks must not be the only protection.
 - Maintain public endpoints under `/api/public` without exposing staff-only or user-sensitive data.
 - Keep JWT handling on the shared React Axios client and Flutter `ApiService` paths.
-- For mobile mutations, decide whether the record must support the existing offline queue and user-review-before-sync flow.
+- Preserve the existing mobile user-review-before-sync workflow. Do not silently add offline replay for a new mutation type.
+- For a new mobile mutation that needs offline support, explicitly define its queue representation, verification state, retry behavior, upload-failure behavior, and replay endpoint.
 - Do not add credentials, production URLs, or service-role keys to source files.
+
+## Public Boundaries
+
+- Keep `/api/public` endpoints and QR/profile flows separate from protected inventory payloads.
+- Never expose staff notes, user identity details, secrets, or other protected fields through public tree or profile responses.
+
+## Skill Priority
+
+When skills overlap, TreeTrace domain and inventory rules take precedence over generic frontend optimization guidance.
 
 ## Verify the Change
 

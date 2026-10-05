@@ -21,12 +21,25 @@ Trace each relevant consumer before changing a shared field, calculation, route,
 ## Protect Domain Invariants
 
 - `common_name` is required for a tree record. Preserve its relationship to species lookup and conservation data.
-- Preserve DBH units in centimeters and height units in meters. When DBH or height changes, retain the backend's biomass/carbon recalculation behavior unless an explicit user-supplied carbon value is intended to take precedence.
 - A newly created health log updates the parent tree's current health status. Do not break that synchronization.
 - Official tree and health changes are staff workflows; citizens cannot create, edit, or delete them. Tree deletion is admin-only and cascades to health logs.
 - Coordinates, barangay, and media URLs may be optional, but do not invent location or media values when data is unavailable.
 - Public endpoints and QR flows are readable without authentication. Keep user identities, staff notes, and secrets out of their responses.
 - AI output is assistive. Preserve confidence, review, and unknown-species pathways rather than treating a prediction as guaranteed fact.
+
+## Measurements And Derived Values
+
+- DBH uses centimeters and height uses meters. Whenever supplied, each must be finite and greater than zero; reject zero, negative, `NaN`, and infinite values.
+- In PATCH, an omitted measurement means unchanged and explicit `null` is rejected. Existing measurements must not be silently cleared through normal editing.
+- New tree creation may legitimately have unknown DBH or height. Keep database columns nullable for historical or incomplete inventory records.
+- Biomass and carbon are backend-owned derived values. Normal tree create/update clients must not override them, and valid DBH or height changes must trigger backend recalculation.
+- Do not add client-side carbon calculations. A manual carbon correction, if ever required, must be a separate admin-only, auditable workflow rather than a generic tree PATCH field.
+- Do not silently convert invalid input to `null`; preserve existing values when a partial update omits a field.
+
+## Authorization And Public Profiles
+
+- Enforce inventory permissions server-side: citizens cannot create, edit, or delete official trees; admin and field-worker access must not rely on UI checks alone.
+- Public QR/tree-profile responses may expose public tree information only. Do not expose staff-only notes, user identities, secrets, or protected inventory information.
 
 ## Test the Workflow
 

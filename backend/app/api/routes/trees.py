@@ -191,10 +191,9 @@ def create_tree(
             detail="Citizen accounts cannot add official inventory trees. Please submit the species for expert review instead.",
         )
     data = payload.model_dump()
-    if data.get("carbon_kg") is None:
-        biomass, carbon = _estimate_tree_carbon(data.get("dbh_cm"), data.get("height_m"))
-        data["biomass_kg"] = data.get("biomass_kg") or biomass
-        data["carbon_kg"] = carbon
+    biomass, carbon = _estimate_tree_carbon(data.get("dbh_cm"), data.get("height_m"))
+    data["biomass_kg"] = biomass
+    data["carbon_kg"] = carbon
     tree = Tree(**data, recorded_by_id=current_user.id)
     db.add(tree)
     db.commit()
@@ -234,9 +233,9 @@ def update_tree(
     data = payload.model_dump(exclude_unset=True)
     dbh = data.get("dbh_cm", tree.dbh_cm)
     height = data.get("height_m", tree.height_m)
-    if data.get("carbon_kg") is None and ("dbh_cm" in data or "height_m" in data):
+    if "dbh_cm" in data or "height_m" in data:
         biomass, carbon = _estimate_tree_carbon(dbh, height)
-        data["biomass_kg"] = data.get("biomass_kg") or biomass
+        data["biomass_kg"] = biomass
         data["carbon_kg"] = carbon
     for field, value in data.items():
         setattr(tree, field, value)

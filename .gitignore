@@ -1,5 +1,13 @@
-backend/.env
+# Local environment files may contain credentials. Keep only explicit examples.
 .env
+.env.*
+*.env
+*.env.*
+!.env.example
+!*.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
 .idea/
 frontend/dist/
 frontend/node_modules/

@@ -13,10 +13,10 @@ import os
 import re
 import asyncio
 from pathlib import Path
+from app.core.config import settings
 from app.services.species_db import lookup_species
 
 try:
-    from app.core.config import settings
     PLANTNET_API_KEY = settings.PLANTNET_API_KEY
     GEMINI_API_KEY   = settings.GEMINI_API_KEY
     PERENUAL_API_KEY = settings.PERENUAL_API_KEY
@@ -35,7 +35,7 @@ TREFLE_URL   = "https://trefle.io/api/v1"
 GBIF_MATCH_URL = "https://api.gbif.org/v1/species/match"
 YOLO_DBH_MODEL_PATH = Path(__file__).resolve().parents[2] / "models" / "tree_trunk_segmentation.pt"
 _YOLO_DBH_MODEL = None
-ENABLE_YOLO_DBH = os.getenv("ENABLE_YOLO_DBH", "").lower() in {"1", "true", "yes", "on"}
+ENABLE_YOLO_DBH = settings.ENABLE_YOLO_DBH
 
 
 def get_dbh_runtime_status() -> dict:

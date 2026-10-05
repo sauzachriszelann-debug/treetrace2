@@ -11,14 +11,15 @@ class PublicTreeProfileScreen extends StatefulWidget {
   final int treeId;
   const PublicTreeProfileScreen({super.key, required this.treeId});
   @override
-  State<PublicTreeProfileScreen> createState() => _PublicTreeProfileScreenState();
+  State<PublicTreeProfileScreen> createState() =>
+      _PublicTreeProfileScreenState();
 }
 
 class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
     with SingleTickerProviderStateMixin {
   TreeModel? _tree;
   Map<String, dynamic>? _wiki;
-  List<HealthLogModel> _logs = [];
+  List<_PublicHealthLog> _logs = [];
   bool _loading = true;
   bool _wikiLoading = false;
   late TabController _tabController;
@@ -40,10 +41,12 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
     try {
       final t = await api.getPublicTree(widget.treeId.toString());
       List<dynamic> l = [];
-      try { l = await api.getTreeHealthLogs(widget.treeId); } catch (_) {}
+      try {
+        l = await api.getTreeHealthLogs(widget.treeId);
+      } catch (_) {}
       setState(() {
         _tree = TreeModel.fromJson(t);
-        _logs = l.map((j) => HealthLogModel.fromJson(j)).toList();
+        _logs = l.map((j) => _PublicHealthLog.fromJson(j)).toList();
         _loading = false;
       });
       _loadWiki();
@@ -57,7 +60,10 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
     setState(() => _wikiLoading = true);
     try {
       final wiki = await api.getTreeWiki(widget.treeId);
-      setState(() { _wiki = wiki; _wikiLoading = false; });
+      setState(() {
+        _wiki = wiki;
+        _wikiLoading = false;
+      });
     } catch (_) {
       setState(() => _wikiLoading = false);
     }
@@ -65,19 +71,26 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return Scaffold(
-      backgroundColor: kSidebarBg,
-      body: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const CircularProgressIndicator(color: Colors.white),
-        const SizedBox(height: 12),
-        Text('Accessing Encyclopedia...', style: GoogleFonts.inter(color: Colors.white.withOpacity(0.7), fontWeight: FontWeight.w600)),
-      ])),
-    );
+    if (_loading)
+      return Scaffold(
+        backgroundColor: kSidebarBg,
+        body: Center(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const CircularProgressIndicator(color: Colors.white),
+          const SizedBox(height: 12),
+          Text('Accessing Encyclopedia...',
+              style: GoogleFonts.inter(
+                  color: Colors.white.withOpacity(0.7),
+                  fontWeight: FontWeight.w600)),
+        ])),
+      );
 
-    if (_tree == null) return Scaffold(
-      appBar: AppBar(title: const Text('Tree Profile')),
-      body: const EmptyState(message: 'Tree not found', icon: Icons.error_outline),
-    );
+    if (_tree == null)
+      return Scaffold(
+        appBar: AppBar(title: const Text('Tree Profile')),
+        body: const EmptyState(
+            message: 'Tree not found', icon: Icons.error_outline),
+      );
 
     final tree = _tree!;
 
@@ -113,20 +126,27 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
           children: [
             // Hero Photo
             tree.photoUrl != null
-                ? CachedNetworkImage(imageUrl: tree.photoUrl!, fit: BoxFit.cover)
+                ? CachedNetworkImage(
+                    imageUrl: tree.photoUrl!, fit: BoxFit.cover)
                 : Container(
                     decoration: const BoxDecoration(
-                      gradient: LinearGradient(colors: [Color(0xFF1a3323), Color(0xFF2d6b3a)]),
+                      gradient: LinearGradient(
+                          colors: [Color(0xFF1a3323), Color(0xFF2d6b3a)]),
                     ),
-                    child: const Icon(Icons.park, color: Colors.white24, size: 80),
+                    child:
+                        const Icon(Icons.park, color: Colors.white24, size: 80),
                   ),
-            
+
             // Modern Gradient
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                  colors: [Colors.black.withOpacity(0.2), Colors.black.withOpacity(0.9)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.2),
+                    Colors.black.withOpacity(0.9)
+                  ],
                   stops: const [0.0, 1.0],
                 ),
               ),
@@ -134,15 +154,25 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
 
             // Info Content
             Positioned(
-              bottom: 80, left: 24, right: 24,
+              bottom: 80,
+              left: 24,
+              right: 24,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   HealthBadge(tree.healthStatus),
                   const SizedBox(height: 12),
-                  Text(tree.commonName, style: GoogleFonts.inter(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800)),
+                  Text(tree.commonName,
+                      style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 32,
+                          fontWeight: FontWeight.w800)),
                   if (tree.scientificName != null)
-                    Text(tree.scientificName!, style: GoogleFonts.inter(color: Colors.white.withOpacity(0.7), fontSize: 16, fontStyle: FontStyle.italic)),
+                    Text(tree.scientificName!,
+                        style: GoogleFonts.inter(
+                            color: Colors.white.withOpacity(0.7),
+                            fontSize: 16,
+                            fontStyle: FontStyle.italic)),
                 ],
               ),
             ),
@@ -163,7 +193,8 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
             labelColor: kPrimary,
             unselectedLabelColor: kMutedFg,
             dividerColor: Colors.transparent,
-            labelStyle: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700),
+            labelStyle:
+                GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700),
             tabs: const [
               Tab(text: 'Overview'),
               Tab(text: 'Care'),
@@ -183,7 +214,8 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
       children: [
         _buildStatsStrip(tree),
         const SizedBox(height: 24),
-        if (tree.isProtected || const ['CR', 'EN', 'VU'].contains(tree.statusCode)) ...[
+        if (tree.isProtected ||
+            const ['CR', 'EN', 'VU'].contains(tree.statusCode)) ...[
           _PublicConservationWarning(tree: tree),
           const SizedBox(height: 16),
         ],
@@ -211,11 +243,14 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
     final carbon = tree.carbonKg ?? _estimateCarbonKg(tree.dbhCm, tree.heightM);
     return Row(
       children: [
-        _StatPill(Icons.eco_rounded, '${carbon.toStringAsFixed(1)} kg', 'CO2 Stock'),
+        _StatPill(
+            Icons.eco_rounded, '${carbon.toStringAsFixed(1)} kg', 'CO2 Stock'),
         const SizedBox(width: 12),
-        _StatPill(Icons.straighten_rounded, '${tree.dbhCm?.toStringAsFixed(0) ?? "0"} cm', 'DBH'),
+        _StatPill(Icons.straighten_rounded,
+            '${tree.dbhCm?.toStringAsFixed(0) ?? "0"} cm', 'DBH'),
         const SizedBox(width: 12),
-        _StatPill(Icons.height_rounded, '${tree.heightM?.toStringAsFixed(1) ?? "0"} m', 'Height'),
+        _StatPill(Icons.height_rounded,
+            '${tree.heightM?.toStringAsFixed(1) ?? "0"} m', 'Height'),
       ],
     );
   }
@@ -227,22 +262,40 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
     if (entries.isEmpty) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(24), border: Border.all(color: kBorder)),
+      decoration: BoxDecoration(
+          color: kCard,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: kBorder)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 16)),
+          Text(title,
+              style:
+                  GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 16)),
           const SizedBox(height: 16),
-          ...entries.map((e) => Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(width: 100, child: Text(e.key.replaceAll('_', ' ').toUpperCase(), style: GoogleFonts.inter(color: kMutedFg, fontSize: 10, fontWeight: FontWeight.w800))),
-                Expanded(child: Text(e.value.toString(), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500))),
-              ],
-            ),
-          )).toList(),
+          ...entries
+              .map((e) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                            width: 100,
+                            child: Text(
+                                e.key.replaceAll('_', ' ').toUpperCase(),
+                                style: GoogleFonts.inter(
+                                    color: kMutedFg,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800))),
+                        Expanded(
+                            child: Text(e.value.toString(),
+                                style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500))),
+                      ],
+                    ),
+                  ))
+              .toList(),
         ],
       ),
     );
@@ -256,16 +309,26 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Text('Optimal Growth Requirements', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18)),
+        Text('Optimal Growth Requirements',
+            style:
+                GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18)),
         const SizedBox(height: 16),
         GridView.count(
-          shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.5,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 1.5,
           children: [
-            _CareCard(Icons.wb_sunny_rounded, 'Sunlight', care['sunlight'] ?? 'Partial', Colors.amber),
-            _CareCard(Icons.water_drop_rounded, 'Watering', care['watering'] ?? 'Moderate', Colors.blue),
-            _CareCard(Icons.layers_rounded, 'Soil Type', care['soil'] ?? 'Loamy', Colors.brown),
-            _CareCard(Icons.thermostat_rounded, 'Climate', care['temperature'] ?? 'Tropical', Colors.orange),
+            _CareCard(Icons.wb_sunny_rounded, 'Sunlight',
+                care['sunlight'] ?? 'Partial', Colors.amber),
+            _CareCard(Icons.water_drop_rounded, 'Watering',
+                care['watering'] ?? 'Moderate', Colors.blue),
+            _CareCard(Icons.layers_rounded, 'Soil Type',
+                care['soil'] ?? 'Loamy', Colors.brown),
+            _CareCard(Icons.thermostat_rounded, 'Climate',
+                care['temperature'] ?? 'Tropical', Colors.orange),
           ],
         ),
         const SizedBox(height: 24),
@@ -324,23 +387,13 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
           'Record ID': '#${tree.id}',
           'Health Status': tree.healthStatus,
           'Location': location,
-          'Coordinates': '${tree.lat?.toStringAsFixed(5)}, ${tree.lng?.toStringAsFixed(5)}',
-          'Last Survey': tree.createdAt == null ? 'Not available' : _formatDate(tree.createdAt!),
+          'Coordinates':
+              '${tree.lat?.toStringAsFixed(5)}, ${tree.lng?.toStringAsFixed(5)}',
+          'Last Survey': tree.createdAt == null
+              ? 'Not available'
+              : _formatDate(tree.createdAt!),
         }),
         const SizedBox(height: 16),
-        if (tree.notes != null)
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: kPrimary.withOpacity(0.05), borderRadius: BorderRadius.circular(20), border: Border.all(color: kPrimary.withOpacity(0.1))),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('FIELD NOTES', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 10, color: kPrimary, letterSpacing: 1.5)),
-                const SizedBox(height: 8),
-                Text(tree.notes!, style: const TextStyle(fontSize: 14, height: 1.5)),
-              ],
-            ),
-          ),
       ],
     );
   }
@@ -350,12 +403,20 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Text('Legends & Symbolism', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18)),
+        Text('Legends & Symbolism',
+            style:
+                GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18)),
         const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(24), border: Border.all(color: kBorder)),
-          child: Text(history ?? 'No historical data available for this species.', style: const TextStyle(fontSize: 15, height: 1.8, color: kForeground)),
+          decoration: BoxDecoration(
+              color: kCard,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: kBorder)),
+          child: Text(
+              history ?? 'No historical data available for this species.',
+              style: const TextStyle(
+                  fontSize: 15, height: 1.8, color: kForeground)),
         ),
         const SizedBox(height: 24),
         if (_logs.isNotEmpty)
@@ -374,7 +435,9 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Photos of Same Tree', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18)),
+        Text('Photos of Same Tree',
+            style:
+                GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18)),
         const SizedBox(height: 12),
         SizedBox(
           height: 170,
@@ -394,19 +457,27 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
                   CachedNetworkImage(
                     imageUrl: photos[index],
                     fit: BoxFit.cover,
-                    errorWidget: (_, __, ___) => const Icon(Icons.park_outlined, color: kMutedFg),
+                    errorWidget: (_, __, ___) =>
+                        const Icon(Icons.park_outlined, color: kMutedFg),
                   ),
                   Positioned(
                     left: 12,
                     bottom: 12,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
                         color: Colors.black.withOpacity(0.45),
                         borderRadius: BorderRadius.circular(999),
                       ),
-                      child: Text(index == 0 ? 'Inventory photo' : 'Similar photo $index',
-                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+                      child: Text(
+                          index == 0
+                              ? 'Inventory photo'
+                              : 'Similar photo $index',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800)),
                     ),
                   ),
                 ],
@@ -422,7 +493,9 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
     final photos = <String>[];
     void add(String? url) {
       final value = url?.trim();
-      if (value != null && value.startsWith('http') && !photos.contains(value)) {
+      if (value != null &&
+          value.startsWith('http') &&
+          !photos.contains(value)) {
         photos.add(value);
       }
     }
@@ -466,9 +539,13 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 16)),
+          Text(title,
+              style:
+                  GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 16)),
           const SizedBox(height: 10),
-          Text(text, style: const TextStyle(fontSize: 14, height: 1.55, color: kForeground)),
+          Text(text,
+              style: const TextStyle(
+                  fontSize: 14, height: 1.55, color: kForeground)),
         ],
       ),
     );
@@ -483,7 +560,9 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Common Problems', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18)),
+        Text('Common Problems',
+            style:
+                GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18)),
         const SizedBox(height: 12),
         SizedBox(
           height: 230,
@@ -514,10 +593,13 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('How Tos', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18)),
+        Text('How Tos',
+            style:
+                GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18)),
         const SizedBox(height: 12),
         ...items.map((item) {
-          final steps = item['steps'] is List ? item['steps'] as List : const [];
+          final steps =
+              item['steps'] is List ? item['steps'] as List : const [];
           return _GuideCard(
             title: item['title']?.toString() ?? 'Guide',
             body: steps.map((e) => e.toString()).join('\n'),
@@ -536,7 +618,9 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Popular Questions', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18)),
+        Text('Popular Questions',
+            style:
+                GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18)),
         const SizedBox(height: 12),
         ...items.map((item) => _GuideCard(
               title: item['q']?.toString() ?? 'Question',
@@ -553,25 +637,32 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
       if ((tree.province ?? '').trim().isNotEmpty) tree.province!.trim(),
     ];
     if (parts.isNotEmpty) return parts.join(', ');
-    return _exactLocationFromNotes(tree.notes) ?? 'Location not tagged';
-  }
-
-  String? _exactLocationFromNotes(String? notes) {
-    if (notes == null) return null;
-    for (final line in notes.split('\n')) {
-      final trimmed = line.trim();
-      if (trimmed.toLowerCase().startsWith('exact location:')) {
-        final value = trimmed.substring('exact location:'.length).trim();
-        if (value.isNotEmpty && value.toLowerCase() != 'null') return value;
-      }
-    }
-    return null;
+    return 'Location not tagged';
   }
 
   String _formatDate(DateTime date) => '${date.month}/${date.day}/${date.year}';
 
-  Widget _buildLoading() => const Center(child: CircularProgressIndicator(color: kPrimary));
-  Widget _buildEmpty() => const EmptyState(message: 'Data unavailable', icon: Icons.info_outline);
+  Widget _buildLoading() =>
+      const Center(child: CircularProgressIndicator(color: kPrimary));
+  Widget _buildEmpty() =>
+      const EmptyState(message: 'Data unavailable', icon: Icons.info_outline);
+}
+
+class _PublicHealthLog {
+  final String condition;
+  final String assessedDate;
+
+  const _PublicHealthLog({
+    required this.condition,
+    required this.assessedDate,
+  });
+
+  factory _PublicHealthLog.fromJson(Map<String, dynamic> json) {
+    return _PublicHealthLog(
+      condition: json['condition'] ?? 'Healthy',
+      assessedDate: json['assessed_date'] ?? '',
+    );
+  }
 }
 
 class _ProblemCard extends StatelessWidget {
@@ -611,9 +702,11 @@ class _ProblemCard extends StatelessWidget {
                     imageUrl: imageUrl,
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    errorWidget: (_, __, ___) => const Icon(Icons.bug_report_outlined, color: kMutedFg),
+                    errorWidget: (_, __, ___) =>
+                        const Icon(Icons.bug_report_outlined, color: kMutedFg),
                   )
-                : const Center(child: Icon(Icons.bug_report_outlined, color: kMutedFg)),
+                : const Center(
+                    child: Icon(Icons.bug_report_outlined, color: kMutedFg)),
           ),
           Padding(
             padding: const EdgeInsets.all(12),
@@ -622,16 +715,32 @@ class _ProblemCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 13))),
+                    Expanded(
+                        child: Text(title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(
+                                fontWeight: FontWeight.w800, fontSize: 13))),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(999)),
-                      child: Text(severity, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w900)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                          color: color.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(999)),
+                      child: Text(severity,
+                          style: TextStyle(
+                              color: color,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 5),
-                Text(description, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: kMutedFg, fontSize: 11.5, height: 1.25)),
+                Text(description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        color: kMutedFg, fontSize: 11.5, height: 1.25)),
               ],
             ),
           ),
@@ -660,9 +769,13 @@ class _GuideCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 14)),
+          Text(title,
+              style:
+                  GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 14)),
           const SizedBox(height: 8),
-          Text(body, style: const TextStyle(color: kMutedFg, fontSize: 13, height: 1.45)),
+          Text(body,
+              style:
+                  const TextStyle(color: kMutedFg, fontSize: 13, height: 1.45)),
         ],
       ),
     );
@@ -749,12 +862,17 @@ class _StatPill extends StatelessWidget {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: kBorder)),
+        decoration: BoxDecoration(
+            color: kCard,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: kBorder)),
         child: Column(
           children: [
             Icon(icon, size: 16, color: kPrimary),
             const SizedBox(height: 4),
-            Text(value, style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 14)),
+            Text(value,
+                style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w800, fontSize: 14)),
             Text(label, style: const TextStyle(color: kMutedFg, fontSize: 10)),
           ],
         ),
@@ -772,15 +890,23 @@ class _CareCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: color.withOpacity(0.05), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(0.1))),
+      decoration: BoxDecoration(
+          color: color.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withOpacity(0.1))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(icon, color: color, size: 24),
           const SizedBox(height: 8),
-          Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w800)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(label,
+              style: TextStyle(
+                  color: color, fontSize: 10, fontWeight: FontWeight.w800)),
+          Text(value,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
         ],
       ),
     );

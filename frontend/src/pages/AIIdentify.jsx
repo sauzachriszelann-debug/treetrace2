@@ -69,6 +69,7 @@ export default function AIIdentify() {
           loading={loading}
           submitLabel={isCitizen ? "Submit for Expert Review" : "Save Tree Record"}
           savingLabel={isCitizen ? "Submitting…" : "Saving…"}
+          photoUploadPurpose={isCitizen ? "unknown_species" : "tree_photo"}
         />
       </div>
     </div>

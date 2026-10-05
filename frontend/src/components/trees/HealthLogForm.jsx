@@ -13,15 +13,42 @@ export default function HealthLogForm({ onSubmit, onCancel }) {
         dbh_cm: "",
         height_m: "",
     });
+    const [errors, setErrors] = useState({});
 
-    const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+    const set = (k, v) => {
+        setForm(f => ({ ...f, [k]: v }));
+        if (k === "dbh_cm" || k === "height_m") {
+            setErrors(current => ({ ...current, [k]: undefined }));
+        }
+    };
+
+    const validateOptionalMeasurement = (value, label) => {
+        const text = value.trim();
+        if (!text) return { value: undefined };
+
+        const measurement = Number(text);
+        if (!Number.isFinite(measurement) || measurement <= 0) {
+            return { error: `${label} must be a finite positive number.` };
+        }
+        return { value: measurement };
+    };
 
     const handleSubmit = (e) => {
         e.preventDefault();
+        const dbh = validateOptionalMeasurement(form.dbh_cm, "DBH");
+        const height = validateOptionalMeasurement(form.height_m, "Height");
+        const nextErrors = {
+            dbh_cm: dbh.error,
+            height_m: height.error,
+        };
+        setErrors(nextErrors);
+        if (dbh.error || height.error) return;
+
+        const { dbh_cm, height_m, ...payload } = form;
         onSubmit({
-            ...form,
-            dbh_cm: form.dbh_cm ? parseFloat(form.dbh_cm) : undefined,
-            height_m: form.height_m ? parseFloat(form.height_m) : undefined,
+            ...payload,
+            ...(dbh.value !== undefined ? { dbh_cm: dbh.value } : {}),
+            ...(height.value !== undefined ? { height_m: height.value } : {}),
         });
     };
 
@@ -46,11 +73,13 @@ export default function HealthLogForm({ onSubmit, onCancel }) {
                 </div>
                 <div className="space-y-2">
                     <Label>DBH (cm)</Label>
-                    <Input type="number" step="0.01" value={form.dbh_cm} onChange={e => set("dbh_cm", e.target.value)} placeholder="Current DBH" />
+                    <Input type="number" step="0.01" value={form.dbh_cm} onChange={e => set("dbh_cm", e.target.value)} placeholder="Current DBH" aria-invalid={Boolean(errors.dbh_cm)} />
+                    {errors.dbh_cm && <p className="text-sm text-destructive" role="alert">{errors.dbh_cm}</p>}
                 </div>
                 <div className="space-y-2">
                     <Label>Height (m)</Label>
-                    <Input type="number" step="0.01" value={form.height_m} onChange={e => set("height_m", e.target.value)} placeholder="Current Height" />
+                    <Input type="number" step="0.01" value={form.height_m} onChange={e => set("height_m", e.target.value)} placeholder="Current Height" aria-invalid={Boolean(errors.height_m)} />
+                    {errors.height_m && <p className="text-sm text-destructive" role="alert">{errors.height_m}</p>}
                 </div>
             </div>
             <div className="space-y-2">

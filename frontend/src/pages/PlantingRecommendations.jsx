@@ -47,7 +47,7 @@ export default function PlantingRecommendations() {
     try {
       let photo_url = source.photo_url || "";
       if (photo) {
-        const uploaded = await storageApi.uploadPhoto(photo);
+        const uploaded = await storageApi.uploadPhoto(photo, "planting_submission");
         photo_url = uploaded.file_url;
       }
       await plantingApi.create({

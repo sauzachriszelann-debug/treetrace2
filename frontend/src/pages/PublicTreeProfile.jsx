@@ -474,20 +474,12 @@ export default function PublicTreeProfile() {
               </Section>
             </div>
 
-            {/* Notes */}
-            {tree.notes && (
-              <div className="mx-4 bg-white rounded-2xl border border-[#e8ede6] p-4">
-                <p className="text-[10px] font-bold text-[#2d6a4f] uppercase tracking-wider mb-2">Field Notes</p>
-                <p className="text-xs text-[#4a6741] leading-relaxed">{tree.notes}</p>
-              </div>
-            )}
-
             {/* Health History */}
             {logs.length > 0 && (
               <div className="mx-4 bg-white rounded-2xl overflow-hidden border border-[#e8ede6]">
                 <Section icon={Calendar} title="Health History">
-                  {logs.map((log) => (
-                    <div key={log.id} className="mb-3 last:mb-0 p-3 bg-[#f8faf7] rounded-xl">
+                  {logs.map((log, index) => (
+                    <div key={`${log.assessed_date}-${index}`} className="mb-3 last:mb-0 p-3 bg-[#f8faf7] rounded-xl">
                       <div className="flex justify-between items-center mb-1">
                         <span className="text-xs font-medium text-[#1a2e1a]">
                           {log.assessed_date ? format(new Date(log.assessed_date), "MMM d, yyyy") : ""}
@@ -498,8 +490,6 @@ export default function PublicTreeProfile() {
                           "bg-red-100 text-red-700"
                         }`}>{log.condition}</span>
                       </div>
-                      {log.assessed_by && <p className="text-[10px] text-[#6b8f71]">By {log.assessed_by}</p>}
-                      {log.notes && <p className="text-xs text-[#4a6741] mt-1">{log.notes}</p>}
                     </div>
                   ))}
                 </Section>
