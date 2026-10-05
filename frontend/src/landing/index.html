@@ -4364,6 +4364,20 @@
                 : '<i class="fa-regular fa-eye"></i>';
         }
 
+        async function readApiResponse(response) {
+            const contentType = response.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+                return response.json();
+            }
+
+            await response.text();
+            return {
+                detail: response.ok
+                    ? ''
+                    : 'The TreeTrace server is temporarily unavailable. Please try again later.',
+            };
+        }
+
         async function submitLandingLogin() {
             const button = document.getElementById('loginSubmitBtn');
             const email = document.getElementById('loginEmail').value.trim();
@@ -4380,7 +4394,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, password }),
                 });
-                const data = await response.json();
+                const data = await readApiResponse(response);
                 if (!response.ok) throw new Error(data.detail || 'Invalid email or password.');
                 localStorage.setItem('treetrace_token', data.access_token);
                 goToApp('/dashboard');
@@ -4415,7 +4429,7 @@
                         role: 'citizen',
                     }),
                 });
-                const registerData = await registerResponse.json();
+                const registerData = await readApiResponse(registerResponse);
                 if (!registerResponse.ok) throw new Error(registerData.detail || 'Registration failed.');
 
                 const loginResponse = await fetch('/api/auth/login', {
@@ -4423,7 +4437,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, password }),
                 });
-                const loginData = await loginResponse.json();
+                const loginData = await readApiResponse(loginResponse);
                 if (!loginResponse.ok) throw new Error(loginData.detail || 'Account created, but login failed.');
                 localStorage.setItem('treetrace_token', loginData.access_token);
                 goToApp('/dashboard');

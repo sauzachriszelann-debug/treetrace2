@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from app.db.database import get_db
 from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, UserOut
 from app.models.user import User, UserRole
@@ -47,7 +48,13 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
     """Authenticate user and return a JWT."""
-    user = db.query(User).filter(User.email == payload.email).first()
+    try:
+        user = db.query(User).filter(User.email == payload.email).first()
+    except SQLAlchemyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service is temporarily unavailable. Please try again later.",
+        ) from exc
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

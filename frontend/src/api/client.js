@@ -19,6 +19,14 @@ api.interceptors.response.use(
   (res) => res,
   (error) => {
     const status = error.response?.status;
+    if (error.response && typeof error.response.data !== "object") {
+      error.response.data = {
+        detail:
+          status >= 500
+            ? "The TreeTrace server is temporarily unavailable. Please try again later."
+            : "The request could not be completed. Please try again.",
+      };
+    }
     if (status === 401) {
       // Only redirect if token is actually missing/invalid (not just a permission error)
       const token = localStorage.getItem("treetrace_token");

@@ -11,7 +11,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.api.routes import health_logs, public, storage, trees
+from app.api.routes import auth, health_logs, public, storage, trees
 from app.core.security import get_current_user
 from app.db.database import Base, get_db
 from app.models.health_log import HealthLog
@@ -39,6 +39,7 @@ def db_session() -> Generator[Session, None, None]:
 @pytest.fixture
 def api_app(db_session: Session) -> Generator[FastAPI, None, None]:
     app = FastAPI()
+    app.include_router(auth.router, prefix="/api/auth")
     app.include_router(trees.router, prefix="/api/trees")
     app.include_router(health_logs.router, prefix="/api/health-logs")
     app.include_router(public.router, prefix="/api/public")
