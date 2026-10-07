@@ -5,7 +5,7 @@
       "destination": "https://treetrace2.onrender.com/api/:path*"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]
