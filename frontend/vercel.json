@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/trees",
+      "destination": "https://treetrace2backend.vercel.app/api/trees/"
+    },
+    {
       "source": "/api/:path*",
       "destination": "https://treetrace2backend.vercel.app/api/:path*"
     },
