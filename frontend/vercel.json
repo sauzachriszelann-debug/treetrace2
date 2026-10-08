@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://treetrace2.onrender.com/api/:path*"
+      "destination": "https://treetrace2backend-git-t-bdac8f-sauzachriszelann-debugs-projects.vercel.app/api/:path*"
     },
     {
       "source": "/((?!api/).*)",
