@@ -1,6 +1,6 @@
 from sqlalchemy import (
     Column, Integer, String, Float, Date, Text,
-    DateTime, ForeignKey, Enum
+    DateTime, ForeignKey, Enum, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -16,6 +16,16 @@ class HealthStatus(str, enum.Enum):
 
 class Tree(Base):
     __tablename__ = "trees"
+
+    # The G2 idempotency key has exactly ONE uniqueness object, named to
+    # match backend/migrations/0001_add_trees_client_uuid.sql: on
+    # PostgreSQL a named UNIQUE constraint creates an index called
+    # ux_trees_client_uuid, the same name the migration creates, so
+    # create_all and the versioned migration converge instead of stacking
+    # a second (redundant) index.
+    __table_args__ = (
+        UniqueConstraint("client_uuid", name="ux_trees_client_uuid"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
 
@@ -42,6 +52,11 @@ class Tree(Base):
     # Media (Supabase URLs)
     photo_url = Column(String(500), nullable=True)
     qr_code_url = Column(String(500), nullable=True)
+
+    # Idempotency key supplied by clients (G2); NULL for legacy clients.
+    # Uniqueness comes from the named constraint above - do NOT add
+    # unique=True/index=True here, that would create redundant indexes.
+    client_uuid = Column(String(36), nullable=True)
 
     # Record metadata
     date_recorded = Column(Date, nullable=True)

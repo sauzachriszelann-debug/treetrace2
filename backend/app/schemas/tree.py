@@ -1,8 +1,9 @@
 import math
 from datetime import date, datetime
 from typing import Any, Optional
+from uuid import UUID
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, ValidationInfo, field_validator, model_validator
 
 
 class TreeMeasurementInput(BaseModel):
@@ -25,6 +26,29 @@ class TreeMeasurementInput(BaseModel):
             raise ValueError("must be a finite positive number")
         return value
 
+    @field_validator("lat", "lng", check_fields=False)
+    @classmethod
+    def validate_coordinate(
+        cls, value: Optional[float], info: ValidationInfo
+    ) -> Optional[float]:
+        """Allow missing coordinates, but reject invalid or out-of-range values.
+
+        latitude must be within [-90, 90] and longitude within [-180, 180].
+        Missing GPS is represented by None and is never invented here.
+        Each side is validated independently: a partial coordinate (one side
+        present, the other None) is permitted and the missing side stays None.
+        """
+        if value is None:
+            return value
+        if not math.isfinite(value):
+            raise ValueError("must be a finite number")
+        is_latitude = info.field_name == "lat"
+        limit = 90.0 if is_latitude else 180.0
+        if not -limit <= value <= limit:
+            axis = "latitude" if is_latitude else "longitude"
+            raise ValueError(f"{axis} must be between {-limit:.0f} and {limit:.0f}")
+        return value
+
 
 class TreeCreate(TreeMeasurementInput):
     common_name: str
@@ -40,6 +64,7 @@ class TreeCreate(TreeMeasurementInput):
     photo_url: Optional[str] = None
     date_recorded: Optional[date] = None
     notes: Optional[str] = None
+    client_uuid: Optional[UUID] = None
 
 
 class TreeUpdate(TreeMeasurementInput):
@@ -85,6 +110,7 @@ class TreeOut(BaseModel):
     date_recorded: Optional[date] = None
     notes: Optional[str] = None
     recorded_by_id: Optional[int] = None
+    client_uuid: Optional[str] = None
     endangered_status: str = "Not Listed"
     status_code: str = "NL"
     protected: bool = False
@@ -121,3 +147,10 @@ class PublicTreeOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class TreeCreateOut(TreeOut):
+    """Create response distinguishing a fresh 201 from an idempotent 200 replay."""
+
+    idempotent_replay: bool = False
+    replayed_differences: dict = {}

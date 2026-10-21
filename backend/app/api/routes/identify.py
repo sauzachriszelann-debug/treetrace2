@@ -1,15 +1,22 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form, Response
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
-from datetime import date
+from datetime import date, datetime, timezone
 import base64
 import json
 
 from app.db.database import get_db
+from app.models.tree_submission import TreeSubmission
 from app.models.user import User, UserRole
 from app.models.unknown_species import UnknownSpecies
 from app.core.security import get_current_user, require_admin
+from app.api.routes.tree_submissions import (
+    TREE_SUBMISSION_DAILY_LIMITS,
+    require_staff,
+    submission_out,
+)
 from app.services.ai_identify import identify_tree_from_url, _pipeline_with_status, measure_dbh_from_base64, get_dbh_runtime_status
 # from app.services.local_species_classifier import (
 #     classify_species_from_image,
@@ -77,6 +84,8 @@ def _reset_daily_usage_if_needed(user: User, db: Session):
         user.ai_usage_date = today
         user.ai_identifications_today = 0
         user.unknown_submissions_today = 0
+        # G4: all three counters roll over together on the shared date.
+        user.tree_submissions_today = 0
         db.commit()
 
 
@@ -178,6 +187,11 @@ def ai_usage(
     return {
         "ai": _usage_payload(current_user, AI_DAILY_LIMITS, "ai_identifications_today"),
         "unknown": _usage_payload(current_user, UNKNOWN_DAILY_LIMITS, "unknown_submissions_today"),
+        "tree_submissions": _usage_payload(
+            current_user,
+            TREE_SUBMISSION_DAILY_LIMITS,
+            "tree_submissions_today",
+        ),
         "qr_scan": {"unlimited": True},
         "public_map": {"unlimited": True},
     }
@@ -516,3 +530,133 @@ def review_unknown_species(
     db.commit()
     db.refresh(entry)
     return _unknown_species_out(entry)
+
+
+def _parse_location_description(description: Optional[str]):
+    """Recover coordinates from the web client's "lat, lng" free text.
+
+    Best-effort and conservative: anything that does not parse into two
+    in-range floats becomes (None, None) - coordinates are never guessed.
+    """
+    if not description:
+        return (None, None)
+    parts = [part.strip() for part in description.split(",")]
+    if len(parts) != 2:
+        return (None, None)
+    try:
+        lat = float(parts[0])
+        lng = float(parts[1])
+    except ValueError:
+        return (None, None)
+    if not (-90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0):
+        return (None, None)
+    return (lat, lng)
+
+
+@router.post("/unknown-species/{entry_id}/convert", status_code=201)
+def convert_unknown_species_to_submission(
+    entry_id: int,
+    response: Response,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_staff),
+):
+    """Convert an IDENTIFIED unknown-species entry into a pending tree
+    submission (Path B integration, safeguard C).
+
+    * Staff only; the original submitter may not convert their own entry.
+    * Requires a non-empty identified_as.
+    * The unknown-species entry is never modified - the submission references
+      it via source_unknown_species_id (unique), and the original submitter
+      is preserved as the submission's submitter.
+    * Repeated/concurrent conversions are safe: the unique constraint plus a
+      replay check return the already-created submission with HTTP 200 and
+      Idempotent-Replay: true.
+    """
+    entry = db.query(UnknownSpecies).filter(UnknownSpecies.id == entry_id).first()
+    if entry is None:
+        raise HTTPException(
+            status_code=404, detail="Unknown species submission not found"
+        )
+
+    if entry.submitted_by_id is not None and entry.submitted_by_id == current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="You cannot review your own submission.",
+        )
+
+    if not (entry.identified_as or "").strip():
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Identify the species first: a conversion requires a "
+                "non-empty identified_as."
+            ),
+        )
+
+    def replay(existing: TreeSubmission):
+        response.status_code = 200
+        response.headers["Idempotent-Replay"] = "true"
+        return submission_out(existing)
+
+    existing = (
+        db.query(TreeSubmission)
+        .filter(TreeSubmission.source_unknown_species_id == entry.id)
+        .first()
+    )
+    if existing is not None:
+        return replay(existing)
+
+    lat, lng = _parse_location_description(entry.location_description)
+    notes_parts = [
+        text
+        for text in (
+            (entry.submitter_notes or "").strip(),
+            (
+                f"Location note: {entry.location_description}"
+                if entry.location_description
+                else ""
+            ).strip(),
+        )
+        if text
+    ]
+
+    for attempt in range(2):
+        try:
+            submission = TreeSubmission(
+                common_name=(entry.identified_as or "").strip(),
+                photo_url=entry.photo_url,
+                barangay=entry.barangay,
+                lat=lat,
+                lng=lng,
+                notes=("\n".join(notes_parts) or None),
+                ai_candidates=entry.ai_candidates,
+                source="ai_identify",
+                source_unknown_species_id=entry.id,
+                # Safeguard C: the ORIGINAL submitter stays the submitter;
+                # the converting reviewer becomes reviewed_by only after an
+                # approve/reject/link action on the submission itself.
+                submitted_by_id=entry.submitted_by_id,
+                status="pending",
+            )
+            db.add(submission)
+            db.commit()
+            db.refresh(submission)
+            return submission_out(submission)
+        except IntegrityError:
+            db.rollback()
+            # Lost a concurrent conversion race - return the winner's row.
+            existing = (
+                db.query(TreeSubmission)
+                .filter(TreeSubmission.source_unknown_species_id == entry.id)
+                .first()
+            )
+            if existing is not None:
+                return replay(existing)
+            if attempt == 0:
+                continue
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Could not uniquely record this conversion. Please retry."
+                ),
+            )

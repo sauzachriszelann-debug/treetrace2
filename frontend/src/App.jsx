@@ -24,6 +24,7 @@ import AIIdentify        from "@/pages/AIIdentify";
 import CommunityStructure from "@/pages/CommunityStructure";
 import Upgrade           from "@/pages/Upgrade";
 import UnknownSpeciesReview from "@/pages/UnknownSpeciesReview";
+import MySubmissions from "@/pages/MySubmissions";
 import ReportsAndTools from "@/pages/ReportsAndTools";
 import ProjectEvaluation from "@/pages/ProjectEvaluation";
 import SystemHome from "@/pages/SystemHome";
@@ -65,6 +66,7 @@ export default function App() {
           <Route path="community"   element={<CommunityStructure />} />
           <Route path="upgrade"     element={<Upgrade />} />
           <Route path="unknown-species" element={<UnknownSpeciesReview />} />
+          <Route path="my-submissions" element={<MySubmissions />} />
           <Route path="reports"     element={<ReportsAndTools />} />
           <Route path="evaluation"  element={<ProjectEvaluation />} />
           <Route path="planting"    element={<PlantingRecommendations />} />

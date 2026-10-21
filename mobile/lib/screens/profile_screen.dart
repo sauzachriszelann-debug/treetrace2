@@ -7,6 +7,7 @@ import '../services/theme.dart';
 import '../models/models.dart';
 import 'upgrade_screen.dart';
 import 'project_evaluation_screen.dart';
+import 'my_submissions_screen.dart';
 import 'unknown_review_screen.dart';
 import 'users_screen.dart';
 import 'qr_labels_screen.dart';
@@ -331,6 +332,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (_) => const ProjectEvaluationScreen(),
+                ),
+              ),
+            ),
+            _MoreAction(
+              'My Submissions',
+              Icons.assignment_outlined,
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const MySubmissionsScreen(),
                 ),
               ),
             ),

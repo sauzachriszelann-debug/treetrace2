@@ -23,6 +23,9 @@ class User(Base):
     upgrade_requested = Column(Boolean, default=False, nullable=False)
     ai_identifications_today = Column(Integer, default=0, nullable=False)
     unknown_submissions_today = Column(Integer, default=0, nullable=False)
+    # G4: separate daily tree-submission quota (decision 10); shares the
+    # ai_usage_date rollover with the counters above.
+    tree_submissions_today = Column(Integer, default=0, nullable=False)
     ai_usage_date = Column(Date, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

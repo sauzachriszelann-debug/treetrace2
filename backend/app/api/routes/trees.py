@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import csv
@@ -7,7 +9,7 @@ import math
 from app.db.database import get_db
 from app.models.tree import Tree
 from app.models.user import User
-from app.schemas.tree import TreeCreate, TreeUpdate, TreeOut
+from app.schemas.tree import TreeCreate, TreeCreateOut, TreeUpdate, TreeOut
 from app.core.security import get_current_user, require_admin
 from app.services.species_db import lookup_species
 
@@ -178,27 +180,395 @@ def route_plan(
     }
 
 
-@router.post("/", response_model=TreeOut, status_code=201)
+def _normalize_name(value: Optional[str]) -> str:
+    return (value or "").strip().lower()
+
+
+def _normalize_coord(value: Optional[float]) -> Optional[float]:
+    return None if value is None else round(float(value), 7)
+
+
+def _identity_fingerprint(
+    common_name: Optional[str],
+    scientific_name: Optional[str],
+    lat: Optional[float],
+    lng: Optional[float],
+    barangay: Optional[str],
+) -> tuple:
+    """Identity of a tree submission, used to detect client_uuid reuse.
+
+    Deliberately excludes photo_url (every retry re-uploads and receives a
+    fresh URL) and measurement/annotation fields (editable data, not
+    identity). Any difference here means the UUID is being reused for a
+    different tree and must surface as HTTP 409 - never a silent merge.
+    """
+    return (
+        _normalize_name(common_name),
+        _normalize_name(scientific_name),
+        _normalize_coord(lat),
+        _normalize_coord(lng),
+        _normalize_name(barangay),
+    )
+
+
+_COMPARE_FIELDS = (
+    "dbh_cm",
+    "height_m",
+    "health_status",
+    "city",
+    "province",
+    "photo_url",
+    "date_recorded",
+    "notes",
+)
+
+# The single uniqueness object protecting trees.client_uuid (named constraint
+# in app/models/tree.py; same-named unique index in
+# backend/migrations/0001_add_trees_client_uuid.sql).
+_CLIENT_UUID_CONSTRAINT = "ux_trees_client_uuid"
+
+
+def _is_client_uuid_conflict(error: IntegrityError) -> bool:
+    """True only for the trees.client_uuid uniqueness violation.
+
+    PostgreSQL (production): SQLSTATE 23505 alone is NOT enough - the
+    violated constraint/index must be the G2 idempotency one. Any other
+    unique violation (or any other integrity failure) is unrelated and must
+    propagate instead of being misread as a retryable UUID collision.
+
+    SQLite (local tests): accept the table.column-scoped UNIQUE message for
+    trees.client_uuid only.
+    """
+    original = getattr(error, "orig", None)
+    if original is None:
+        return False
+    sqlstate = getattr(original, "pgcode", None)
+    if sqlstate is not None:  # psycopg2 / psycopg3 carry the SQLSTATE here
+        return sqlstate == "23505" and _CLIENT_UUID_CONSTRAINT in str(original)
+    # SQLite raises e.g. "UNIQUE constraint failed: trees.client_uuid".
+    return "UNIQUE constraint failed: trees.client_uuid" in str(original)
+
+
+def _replayed_differences(existing: Tree, submitted: dict) -> dict:
+    """Report non-identity differences between the stored tree and a replay.
+
+    Differences are reported, never applied: an existing tree is never
+    overwritten by an idempotent replay.
+    """
+
+    def norm_str(value):
+        if hasattr(value, "value"):  # SQLAlchemy Enum members
+            value = value.value
+        text = (value or "").strip()
+        return text or None
+
+    def norm_num(value):
+        return None if value is None else round(float(value), 2)
+
+    def norm_date(value):
+        return None if value is None else value.isoformat()
+
+    converters = {
+        "dbh_cm": norm_num,
+        "height_m": norm_num,
+        "health_status": norm_str,
+        "city": norm_str,
+        "province": norm_str,
+        "photo_url": norm_str,
+        "date_recorded": norm_date,
+        "notes": norm_str,
+    }
+    differences = {}
+    for field in _COMPARE_FIELDS:
+        convert = converters[field]
+        existing_value = convert(getattr(existing, field))
+        submitted_value = convert(submitted.get(field))
+        if existing_value != submitted_value:
+            differences[field] = {
+                "existing": existing_value,
+                "submitted": submitted_value,
+            }
+    return differences
+
+
+@router.post("/", response_model=TreeCreateOut, status_code=201)
 def create_tree(
     payload: TreeCreate,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a new tree record."""
+    """Create a new tree record.
+
+    Idempotent when the client supplies ``client_uuid``: a repeated request
+    returns the already-created tree with HTTP 200 and an
+    ``Idempotent-Replay: true`` header instead of creating a duplicate.
+    """
     if current_user.role == "citizen":
         raise HTTPException(
             status_code=403,
             detail="Citizen accounts cannot add official inventory trees. Please submit the species for expert review instead.",
         )
     data = payload.model_dump()
+    client_uuid = data.pop("client_uuid", None)
+    client_uuid = str(client_uuid) if client_uuid is not None else None
+    submitted = payload.model_dump(exclude={"client_uuid"})
+
+    def replay(existing: Tree):
+        # The route default is 201; an idempotent replay is an HTTP 200.
+        response.status_code = 200
+        response.headers["Idempotent-Replay"] = "true"
+        body = TreeCreateOut.model_validate(existing).model_dump()
+        body["idempotent_replay"] = True
+        body["replayed_differences"] = _replayed_differences(existing, submitted)
+        return body
+
+    if client_uuid is not None:
+        existing = (
+            db.query(Tree).filter(Tree.client_uuid == client_uuid).first()
+        )
+        if existing is not None:
+            if (
+                _identity_fingerprint(
+                    payload.common_name,
+                    payload.scientific_name,
+                    payload.lat,
+                    payload.lng,
+                    payload.barangay,
+                )
+                != _identity_fingerprint(
+                    existing.common_name,
+                    existing.scientific_name,
+                    existing.lat,
+                    existing.lng,
+                    existing.barangay,
+                )
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "message": (
+                            "This submission key is already associated with a "
+                            "different tree. Nothing was merged or overwritten."
+                        ),
+                        "existing_tree_id": existing.id,
+                    },
+                )
+            return replay(existing)
+
     biomass, carbon = _estimate_tree_carbon(data.get("dbh_cm"), data.get("height_m"))
     data["biomass_kg"] = biomass
     data["carbon_kg"] = carbon
-    tree = Tree(**data, recorded_by_id=current_user.id)
-    db.add(tree)
-    db.commit()
-    db.refresh(tree)
-    return tree
+    data["client_uuid"] = client_uuid
+
+    # The unique index on trees.client_uuid is the source of truth: two
+    # concurrent requests cannot both insert the same key. The loser raises
+    # IntegrityError after the winner commits; resolve it by returning the
+    # winner's record (or 409 on a fingerprint mismatch).
+    for attempt in range(2):
+        try:
+            tree = Tree(**data, recorded_by_id=current_user.id)
+            db.add(tree)
+            db.commit()
+            db.refresh(tree)
+            return tree
+        except IntegrityError as exc:
+            db.rollback()
+            # Recover ONLY from the client_uuid uniqueness violation. Any
+            # other integrity failure (unrelated constraint, wrong SQLSTATE,
+            # wrong constraint name) is re-raised untouched.
+            if client_uuid is None or not _is_client_uuid_conflict(exc):
+                raise
+            existing = (
+                db.query(Tree).filter(Tree.client_uuid == client_uuid).first()
+            )
+            if existing is not None:
+                if (
+                    _identity_fingerprint(
+                        payload.common_name,
+                        payload.scientific_name,
+                        payload.lat,
+                        payload.lng,
+                        payload.barangay,
+                    )
+                    != _identity_fingerprint(
+                        existing.common_name,
+                        existing.scientific_name,
+                        existing.lat,
+                        existing.lng,
+                        existing.barangay,
+                    )
+                ):
+                    raise HTTPException(
+                        status_code=409,
+                        detail={
+                            "message": (
+                                "This submission key is already associated with a "
+                                "different tree. Nothing was merged or overwritten."
+                            ),
+                            "existing_tree_id": existing.id,
+                        },
+                    )
+                return replay(existing)
+            if attempt == 0:
+                # The conflicting transaction aborted; retry the insert once.
+                continue
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Could not uniquely record this submission. "
+                    "Please retry with the same submission key."
+                ),
+            )
+
+
+# ── Nearby matching suggestions (G3) ─────────────────────────────────────
+_NEARBY_DEFAULT_RADIUS_M = 15.0
+_NEARBY_MAX_RADIUS_M = 100.0
+_NEARBY_DEFAULT_LIMIT = 5
+_NEARBY_MAX_LIMIT = 10
+
+
+@router.get("/nearby")
+def nearby_trees(
+    lat: float = Query(..., ge=-90, le=90),
+    lng: float = Query(..., ge=-180, le=180),
+    radius_m: float = Query(_NEARBY_DEFAULT_RADIUS_M, gt=0, le=_NEARBY_MAX_RADIUS_M),
+    limit: int = Query(_NEARBY_DEFAULT_LIMIT, ge=1, le=_NEARBY_MAX_LIMIT),
+    common_name: Optional[str] = None,
+    scientific_name: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Advisory duplicate-prevention lookup (G3). Strictly read-only.
+
+    Suggests existing trees near a proposed GPS point so staff can avoid
+    registering the same physical tree twice. The result is advisory only:
+    this endpoint never writes, and callers must never treat a match as a
+    reason to merge, overwrite, delete, or reject a registration.
+
+    Nearest-neighbor selection is exact and portable. The WHERE clause
+    bounds the scan to a geographic box that provably contains the entire
+    search circle (exact spherical bounds: |Δlat| ≤ r/R, and
+    |Δlng| ≤ asin(sin(r/R)/cos(lat)), covering the antimeridian and pole
+    cases), and every row in that box is then measured with the same
+    haversine used by route-plan. Ordering and the limit are applied only
+    AFTER exact distances are computed — sorted by unrounded distance with
+    tree id as tie-break — so no candidate that is genuinely nearer can be
+    dropped or misordered by an approximation before the final result set
+    is selected.
+
+    Trade-off: with no coordinate index (per approved design) this is a
+    full sequential scan either way; dropping SQL ORDER BY/LIMIT only
+    changes which rows are transferred (every in-box row — tens to a few
+    hundred for a <=100 m urban box — instead of limit+5) and moves a
+    trivial sort to Python. Sub-millisecond at inventory scale, in exchange
+    for the exact guarantee. SQL-side exact haversine is not an option
+    (SQLite in the test stack has no trig functions; PostgreSQL-only
+    functions would break portability), and PostGIS is out of scope — no
+    schema change is needed for this approach.
+    """
+    if current_user.role == "citizen":
+        raise HTTPException(
+            status_code=403,
+            detail="Nearby suggestions are available to admins and field workers.",
+        )
+
+    # Bounding box: a proven superset of the search circle on the sphere
+    # used by _distance_km (R = 6371 km). Any point within angular radius
+    # gamma = r/R satisfies |Δlat| <= gamma (a meridian arc is the latitude
+    # extreme), and maximising |Δlng| over the circle via the spherical law
+    # of cosines gives |Δlng| <= asin(sin(gamma)/cos(lat)), or all
+    # longitudes when the circle contains a pole. A 1e-9-degree epsilon
+    # (~0.1 mm) absorbs floating-point noise so the box can never clip a
+    # tree that is inside the radius.
+    gamma = radius_m / 6371000.0
+    box_dlat = math.degrees(gamma)
+    cos_lat = math.cos(math.radians(lat))
+    sin_dlng = math.sin(gamma) / max(cos_lat, 1e-12)
+    if sin_dlng >= 1.0:
+        box_dlng = 180.0  # circle contains a pole: every longitude qualifies
+    else:
+        box_dlng = math.degrees(math.asin(sin_dlng))
+    epsilon = 1e-9
+    box_lat_low = lat - box_dlat - epsilon
+    box_lat_high = lat + box_dlat + epsilon
+    box_lng_low = lng - box_dlng - epsilon
+    box_lng_high = lng + box_dlng + epsilon
+
+    lng_filter = Tree.lng.between(box_lng_low, box_lng_high)
+    if box_lng_high > 180.0:
+        # Box crosses the antimeridian: also match the wrapped segment.
+        lng_filter = or_(
+            lng_filter,
+            Tree.lng.between(box_lng_low - 360.0, box_lng_high - 360.0),
+        )
+    elif box_lng_low < -180.0:
+        lng_filter = or_(
+            lng_filter,
+            Tree.lng.between(box_lng_low + 360.0, box_lng_high + 360.0),
+        )
+
+    # No SQL ORDER BY / LIMIT here, deliberately: every row in the box must
+    # be measured exactly before nearest-N truncation, so that an
+    # approximation can never exclude a genuinely nearer tree.
+    rows = (
+        db.query(Tree)
+        .filter(
+            Tree.lat.isnot(None),
+            Tree.lng.isnot(None),
+            Tree.lat.between(box_lat_low, box_lat_high),
+            lng_filter,
+        )
+        .all()
+    )
+
+    submitted_common = _normalize_name(common_name)
+    submitted_sci = _normalize_name(scientific_name)
+    has_submitted_species = bool(submitted_common or submitted_sci)
+
+    measured = []
+    for tree in rows:
+        distance_m = _distance_km(lat, lng, tree.lat, tree.lng) * 1000.0
+        if distance_m > radius_m:
+            continue
+        if not has_submitted_species:
+            species_match = "unknown"
+        else:
+            same_common = bool(submitted_common) and (
+                _normalize_name(tree.common_name) == submitted_common
+            )
+            same_sci = (
+                bool(submitted_sci)
+                and bool(tree.scientific_name)
+                and _normalize_name(tree.scientific_name) == submitted_sci
+            )
+            species_match = "exact" if (same_common or same_sci) else "different"
+        measured.append(
+            (
+                distance_m,
+                tree.id,
+                {
+                    "tree_id": tree.id,
+                    "common_name": tree.common_name,
+                    "scientific_name": tree.scientific_name,
+                    "distance_m": round(distance_m, 1),
+                    "species_match": species_match,
+                    "health_status": getattr(
+                        tree.health_status, "value", tree.health_status
+                    ),
+                    "barangay": tree.barangay,
+                    "created_at": tree.created_at.isoformat()
+                    if tree.created_at
+                    else None,
+                },
+            )
+        )
+    # Order by the exact unrounded distance (tree id breaks ties between
+    # nearly equal candidates so the response is deterministic), and only
+    # then truncate to the requested limit.
+    measured.sort(key=lambda item: (item[0], item[1]))
+    return [payload for _, _, payload in measured[:limit]]
 
 
 @router.get("/{tree_id}", response_model=TreeOut)

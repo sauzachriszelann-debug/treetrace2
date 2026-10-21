@@ -73,7 +73,7 @@ flutter run
 
 ---
 
-## 🔧 Environment Setup
+## Environment Setup
 
 Copy `backend/.env.example` to `backend/.env` and fill in:
 

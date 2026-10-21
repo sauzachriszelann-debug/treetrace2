@@ -40,6 +40,13 @@ export const treesApi = {
     return data;
   },
 
+  // G3 advisory duplicate-prevention lookup. The 5s timeout keeps the
+  // nearby check from hanging a registration indefinitely.
+  nearby: async (params = {}) => {
+    const { data } = await api.get("/trees/nearby", { params, timeout: 5000 });
+    return data;
+  },
+
   exportInventoryCsv: async () => {
     const { data } = await api.get("/trees/reports/inventory.csv", {
       responseType: "blob",

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
+import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -114,6 +115,80 @@ class ApiService {
     await _writeQueue(queue);
   }
 
+  Future<void> _updateQueuedPayload(
+      int id, Map<String, dynamic> payload) async {
+    final queue = await _readQueue();
+    for (final item in queue) {
+      if (item['id'] == id) {
+        item['payload'] = payload;
+      }
+    }
+    await _writeQueue(queue);
+  }
+
+  // ── Idempotent submission key (G2) ─────────────────────────────────────
+  /// Generates an RFC 4122 v4 UUID without adding a dependency.
+  String generateClientUuid() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
+        '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+  }
+
+  static const _pendingDraftKey = 'treetrace_tree_draft';
+
+  /// Pending submission envelope (key + payload snapshot). Survives app
+  /// restarts; cleared only on confirmed success or explicit discard.
+  Future<Map<String, dynamic>?> readPendingDraft() async {
+    final raw = await _storage.read(key: _pendingDraftKey);
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      return Map<String, dynamic>.from(jsonDecode(raw) as Map);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> writePendingDraft(Map<String, dynamic> draft) async {
+    await _storage.write(key: _pendingDraftKey, value: jsonEncode(draft));
+  }
+
+  Future<void> clearPendingDraft() async {
+    await _storage.delete(key: _pendingDraftKey);
+  }
+
+  /// Reads the pending draft while distinguishing three cases:
+  ///  - {'draft': Map, 'error': null}         a readable draft;
+  ///  - {'draft': null, 'error': null}        nothing stored;
+  ///  - {'draft': null, 'error': ...}         stored data exists but could
+  ///    not be recovered; 'raw' carries whatever was read, if anything.
+  /// Callers must never overwrite stored data when 'error' is set unless
+  /// the user explicitly confirmed the overwrite.
+  Future<Map<String, dynamic>> readPendingDraftResult() async {
+    String? raw;
+    try {
+      raw = await _storage.read(key: _pendingDraftKey);
+    } catch (_) {
+      return {'draft': null, 'error': 'storage', 'raw': null};
+    }
+    if (raw == null || raw.isEmpty) {
+      return {'draft': null, 'error': null, 'raw': null};
+    }
+    try {
+      return {
+        'draft': Map<String, dynamic>.from(jsonDecode(raw) as Map),
+        'error': null,
+        'raw': null,
+      };
+    } catch (_) {
+      // Unparseable but still present: preserve the raw bytes for the UI.
+      return {'draft': null, 'error': 'unreadable', 'raw': raw};
+    }
+  }
+
   Future<List<Map<String, dynamic>>> aiIdentificationHistory() async {
     final raw = await _storage.read(key: _aiHistoryKey);
     if (raw == null || raw.isEmpty) return [];
@@ -162,8 +237,16 @@ class ApiService {
           if (photoPath != null &&
               photoPath.isNotEmpty &&
               File(photoPath).existsSync()) {
-            payload['photo_url'] =
-                await uploadPhoto(File(photoPath), purpose: 'tree_photo');
+            final uploadedUrl = await uploadPhoto(
+              File(photoPath),
+              purpose: 'tree_photo',
+            );
+            if (uploadedUrl != null) {
+              payload['photo_url'] = uploadedUrl;
+              // Persist the uploaded URL so a later retry of this queue item
+              // does not upload the same photo again.
+              await _updateQueuedPayload(item['id'] as int, payload);
+            }
           }
           await createTree(payload);
         } else if (item['type'] == 'CREATE_HEALTH_LOG') {
@@ -319,6 +402,49 @@ class ApiService {
   Future<Map<String, dynamic>> createTree(Map<String, dynamic> data) async {
     final res = await _dio.post('/trees/', data: data);
     return res.data;
+  }
+
+  /// G4: citizens create PENDING tree submissions, never official trees.
+  /// Idempotent through client_uuid exactly like createTree (G2).
+  Future<Map<String, dynamic>> createTreeSubmission(
+      Map<String, dynamic> data) async {
+    final res = await _dio.post('/tree-submissions/', data: data);
+    return res.data;
+  }
+
+  /// G4: the caller's own submissions with their review decisions.
+  Future<List<dynamic>> getMyTreeSubmissions() async {
+    final res = await _dio.get('/tree-submissions/my');
+    return res.data;
+  }
+
+  /// G3 advisory duplicate-prevention lookup: existing trees near a
+  /// proposed GPS point. The short receive timeout keeps the check from
+  /// hanging a registration indefinitely; callers must treat a failure as
+  /// "unknown", never as "no matches".
+  Future<List<Map<String, dynamic>>> getNearbyTrees({
+    required double lat,
+    required double lng,
+    double radiusM = 15,
+    int limit = 5,
+    String? commonName,
+    String? scientificName,
+  }) async {
+    final res = await _dio.get(
+      '/trees/nearby',
+      queryParameters: {
+        'lat': lat,
+        'lng': lng,
+        'radius_m': radiusM,
+        'limit': limit,
+        if (commonName != null && commonName.isNotEmpty)
+          'common_name': commonName,
+        if (scientificName != null && scientificName.isNotEmpty)
+          'scientific_name': scientificName,
+      },
+      options: Options(receiveTimeout: const Duration(seconds: 8)),
+    );
+    return (res.data as List).cast<Map<String, dynamic>>();
   }
 
   Future<Map<String, dynamic>> updateTree(

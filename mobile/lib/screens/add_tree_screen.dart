@@ -3,11 +3,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:dio/dio.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 import '../services/api_service.dart';
+import '../services/auth_provider.dart';
 import '../services/theme.dart';
 import 'dbh_measure_screen.dart';
+import 'tree_detail_screen.dart';
 
 class AddTreeScreen extends StatefulWidget {
   final Map<String, dynamic>? aiResult;
@@ -41,6 +45,8 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
   String? _dbhMethod;
   Map<String, dynamic>? _aiPrediction;
   double? _predictedDbhCm;
+  String? _pendingKey;
+  Map<String, dynamic>? _restoredSnapshot;
 
   @override
   void initState() {
@@ -57,7 +63,10 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
       _notesCtrl.text = _usefulAiNote(r['description']) ?? '';
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _captureGps(automatic: true);
+      if (mounted) {
+        _captureGps(automatic: true);
+        _offerDraftRecovery();
+      }
     });
   }
 
@@ -89,6 +98,164 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     ];
     if (blocked.any(lower.contains)) return null;
     return text;
+  }
+
+  bool _sameIdentity(
+      Map<String, dynamic> snapshot, Map<String, dynamic> payload) {
+    String norm(Object? v) => (v ?? '').toString().trim().toLowerCase();
+    double? coord(Object? v) {
+      final text = (v ?? '').toString().trim();
+      if (text.isEmpty) return null;
+      final parsed = double.tryParse(text);
+      if (parsed == null || !parsed.isFinite) return null;
+      return (parsed * 1e7).round() / 1e7;
+    }
+
+    return norm(snapshot['common_name']) == norm(payload['common_name']) &&
+        norm(snapshot['scientific_name']) == norm(payload['scientific_name']) &&
+        coord(snapshot['lat']) == coord(payload['lat']) &&
+        coord(snapshot['lng']) == coord(payload['lng']) &&
+        norm(snapshot['barangay']) == norm(payload['barangay']);
+  }
+
+  Map<String, dynamic> _currentSnapshot({String? exactLocation}) => {
+        'common_name': _nameCtrl.text.trim(),
+        'scientific_name': _sciCtrl.text.trim(),
+        'dbh_text': _dbhCtrl.text.trim(),
+        'height_text': _heightCtrl.text.trim(),
+        'health': _health,
+        'barangay': _barangayCtrl.text.trim(),
+        'exact_location': exactLocation ?? _exactLocationCtrl.text.trim(),
+        'city': _cityCtrl.text.trim(),
+        'province': _provinceCtrl.text.trim(),
+        'lat': _latCtrl.text.trim(),
+        'lng': _lngCtrl.text.trim(),
+        'notes': _notesCtrl.text.trim(),
+      };
+
+  Future<void> _offerDraftRecovery() async {
+    final result = await api.readPendingDraftResult();
+    final draft = result['draft'] as Map<String, dynamic>?;
+    if (!mounted) return;
+    if (result['error'] == 'storage') {
+      // Secure storage could not be read: nothing was discarded and no
+      // submission key will be created or replaced silently.
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Could not check secure storage for a previous submission. Nothing was discarded.'),
+          backgroundColor: kPoor));
+      return;
+    }
+    if (result['error'] == 'unreadable') {
+      await _offerUnreadableDraftRecovery(result['raw']?.toString());
+      return;
+    }
+    if (draft == null) return;
+    final snapshot = Map<String, dynamic>.from(draft['snapshot'] ?? {});
+    final uncertain =
+        draft['status'] == 'uncertain' || draft['status'] == 'in_flight';
+    final submitted =
+        Map<String, dynamic>.from(draft['submitted_payload'] ?? {});
+    final canRetry = uncertain && submitted.isNotEmpty;
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Recover previous submission?'),
+        content: Text(
+          '${snapshot['common_name'] ?? 'Unnamed tree'} — saved ${draft['created_at'] ?? 'earlier'}'
+          '${uncertain ? '\n\nA previous save may have reached the server. Resuming keeps the same submission key, so retrying cannot create a duplicate.' : '\n\nResume to continue this draft, or discard it to start fresh.'}',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, 'discard'),
+              child: const Text('Discard')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, 'resume'),
+              child: const Text('Resume')),
+          if (canRetry)
+            ElevatedButton(
+                onPressed: () => Navigator.pop(context, 'retry'),
+                child: const Text('Retry original submission')),
+        ],
+      ),
+    );
+    if (choice == 'discard') {
+      // Explicit confirmation: the pending key and payload are discarded.
+      await api.clearPendingDraft();
+      return;
+    }
+    if (choice == 'retry') {
+      await _retryOriginalSubmission(draft);
+      return;
+    }
+    if (choice != 'resume') {
+      // Dialog dismissed without a choice: keep the pending submission
+      // (key and payload) untouched.
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _pendingKey = draft['key']?.toString();
+      _restoredSnapshot = snapshot;
+      _nameCtrl.text = snapshot['common_name']?.toString() ?? '';
+      _sciCtrl.text = snapshot['scientific_name']?.toString() ?? '';
+      _dbhCtrl.text = snapshot['dbh_text']?.toString() ?? '';
+      _heightCtrl.text = snapshot['height_text']?.toString() ?? '';
+      _barangayCtrl.text = snapshot['barangay']?.toString() ?? '';
+      _exactLocationCtrl.text = snapshot['exact_location']?.toString() ?? '';
+      _latCtrl.text = snapshot['lat']?.toString() ?? '';
+      _lngCtrl.text = snapshot['lng']?.toString() ?? '';
+      _notesCtrl.text = snapshot['notes']?.toString() ?? '';
+      final photoPath = draft['photo_path']?.toString();
+      if (photoPath != null &&
+          photoPath.isNotEmpty &&
+          File(photoPath).existsSync()) {
+        _photo = File(photoPath);
+      }
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Draft restored. Saving reuses the same submission key; the original payload stays retryable.'),
+          backgroundColor: kHealthy));
+    }
+  }
+
+  /// A stored pending submission exists but cannot be parsed. Its bytes are
+  /// preserved unless the user explicitly discards them.
+  Future<void> _offerUnreadableDraftRecovery(String? raw) async {
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Previous submission could not be read'),
+        content: SingleChildScrollView(
+          child: Text(
+            'A pending submission was found on this device but could not be '
+            'read. It has NOT been deleted.\n\n'
+            '${raw == null || raw.isEmpty ? '' : 'Stored data:\n$raw\n\n'}'
+            'Keep it (nothing changes), or discard it explicitly to start fresh.',
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Keep It')),
+          ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: kPoor),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Discard Unreadable Draft',
+                  style: TextStyle(color: Colors.white))),
+        ],
+      ),
+    );
+    if (discard == true) {
+      await api.clearPendingDraft();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Unreadable submission data discarded.'),
+            backgroundColor: kHealthy));
+      }
+    }
   }
 
   Future<void> _pickPhoto(ImageSource source) async {
@@ -177,12 +344,17 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
         position.longitude,
       );
       setState(() {
-        _latCtrl.text = position.latitude.toStringAsFixed(7);
-        _lngCtrl.text = position.longitude.toStringAsFixed(7);
-        if (location.exactLocation != null) {
+        // Preserve restored or manually entered values (G2 draft recovery).
+        if (_latCtrl.text.isEmpty) {
+          _latCtrl.text = position.latitude.toStringAsFixed(7);
+        }
+        if (_lngCtrl.text.isEmpty) {
+          _lngCtrl.text = position.longitude.toStringAsFixed(7);
+        }
+        if (location.exactLocation != null && _exactLocationCtrl.text.isEmpty) {
           _exactLocationCtrl.text = location.exactLocation!;
         }
-        if (location.barangay != null) {
+        if (location.barangay != null && _barangayCtrl.text.isEmpty) {
           _barangayCtrl.text = location.barangay!;
         }
         if (location.city != null) {
@@ -478,6 +650,31 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     final dbhCm = _parseOptionalMeasurement(_dbhCtrl.text);
     final heightM = _parseOptionalMeasurement(_heightCtrl.text);
 
+    double? lat;
+    double? lng;
+    final rawLat = _latCtrl.text.trim();
+    if (rawLat.isNotEmpty) {
+      lat = double.tryParse(rawLat);
+      if (lat == null || !lat.isFinite || lat < -90 || lat > 90) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Latitude must be a number between -90 and 90, or leave it empty.'),
+            backgroundColor: kPoor));
+        return;
+      }
+    }
+    final rawLng = _lngCtrl.text.trim();
+    if (rawLng.isNotEmpty) {
+      lng = double.tryParse(rawLng);
+      if (lng == null || !lng.isFinite || lng < -180 || lng > 180) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Longitude must be a number between -180 and 180, or leave it empty.'),
+            backgroundColor: kPoor));
+        return;
+      }
+    }
+
     final endangered = _checkEndangered(_nameCtrl.text.trim().toLowerCase());
     if (endangered != null) {
       final proceed = await showDialog<bool>(
@@ -522,6 +719,9 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     }
 
     setState(() => _saving = true);
+    // G4: citizens submit PENDING tree submissions for expert review; only
+    // staff records become official inventory trees.
+    final isCitizen = context.read<AuthProvider>().user?.role == 'citizen';
     try {
       String? photoUrl;
       final exactLocation = _exactLocationCtrl.text.trim();
@@ -540,8 +740,8 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
             : _barangayCtrl.text.trim(),
         'dbh_cm': dbhCm,
         'height_m': heightM,
-        'lat': double.tryParse(_latCtrl.text),
-        'lng': double.tryParse(_lngCtrl.text),
+        'lat': lat,
+        'lng': lng,
         'city': _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
         'province': _provinceCtrl.text.trim().isEmpty
             ? null
@@ -550,33 +750,503 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
         'photo_url': photoUrl,
       };
 
+      // ── Idempotent submission key (G2) ─────────────────────────────────
+      // A pending submission from an earlier attempt (possibly already on
+      // the server) must never be replaced silently: its key and payload
+      // are preserved until the user explicitly confirms a new submission.
+      var key = _pendingKey;
+      final pendingRead = await api.readPendingDraftResult();
+      if (pendingRead['error'] != null) {
+        // Never overwrite pending data that could not be read back.
+        final keepGoing = await _confirmUnreadablePendingOverwrite(
+          pendingRead['error'] == 'storage'
+              ? 'Secure storage could not be read'
+              : 'The pending submission on this device could not be read',
+          pendingRead['raw']?.toString(),
+        );
+        if (keepGoing != true) return; // save aborted; data untouched
+      }
+      final stored = pendingRead['draft'] as Map<String, dynamic>?;
+      final storedKey = stored?['key']?.toString();
+      if (stored != null && (key == null || key != storedKey)) {
+        // Another pending submission owns the envelope (for example the
+        // recovery dialog was dismissed). Ask before replacing it.
+        final replace = await _confirmReplacePending(stored);
+        if (replace != true) return; // everything preserved; save aborted
+        await api.clearPendingDraft();
+        key = null;
+        _restoredSnapshot = null;
+      } else if (key != null &&
+          stored != null &&
+          _restoredSnapshot != null &&
+          !_sameIdentity(_restoredSnapshot!, payload)) {
+        // Same pending key, but the form now describes a different tree.
+        final replace = await _confirmReplacePending(stored);
+        if (replace != true) return; // previous key + payload preserved
+        await api.clearPendingDraft();
+        key = null;
+        _restoredSnapshot = null;
+      }
+      // ── Nearby matching suggestions (G3) ─────────────────────────────
+      // Advisory duplicate prevention for NEW submissions only: G2 flows
+      // that reuse an existing key (retry/edit of a pending submission)
+      // skip it, and offline saves queue without it - the queue
+      // confirmation below states that limitation explicitly.
+      if (!isCitizen &&
+          key == null &&
+          lat != null &&
+          lng != null &&
+          await api.isOnline()) {
+        final proceed = await _runNearbyCheck(
+          lat,
+          lng,
+          commonName: _nameCtrl.text.trim(),
+          scientificName: _sciCtrl.text.trim(),
+        );
+        if (proceed != true) return; // nothing written or sent yet
+      }
+
+      final createdAt = (stored != null && storedKey == key)
+          ? stored['created_at']?.toString()
+          : null;
+      key ??= api.generateClientUuid();
+      _pendingKey = key;
+      payload['client_uuid'] = key;
+
       if (await api.isOnline()) {
         if (_photo != null)
-          payload['photo_url'] =
-              await api.uploadPhoto(_photo!, purpose: 'tree_photo');
-        await api.createTree(payload);
-        if (_addToEvaluation) {
+          payload['photo_url'] = await api.uploadPhoto(_photo!,
+              purpose: isCitizen ? 'unknown_species' : 'tree_photo');
+        // Persist key + an immutable copy of the exact payload BEFORE the
+        // request: if it reaches the server and the response is lost, the
+        // retry carries the same key and payload. submitted_payload is
+        // written ONCE per key: an edited Save never replaces it, so
+        // "Retry original submission" always stays possible.
+        final priorSubmitted = stored != null &&
+                storedKey == key &&
+                stored['submitted_payload'] is Map
+            ? Map<String, dynamic>.from(stored['submitted_payload'] as Map)
+            : null;
+        try {
+          await api.writePendingDraft({
+            'key': key,
+            'created_at': createdAt ?? DateTime.now().toIso8601String(),
+            'status': 'in_flight',
+            'snapshot': _currentSnapshot(exactLocation: exactLocation),
+            'photo_path': _photo?.path,
+            'submitted_payload':
+                priorSubmitted ?? Map<String, dynamic>.from(payload),
+          });
+        } catch (e) {
+          // Surface a failed persistence instead of proceeding silently
+          // without local recovery data.
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(
+                    'Warning: could not secure this submission on this device ($e). If the save fails, it may not be recoverable.'),
+                backgroundColor: kPoor));
+          }
+        }
+        final result = isCitizen
+            ? await api.createTreeSubmission({...payload, 'source': 'mobile'})
+            : await api.createTree(payload);
+        await api.clearPendingDraft();
+        _pendingKey = null;
+        _restoredSnapshot = null;
+        // Staff replays carry idempotent_replay; G4 submission replays are
+        // recognised by a decided status (a fresh submission is 'pending').
+        if (result['idempotent_replay'] == true ||
+            (isCitizen &&
+                result['status'] != null &&
+                result['status'] != 'pending')) {
+          final differences =
+              Map<String, dynamic>.from(result['replayed_differences'] ?? {});
+          if (mounted) {
+            final summary = differences.keys.join(', ');
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(differences.isEmpty
+                    ? (isCitizen
+                        ? 'This submission was already recorded - no duplicate was created.'
+                        : 'Already recorded as tree #${result['id']} - no duplicate was created.')
+                    : 'Already recorded as tree #${result['id']}. Not overwritten; differences: $summary. Review the record to update it.'),
+                backgroundColor: kHealthy));
+            Navigator.pop(context, true);
+          }
+          return;
+        }
+        if (_addToEvaluation && !isCitizen) {
           try {
             await _saveEvaluationRow();
           } catch (_) {}
         }
+      } else if (isCitizen) {
+        // G4 (decision 8): citizen submissions are online-only; the offline
+        // queue stays a staff tool. The pending key/payload written above
+        // are discarded only because nothing was ever sent.
+        await api.clearPendingDraft();
+        _pendingKey = null;
+        _restoredSnapshot = null;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text(
+                  'Tree submissions need an internet connection. Please try again when you are back online.'),
+              backgroundColor: kPoor));
+        }
+        return;
       } else {
         await api.queueOfflineAction('CREATE_TREE', payload,
             photoPath: _photo?.path);
+        // The offline queue now owns the pending submission (payload + key);
+        // its replay is idempotent through client_uuid.
+        await api.clearPendingDraft();
+        _pendingKey = null;
+        _restoredSnapshot = null;
       }
       if (mounted) {
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(await api.isOnline()
-                ? 'Tree saved!'
-                : 'Saved offline. Review it in Field Sync before uploading.'),
+            content: Text(isCitizen
+                ? 'Submitted for expert review! Track it under My Submissions.'
+                : await api.isOnline()
+                    ? 'Tree saved!'
+                    : 'Saved offline - the nearby duplicate check was skipped. '
+                        'Review it in Field Sync before uploading.'),
             backgroundColor: kHealthy));
+      }
+    } on DioException catch (e) {
+      // Preserve the pending submission: the request MAY have reached the
+      // server. Retrying with the same key and the immutable
+      // submitted_payload copy cannot create a duplicate.
+      if (_pendingKey != null) {
+        final pendingRead = await api.readPendingDraftResult();
+        if (pendingRead['error'] == 'storage') {
+          // The stored draft could not be read; overwriting it could destroy
+          // the only copy of an earlier original payload.
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text(
+                    'Could not update the saved submission on this device (secure storage error). Nothing was deleted.'),
+                backgroundColor: kPoor));
+          }
+        } else {
+          final stored = pendingRead['draft'] as Map<String, dynamic>?;
+          await api.writePendingDraft({
+            'key': _pendingKey,
+            'created_at':
+                stored?['created_at'] ?? DateTime.now().toIso8601String(),
+            'status': e.response == null ? 'uncertain' : 'conflict',
+            'snapshot': _currentSnapshot(),
+            'photo_path': _photo?.path,
+            'submitted_payload': stored?['submitted_payload'],
+            if (pendingRead['error'] == 'unreadable')
+              'previous_unreadable_raw': pendingRead['raw'],
+          });
+        }
+      }
+      if (e.response?.statusCode == 409) {
+        final detail =
+            e.response?.data is Map ? e.response?.data['detail'] : null;
+        final existingId = detail is Map ? detail['existing_tree_id'] : null;
+        if (mounted) {
+          final choice = await showDialog<String>(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: const Text('This key belongs to a different tree'),
+              content: Text(
+                  'Nothing was merged or overwritten.${existingId != null ? ' The existing record is tree #$existingId.' : ''}'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context, 'new'),
+                    child: const Text('Start new submission')),
+                if (existingId != null)
+                  ElevatedButton(
+                      onPressed: () => Navigator.pop(context, 'open'),
+                      child: const Text('Open existing record')),
+              ],
+            ),
+          );
+          if (choice == 'open') {
+            await api.clearPendingDraft();
+            _pendingKey = null;
+            _restoredSnapshot = null;
+            if (mounted) Navigator.pop(context, true);
+          } else if (choice == 'new') {
+            await api.clearPendingDraft();
+            _pendingKey = null;
+            _restoredSnapshot = null;
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text(
+                      'Start a fresh save - a new submission key will be used.'),
+                  backgroundColor: kHealthy));
+            }
+          }
+          // Dismissed without a choice: keep the pending key and payload.
+        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Connection problem - your submission is saved. Retrying will not create a duplicate.'),
+            backgroundColor: kPoor));
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: kPoor));
     } finally {
       setState(() => _saving = false);
+    }
+  }
+
+  /// Asks for explicit confirmation before replacing a different pending
+  /// submission. The previous key and payload stay untouched until the
+  /// user picks "Discard & start new".
+  Future<bool> _confirmReplacePending(Map<String, dynamic> stored) async {
+    final snapshot = Map<String, dynamic>.from(stored['snapshot'] ?? {});
+    final uncertain =
+        stored['status'] == 'uncertain' || stored['status'] == 'in_flight';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Start a new submission?'),
+        content: Text(
+            'A pending submission for "${snapshot['common_name'] ?? 'Unnamed tree'}" '
+            '${uncertain ? 'may already have reached the server' : 'is still saved'} '
+            'and keeps its submission key until you confirm.\n\n'
+            'Discard it and submit this form as a new tree?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Keep pending submission')),
+          ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: kPoor),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Discard & start new',
+                  style: TextStyle(color: Colors.white))),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
+
+  /// Explicit confirmation required before a save may overwrite pending
+  /// submission data that could not be read back.
+  Future<bool> _confirmUnreadablePendingOverwrite(
+      String reason, String? raw) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Unreadable pending submission'),
+        content: SingleChildScrollView(
+          child: Text(
+            '$reason. Overwriting it would lose the original submission key '
+            'and payload.\n\n'
+            '${raw == null || raw.isEmpty ? '' : 'Stored data:\n$raw\n\n'}'
+            'Cancel to keep everything as-is, or overwrite explicitly to '
+            'start this save as a new submission.',
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel (keep pending data)')),
+          ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: kPoor),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Overwrite & Start New',
+                  style: TextStyle(color: Colors.white))),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
+
+  /// Advisory G3 lookup. Returns true when the save should proceed.
+  /// A failed check is NEVER treated as "no matches": the user must
+  /// explicitly choose to continue without it. Candidates are presented
+  /// with distance, species-match label, and barangay; tapping one opens
+  /// the existing record (the existing-record link). Nothing is merged,
+  /// overwritten, or rejected automatically.
+  Future<bool> _runNearbyCheck(
+    double lat,
+    double lng, {
+    required String commonName,
+    required String scientificName,
+  }) async {
+    List<Map<String, dynamic>> candidates;
+    try {
+      candidates = await api.getNearbyTrees(
+        lat: lat,
+        lng: lng,
+        commonName: commonName,
+        scientificName: scientificName,
+      );
+    } catch (_) {
+      if (!mounted) return false;
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Nearby check could not be completed'),
+          content: const Text(
+              'Possible existing trees could not be verified (network or server problem). '
+              'This is NOT the same as "no matches" - your registration is simply unchecked.\n\n'
+              'Continue without the nearby check?'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel')),
+            ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Continue without check')),
+          ],
+        ),
+      );
+      return proceed == true;
+    }
+
+    if (!mounted) return false;
+    if (candidates.isEmpty) return true;
+
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Possible existing trees nearby'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: candidates.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (_, index) {
+              final candidate = candidates[index];
+              final distance =
+                  (candidate['distance_m'] as num?)?.toDouble() ?? 0;
+              final match = candidate['species_match']?.toString();
+              final matchLabel = match == 'exact'
+                  ? 'same species'
+                  : match == 'unknown'
+                      ? 'species not provided'
+                      : 'different species';
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  '${candidate['common_name'] ?? 'Unnamed tree'}'
+                  '${candidate['scientific_name'] != null ? ' (${candidate['scientific_name']})' : ''}',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text('~${distance.round()} m away'
+                    '${candidate['barangay'] != null ? ' · ${candidate['barangay']}' : ''}'
+                    ' · $matchLabel'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  final treeId = candidate['tree_id'];
+                  if (treeId is int) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => TreeDetailScreen(treeId: treeId)),
+                    );
+                  }
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Register as a new tree')),
+        ],
+      ),
+    );
+    return proceed == true;
+  }
+
+  /// Re-sends the immutable original payload with its original key.
+  /// Nothing from the current form is used, so no data can be silently
+  /// replaced, and the same UUID is reused.
+  Future<void> _retryOriginalSubmission(Map<String, dynamic> draft) async {
+    final key = draft['key']?.toString();
+    final original =
+        Map<String, dynamic>.from(draft['submitted_payload'] ?? {});
+    if (key == null || original.isEmpty) return;
+    original['client_uuid'] = key;
+
+    if (!await api.isOnline()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Still offline - the original submission is kept for later.'),
+            backgroundColor: kPoor));
+      }
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      await api.writePendingDraft({
+        'key': key,
+        'created_at': draft['created_at'],
+        'status': 'in_flight',
+        'snapshot': draft['snapshot'],
+        'photo_path': draft['photo_path'],
+        'submitted_payload': original,
+      });
+      final result = await api.createTree(original);
+      await api.clearPendingDraft();
+      _pendingKey = null;
+      _restoredSnapshot = null;
+      if (!mounted) return;
+      if (result['idempotent_replay'] == true) {
+        final differences =
+            Map<String, dynamic>.from(result['replayed_differences'] ?? {});
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(differences.isEmpty
+                ? 'Already recorded as tree #${result['id']} - no duplicate was created.'
+                : 'Already recorded as tree #${result['id']}. Not overwritten; differences: ${differences.keys.join(', ')}. Review the record to update it.'),
+            backgroundColor: kHealthy));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Tree saved!'), backgroundColor: kHealthy));
+      }
+      Navigator.pop(context, true);
+    } on DioException catch (e) {
+      final stored = await api.readPendingDraft();
+      await api.writePendingDraft({
+        'key': key,
+        'created_at': stored?['created_at'] ?? draft['created_at'],
+        'status': e.response == null ? 'uncertain' : 'conflict',
+        'snapshot': stored?['snapshot'] ?? draft['snapshot'],
+        'photo_path': stored?['photo_path'] ?? draft['photo_path'],
+        'submitted_payload': stored?['submitted_payload'] ?? original,
+      });
+      if (mounted) {
+        if (e.response?.statusCode == 409) {
+          final detail =
+              e.response?.data is Map ? e.response?.data['detail'] : null;
+          final existingId = detail is Map ? detail['existing_tree_id'] : null;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(
+                  'Submission conflict: this key already belongs to a different tree.'
+                  '${existingId != null ? ' The existing record is tree #$existingId.' : ''}'
+                  ' Nothing was merged or overwritten - the original submission is kept.'),
+              backgroundColor: kPoor));
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text(
+                  'Connection problem - the original submission is kept. Retrying will not create a duplicate.'),
+              backgroundColor: kPoor));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: kPoor));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 

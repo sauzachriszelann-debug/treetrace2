@@ -1,18 +1,20 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { aiApi } from "@/api/ai";
+import { treeSubmissionsApi } from "@/api/treeSubmissions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { CheckCircle2, CircleHelp, Leaf, Loader2, Mail, MapPin, RotateCcw, XCircle } from "lucide-react";
+import { CheckCircle2, CircleHelp, Leaf, Loader2, Mail, MapPin, RotateCcw, TreePine, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 export default function UnknownSpeciesReview() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState({});
   const [savingId, setSavingId] = useState(null);
+  const [convertingId, setConvertingId] = useState(null);
   const [statusFilter, setStatusFilter] = useState("all");
 
   const { data: submissions = [], isLoading } = useQuery({
@@ -72,6 +74,31 @@ export default function UnknownSpeciesReview() {
       toast.error(err?.response?.data?.detail || "Failed to update review.");
     } finally {
       setSavingId(null);
+    }
+  };
+
+  // G4 Path B: turn an IDENTIFIED entry into a pending tree submission.
+  // The unknown-species record itself is never modified; conversion is
+  // replay-safe server-side (the unique source constraint returns the
+  // already-created submission).
+  const convert = async (entry) => {
+    setConvertingId(entry.id);
+    try {
+      const created = await treeSubmissionsApi.convertUnknownSpecies(entry.id);
+      qc.invalidateQueries({ queryKey: ["unknown-species"] });
+      qc.invalidateQueries({ queryKey: ["submissions"] });
+      toast.success(
+        created?.status === "pending"
+          ? "Tree submission created and queued for review."
+          : "A tree submission already exists for this entry.",
+      );
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.detail ||
+          "Failed to convert this submission.",
+      );
+    } finally {
+      setConvertingId(null);
     }
   };
 
@@ -209,6 +236,31 @@ export default function UnknownSpeciesReview() {
                       Reopen
                     </Button>
                   </div>
+
+                  {entry.review_status === "identified" && (
+                    <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-2">
+                      <p className="text-xs font-semibold text-muted-foreground">
+                        Turn identification into an official tree submission
+                      </p>
+                      <p className="text-muted-foreground">
+                        Creates a pending tree submission from this entry for
+                        the review queue. The entry above is kept unchanged as
+                        the identification record.
+                      </p>
+                      <Button
+                        size="sm"
+                        onClick={() => convert(entry)}
+                        disabled={convertingId === entry.id}
+                      >
+                        {convertingId === entry.id ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <TreePine className="w-4 h-4 mr-2" />
+                        )}
+                        Create Tree Submission
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );

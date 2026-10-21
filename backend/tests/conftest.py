@@ -7,7 +7,7 @@ os.environ.setdefault("TESTING", "true")
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -78,6 +78,66 @@ def auth_as(api_app: FastAPI, db_session: Session) -> Callable[[UserRole], User]
         return user
 
     return set_user
+
+
+@pytest.fixture
+def concurrency_app(tmp_path) -> Generator[FastAPI, None, None]:
+    """App wired to a file-based SQLite with per-request sessions.
+
+    The shared ``api_app`` fixture uses one session for every request and
+    cannot exercise concurrent idempotency handling.
+    """
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'concurrency.db'}",
+        connect_args={"check_same_thread": False, "timeout": 30},
+    )
+
+    # WAL plus a busy timeout lets two write transactions serialize instead of
+    # hitting SQLite's shared-lock upgrade deadlock (which surfaces as an
+    # uncatchable "database is locked" under plain rollback journal mode).
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragma(dbapi_connection, _connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=30000")
+        cursor.close()
+
+    Base.metadata.create_all(bind=engine)
+    TestSession = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    app = FastAPI()
+    app.include_router(trees.router, prefix="/api/trees")
+
+    def override_get_db():
+        session = TestSession()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    admin_session = TestSession()
+    admin = User(
+        full_name="Concurrency Admin",
+        email="concurrency-admin@example.test",
+        hashed_password="test-password-hash",
+        role=UserRole.admin,
+        is_active=True,
+    )
+    admin_session.add(admin)
+    admin_session.commit()
+    # Keep the admin session open until teardown: the request handlers read
+    # current_user.id/.role, which would raise on a closed, expired instance.
+    admin_session.refresh(admin)
+
+    app.dependency_overrides[get_current_user] = lambda: admin
+    try:
+        yield app
+    finally:
+        app.dependency_overrides.clear()
+        admin_session.close()
+        engine.dispose()
 
 
 @pytest.fixture

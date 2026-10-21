@@ -427,11 +427,31 @@ export default function TreeForm({
           photoUploadPurpose,
         );
         finalPhotoUrl = file_url;
+        // Cache the uploaded URL so a retry of the same form does not
+        // upload the same photo again.
+        set("photo_url", file_url);
       } catch {
         toast.error("Photo upload failed. Saving without photo.");
       } finally {
         setPhotoLoading(false);
       }
+    }
+
+    const toCoordinate = (value) => {
+      const trimmed = typeof value === "string" ? value.trim() : value;
+      if (trimmed === "" || trimmed === null || trimmed === undefined) return undefined;
+      const parsed = Number(trimmed);
+      return Number.isFinite(parsed) ? parsed : NaN;
+    };
+    const lat = toCoordinate(form.lat);
+    const lng = toCoordinate(form.lng);
+    const latInvalid = lat !== undefined && (Number.isNaN(lat) || lat < -90 || lat > 90);
+    const lngInvalid = lng !== undefined && (Number.isNaN(lng) || lng < -180 || lng > 180);
+    if (latInvalid || lngInvalid) {
+      toast.error(
+        "Invalid GPS coordinates. Latitude must be between -90 and 90, longitude between -180 and 180. Leave a field empty if that coordinate is unavailable."
+      );
+      return;
     }
 
     const payload = { ...form };
@@ -442,8 +462,8 @@ export default function TreeForm({
 
     Object.assign(payload, {
       photo_url: finalPhotoUrl || undefined,
-      lat: form.lat ? parseFloat(form.lat) : undefined,
-      lng: form.lng ? parseFloat(form.lng) : undefined,
+      lat,
+      lng,
     });
 
     if (dbhUpdate.value !== undefined) payload.dbh_cm = dbhUpdate.value;
