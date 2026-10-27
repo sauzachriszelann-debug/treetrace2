@@ -1,12 +1,13 @@
 import api from "./client";
 
 export const storageApi = {
-  uploadPhoto: async (file, purpose) => {
+  uploadPhoto: async (file, purpose, config) => {
     const form = new FormData();
     form.append("file", file);
     form.append("purpose", purpose);
     const { data } = await api.post("/storage/upload-photo", form, {
       headers: { "Content-Type": "multipart/form-data" },
+      ...config,
     });
     return data; // { file_url, path }
   },

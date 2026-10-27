@@ -321,98 +321,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildMoreActions(AuthProvider auth) {
-    final isCitizen = auth.user?.role == 'citizen';
-    final actions = isCitizen
-        ? [
-            _MoreAction(
-              'Evaluation',
-              Icons.fact_check_outlined,
-              () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const ProjectEvaluationScreen(),
-                ),
-              ),
-            ),
-            _MoreAction(
-              'My Submissions',
-              Icons.assignment_outlined,
-              () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const MySubmissionsScreen(),
-                ),
-              ),
-            ),
-            _MoreAction('Field Sync', Icons.sync_rounded, _openFieldSync),
-            _MoreAction('History', Icons.history_rounded, _showHistorySheet),
-            _MoreAction(
-              'Expert Reviews',
-              Icons.science_outlined,
-              _showExpertReviewsSheet,
-            ),
-          ]
-        : [
-            _MoreAction(
-              'Unknown',
-              Icons.help_outline_rounded,
-              () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const UnknownReviewScreen()),
-              ),
-            ),
-            _MoreAction(
-              'Users',
-              Icons.people_alt_outlined,
-              () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const UsersScreen()),
-              ),
-            ),
-            _MoreAction(
-              'QR Labels',
-              Icons.qr_code_2_rounded,
-              () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const QrLabelsScreen()),
-              ),
-            ),
-            _MoreAction(
-              'Reports',
-              Icons.summarize_outlined,
-              () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ReportsToolsScreen()),
-              ),
-            ),
-            _MoreAction(
-              'Evaluation',
-              Icons.fact_check_outlined,
-              () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const ProjectEvaluationScreen(),
-                ),
-              ),
-            ),
-            _MoreAction('Field Sync', Icons.sync_rounded, _openFieldSync),
-          ];
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: EdgeInsets.zero,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 2.55,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-      ),
-      itemCount: actions.length,
-      itemBuilder: (_, index) => _MoreActionTile(action: actions[index]),
-    );
-  }
+  Widget _buildMoreActions(AuthProvider auth) => MoreActionsGrid(
+        role: auth.user?.role,
+        onOpenFieldSync: _openFieldSync,
+        onShowHistory: _showHistorySheet,
+        onShowExpertReviews: _showExpertReviewsSheet,
+      );
 
   Future<void> _openFieldSync() async {
     await Navigator.push(
@@ -696,6 +610,146 @@ class _MoreAction {
   final IconData icon;
   final VoidCallback onTap;
   const _MoreAction(this.label, this.icon, this.onTap);
+}
+
+/// Phase 11F — the More-menu tile labels visible to [role], in display order.
+///
+/// The backend is the authority and this list mirrors it exactly:
+/// - 'Unknown' opens UnknownReviewScreen -> GET /api/ai/unknown-species,
+///   require_admin (app/api/routes/identify.py). There is no staff-scoped
+///   equivalent, so it is admin-only.
+/// - 'Users' opens UsersScreen -> GET /api/users, require_admin
+///   (app/api/routes/users.py). Admin-only.
+/// - QR Labels, Reports, Evaluation and Field Sync only touch endpoints any
+///   authenticated user may call (trees, own queue), so field workers keep
+///   them. Reports' optional user analytics already degrades gracefully.
+/// - Citizens keep their own-submission tools; they never see staff tiles.
+///
+/// A missing or unknown role gets the least-privileged non-citizen set:
+/// never the admin-only tiles.
+@visibleForTesting
+List<String> moreMenuLabelsForRole(String? role) {
+  if (role == 'citizen') {
+    return const [
+      'Evaluation',
+      'My Submissions',
+      'Field Sync',
+      'History',
+      'Expert Reviews',
+    ];
+  }
+  return [
+    if (role == 'admin') ...const ['Unknown', 'Users'],
+    ...const ['QR Labels', 'Reports', 'Evaluation', 'Field Sync'],
+  ];
+}
+
+/// The 2-column More-menu grid, showing only the tiles [role] may open.
+///
+/// Public so role gating can be widget-tested without booting
+/// ProfileScreen, whose initState starts network-facing futures (queue
+/// count, AI history, own unknown-species submissions). Sheet-opening
+/// callbacks are injected by the owning State.
+class MoreActionsGrid extends StatelessWidget {
+  const MoreActionsGrid({
+    super.key,
+    required this.role,
+    required this.onOpenFieldSync,
+    required this.onShowHistory,
+    required this.onShowExpertReviews,
+  });
+
+  final String? role;
+  final VoidCallback onOpenFieldSync;
+  final VoidCallback onShowHistory;
+  final VoidCallback onShowExpertReviews;
+
+  @override
+  Widget build(BuildContext context) {
+    final actions = [
+      for (final label in moreMenuLabelsForRole(role))
+        _moreActionFor(context, label),
+    ];
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 2.55,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+      ),
+      itemCount: actions.length,
+      itemBuilder: (_, index) => _MoreActionTile(action: actions[index]),
+    );
+  }
+
+  _MoreAction _moreActionFor(BuildContext context, String label) {
+    switch (label) {
+      case 'Unknown':
+        return _MoreAction(
+          label,
+          Icons.help_outline_rounded,
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const UnknownReviewScreen()),
+          ),
+        );
+      case 'Users':
+        return _MoreAction(
+          label,
+          Icons.people_alt_outlined,
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const UsersScreen()),
+          ),
+        );
+      case 'QR Labels':
+        return _MoreAction(
+          label,
+          Icons.qr_code_2_rounded,
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const QrLabelsScreen()),
+          ),
+        );
+      case 'Reports':
+        return _MoreAction(
+          label,
+          Icons.summarize_outlined,
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ReportsToolsScreen()),
+          ),
+        );
+      case 'Evaluation':
+        return _MoreAction(
+          label,
+          Icons.fact_check_outlined,
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ProjectEvaluationScreen()),
+          ),
+        );
+      case 'Field Sync':
+        return _MoreAction(label, Icons.sync_rounded, onOpenFieldSync);
+      case 'My Submissions':
+        return _MoreAction(
+          label,
+          Icons.assignment_outlined,
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const MySubmissionsScreen()),
+          ),
+        );
+      case 'History':
+        return _MoreAction(label, Icons.history_rounded, onShowHistory);
+      case 'Expert Reviews':
+        return _MoreAction(label, Icons.science_outlined, onShowExpertReviews);
+    }
+    throw StateError('Unhandled More-menu label: $label');
+  }
 }
 
 class _MoreActionTile extends StatelessWidget {

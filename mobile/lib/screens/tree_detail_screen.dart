@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -6,6 +7,15 @@ import '../services/auth_provider.dart';
 import '../services/theme.dart';
 import '../models/models.dart';
 import '../widgets/widgets.dart';
+
+/// Message for the empty tree-detail state.
+///
+/// `unreachable` distinguishes "the backend did not answer" from "the server
+/// says this tree does not exist" (Phase 11D). Keeping it a pure function
+/// makes both branches testable without a network.
+String treeDetailEmptyMessage({required bool unreachable}) => unreachable
+    ? 'Cannot reach the TreeTrace server. Check your connection and try again.'
+    : 'Tree not found';
 
 class TreeDetailScreen extends StatefulWidget {
   final int treeId;
@@ -18,6 +28,10 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
   TreeModel? _tree;
   List<HealthLogModel> _logs = [];
   bool _loading = true;
+
+  /// True when the load failed because the backend could not be reached,
+  /// rather than because the tree does not exist (Phase 11D).
+  bool _unreachable = false;
 
   @override
   void initState() {
@@ -35,10 +49,16 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
       setState(() {
         _tree = TreeModel.fromJson(t);
         _logs = l.map((j) => HealthLogModel.fromJson(j)).toList();
+        _unreachable = false;
         _loading = false;
       });
-    } catch (_) {
-      setState(() => _loading = false);
+    } catch (e) {
+      // An unreachable backend must not be reported as a missing tree: field
+      // workers were seeing "Tree not found" every time the connection dropped.
+      setState(() {
+        _unreachable = isConnectionFailure(e);
+        _loading = false;
+      });
     }
   }
 
@@ -52,7 +72,11 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
     if (_tree == null)
       return Scaffold(
         appBar: AppBar(),
-        body: const EmptyState(message: 'Tree not found'),
+        body: EmptyState(
+          message: _unreachable
+              ? treeDetailEmptyMessage(unreachable: true)
+              : treeDetailEmptyMessage(unreachable: false),
+        ),
       );
 
     final tree = _tree!;
@@ -75,7 +99,21 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
                     fontWeight: FontWeight.w700)),
             background: tree.photoUrl != null
                 ? Stack(fit: StackFit.expand, children: [
-                    Image.network(tree.photoUrl!, fit: BoxFit.cover),
+                    // Phase 12C.5 (B): graceful offline fallback instead of
+                    // the framework's raw exception rendering (which showed a
+                    // red X plus the SocketException text on-device).
+                    CachedNetworkImage(
+                      imageUrl: tree.photoUrl!,
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => Container(color: kSidebarBg),
+                      errorWidget: (_, __, ___) => Container(
+                        color: kSidebarBg,
+                        alignment: Alignment.center,
+                        child: Icon(Icons.park_outlined,
+                            size: 56,
+                            color: Colors.white.withValues(alpha: 0.6)),
+                      ),
+                    ),
                     Container(
                         decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -458,9 +496,17 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
                           errorText.contains('failed host lookup') ||
                           errorText.contains('socketexception');
                       if (shouldQueue) {
+                        // G6 (D3): this request FAILED MID-FLIGHT, so it may
+                        // already have committed server-side. Keep it, mark
+                        // it for review, and never auto-retry it - health
+                        // logs have no idempotency key and a blind retry
+                        // could create a duplicate.
                         await api.queueOfflineAction(
                           'CREATE_HEALTH_LOG',
                           payload,
+                          requiresReview: true,
+                          reviewReason:
+                              'This save failed after the request may have reached the server. It is kept for review and will not be retried automatically, because a blind retry could create a duplicate health log.',
                         );
                         queuedOffline = true;
                         if (sheetContext.mounted) {

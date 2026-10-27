@@ -11,8 +11,8 @@ export const plantingApi = {
     return data;
   },
 
-  create: async (payload) => {
-    const { data } = await api.post("/planting/", payload);
+  create: async (payload, config) => {
+    const { data } = await api.post("/planting/", payload, config);
     return data;
   },
 

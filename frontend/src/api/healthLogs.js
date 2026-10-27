@@ -11,8 +11,8 @@ export const healthLogsApi = {
     return data;
   },
 
-  create: async (payload) => {
-    const { data } = await api.post("/health-logs/", payload);
+  create: async (payload, config) => {
+    const { data } = await api.post("/health-logs/", payload, config);
     return data;
   },
 

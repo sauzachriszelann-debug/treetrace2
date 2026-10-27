@@ -9,14 +9,38 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../services/api_service.dart';
 import '../services/auth_provider.dart';
+import '../services/gps_capture.dart';
 import '../services/theme.dart';
 import 'dbh_measure_screen.dart';
 import 'tree_detail_screen.dart';
 
+/// Seam for the platform reverse geocoder (Phase 12B.1A). Production uses
+/// the geocoding plugin; widget tests inject fakes so no external service is
+/// ever contacted from a test.
+typedef PlacemarkLookup =
+    Future<List<Placemark>> Function(double lat, double lng);
+
+Future<List<Placemark>> _defaultPlacemarkLookup(double lat, double lng) =>
+    placemarkFromCoordinates(lat, lng);
+
 class AddTreeScreen extends StatefulWidget {
   final Map<String, dynamic>? aiResult;
   final File? initialPhoto;
-  const AddTreeScreen({super.key, this.aiResult, this.initialPhoto});
+
+  /// Phase 12B.1A test seams. Production call sites pass neither and get the
+  /// real Geolocator/geocoder implementations unchanged.
+  final GpsCaptureService? gpsService;
+  final PlacemarkLookup? placemarkLookup;
+  final bool skipOnlineLocationLookup;
+
+  const AddTreeScreen({
+    super.key,
+    this.aiResult,
+    this.initialPhoto,
+    this.gpsService,
+    this.placemarkLookup,
+    this.skipOnlineLocationLookup = false,
+  });
   @override
   State<AddTreeScreen> createState() => _AddTreeScreenState();
 }
@@ -40,6 +64,16 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
   bool _saving = false;
   bool _identifying = false;
   bool _gpsLoading = false;
+  double? _gpsAccuracyM;
+  // Exact text the app itself last wrote into the fields (Phase 12A.1:
+  // tells an app-owned value apart from one the user typed or edited).
+  String? _lastAutoLatText;
+  String? _lastAutoLngText;
+  String? _lastAutoBarangay;
+  // Phase 12B.1A: injectable seams, resolved once against the widget config.
+  late final GpsCaptureService _gps = widget.gpsService ?? GpsCaptureService();
+  late final PlacemarkLookup _placemark =
+      widget.placemarkLookup ?? _defaultPlacemarkLookup;
   bool _addToEvaluation = true;
   String? _dbhConfidence; // Low / Medium / High
   String? _dbhMethod;
@@ -319,56 +353,110 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     }
   }
 
+  /// Captures a fresh GPS fix and reconciles it with whatever the form
+  /// already holds (Phase 12A.1).
+  ///
+  /// Automatic capture (screen open) only FILLS EMPTY fields — draft
+  /// restoration and manual values always win. An explicit recapture may
+  /// also REFRESH values the app itself wrote, but never overwrites
+  /// coordinates or a barangay the user entered without asking, and a
+  /// poor-accuracy fix is never applied without confirmation.
   Future<void> _captureGps({bool automatic = false}) async {
     setState(() => _gpsLoading = true);
     try {
-      final servicesEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!servicesEnabled) {
-        throw Exception('Location services are turned off.');
+      final outcome = await _gps.capture();
+      if (!outcome.success) {
+        _reportGpsFailure(outcome.failure!, automatic: automatic);
+        return;
+      }
+      final position = outcome.position!;
+      _gpsAccuracyM = position.accuracy;
+
+      if (classifyGpsAccuracy(position.accuracy) == GpsAccuracyGrade.poor) {
+        if (automatic) {
+          // Never place an unconfirmed poor fix into the form on screen
+          // open; the accuracy pill and this message tell the user how to
+          // review it explicitly.
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(
+                  '${gpsAccuracyLabel(position.accuracy)} — the fix was not applied. '
+                  'Tap Capture GPS & Address to review it.'),
+              backgroundColor: kFair,
+            ));
+          }
+          return;
+        }
+        if (!mounted) return;
+        final useIt =
+            await showLowAccuracyConfirmation(context, position.accuracy);
+        if (useIt != true) return; // form values untouched
       }
 
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        throw Exception('Location permission was denied.');
+      final newLatText = position.latitude.toStringAsFixed(7);
+      final newLngText = position.longitude.toStringAsFixed(7);
+
+      if (automatic) {
+        // Fill-only-if-empty (G2 draft recovery preserved).
+        if (_latCtrl.text.isEmpty) {
+          _latCtrl.text = newLatText;
+          _lastAutoLatText = newLatText;
+        }
+        if (_lngCtrl.text.isEmpty) {
+          _lngCtrl.text = newLngText;
+          _lastAutoLngText = newLngText;
+        }
+      } else {
+        // Explicit recapture: coordinates refresh silently when the fields
+        // still hold app-written values (the Phase 12A “refresh” fix);
+        // user-entered coordinates are preserved unless confirmed.
+        final latAction = coordinateMergeAction(
+          currentText: _latCtrl.text,
+          lastAutoText: _lastAutoLatText,
+          newText: newLatText,
+        );
+        final lngAction = coordinateMergeAction(
+          currentText: _lngCtrl.text,
+          lastAutoText: _lastAutoLngText,
+          newText: newLngText,
+        );
+        var applyCoordinates = true;
+        if (latAction == CoordinateMergeAction.needsConfirmation ||
+            lngAction == CoordinateMergeAction.needsConfirmation) {
+          if (!mounted) return;
+          applyCoordinates = await showCoordinateReplacementConfirmation(
+            context,
+            existing: '${_latCtrl.text.trim()}, ${_lngCtrl.text.trim()}',
+            replacement: '$newLatText, $newLngText',
+          );
+        }
+        if (applyCoordinates) {
+          _latCtrl.text = newLatText;
+          _lastAutoLatText = newLatText;
+          _lngCtrl.text = newLngText;
+          _lastAutoLngText = newLngText;
+        }
       }
 
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
+      // Phase 12B.1A: the address lookup runs AFTER the coordinates are in
+      // the form, so a slow or failing geocoder can never delay, block or
+      // lose the captured fix — it only decides how many address fields get
+      // filled. The lookup is bounded by kGeocodeTimeout; a failure leaves
+      // every address field as it was (nothing is invented).
       final location = await _locationFromCoordinates(
         position.latitude,
         position.longitude,
       );
-      setState(() {
-        // Preserve restored or manually entered values (G2 draft recovery).
-        if (_latCtrl.text.isEmpty) {
-          _latCtrl.text = position.latitude.toStringAsFixed(7);
-        }
-        if (_lngCtrl.text.isEmpty) {
-          _lngCtrl.text = position.longitude.toStringAsFixed(7);
-        }
-        if (location.exactLocation != null && _exactLocationCtrl.text.isEmpty) {
-          _exactLocationCtrl.text = location.exactLocation!;
-        }
-        if (location.barangay != null && _barangayCtrl.text.isEmpty) {
-          _barangayCtrl.text = location.barangay!;
-        }
-        if (location.city != null) {
-          _cityCtrl.text = location.city!;
-        }
-        if (location.province != null) {
-          _provinceCtrl.text = location.province!;
-        }
-      });
+      if (!mounted) return;
+      await _applyResolvedLocation(location, confirmBarangay: !automatic);
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(location.barangay == null
-              ? 'GPS captured. Add the exact place if needed.'
-              : 'GPS and full address captured!'),
+          content: Text(
+              '${gpsAccuracyLabel(position.accuracy)} — '
+              '${location.barangay == null
+                  ? 'add the exact place, city and province if needed'
+                  : 'location captured'}'),
           backgroundColor: kHealthy,
         ));
       }
@@ -386,11 +474,100 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     }
   }
 
+  /// Honest, actionable message per failure class. A blocked permission or
+  /// disabled location services deep-links straight to the right settings
+  /// screen instead of leaving the user guessing.
+  void _reportGpsFailure(GpsFailureKind kind, {required bool automatic}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(automatic
+          ? '${gpsFailureMessage(kind)} Tap Capture GPS & Address to try again.'
+          : 'Could not capture GPS: ${gpsFailureMessage(kind)}'),
+      backgroundColor: kPoor,
+      action: kind == GpsFailureKind.locationServicesDisabled
+          ? SnackBarAction(
+              label: 'Open Settings',
+              textColor: Colors.white,
+              onPressed: Geolocator.openLocationSettings,
+            )
+          : kind == GpsFailureKind.permissionDeniedForever
+              ? SnackBarAction(
+                  label: 'Open Settings',
+                  textColor: Colors.white,
+                  onPressed: Geolocator.openAppSettings,
+                )
+              : null,
+    ));
+  }
+
+  /// Reconciles the reverse-geocoded [location] with the location fields.
+  ///
+  /// Barangay follows the merge policy: an app-written label from the OLD
+  /// coordinates is refreshed or cleared; a user-confirmed label survives
+  /// unless the new resolution contradicts it, in which case the user
+  /// decides. City/province defaults (“Panabo City” / “Davao del Norte”)
+  /// are only ever applied by [_locationFromCoordinates] for positions
+  /// inside the Panabo area; when a recapture resolves outside it, the old
+  /// default text is cleared rather than silently re-asserted.
+  Future<void> _applyResolvedLocation(
+    _ResolvedLocation location, {
+    required bool confirmBarangay,
+  }) async {
+    if (location.exactLocation != null && _exactLocationCtrl.text.isEmpty) {
+      _exactLocationCtrl.text = location.exactLocation!;
+    }
+
+    if (location.city != null) {
+      _cityCtrl.text = location.city!;
+    } else if (_cityCtrl.text.trim() == 'Panabo City') {
+      _cityCtrl.text = ''; // out-of-area / unresolved: no phantom default
+    }
+    if (location.province != null) {
+      _provinceCtrl.text = location.province!;
+    } else if (_provinceCtrl.text.trim() == 'Davao del Norte') {
+      _provinceCtrl.text = '';
+    }
+
+    switch (barangayMergeAction(
+      currentText: _barangayCtrl.text,
+      lastAutoBarangay: _lastAutoBarangay,
+      newResolvedBarangay: location.barangay,
+    )) {
+      case BarangayMergeAction.useNew:
+        _barangayCtrl.text = location.barangay!.trim();
+        _lastAutoBarangay = location.barangay!.trim();
+        break;
+      case BarangayMergeAction.clear:
+        _barangayCtrl.text = '';
+        _lastAutoBarangay = null;
+        break;
+      case BarangayMergeAction.keep:
+        break;
+      case BarangayMergeAction.confirmWithUser:
+        if (!confirmBarangay || !mounted) break;
+        final useNew = await showBarangayReplacementConfirmation(
+          context,
+          existing: _barangayCtrl.text.trim(),
+          replacement: location.barangay!.trim(),
+        );
+        if (useNew && mounted) {
+          _barangayCtrl.text = location.barangay!.trim();
+          _lastAutoBarangay = location.barangay!.trim();
+        }
+        break;
+    }
+  }
+
   Future<_ResolvedLocation> _locationFromCoordinates(
       double lat, double lng) async {
     _ResolvedLocation? phoneLocation;
     try {
-      final marks = await placemarkFromCoordinates(lat, lng);
+      // Phase 12B.1A: bounded. The coordinates are already in the form at
+      // this point; a lookup that hangs is dropped (as a timeout, handled by
+      // the catch below) rather than keeping the capture button disabled
+      // forever. Failure never invents an address — it only means fewer
+      // fields are auto-filled.
+      final marks = await _placemark(lat, lng).timeout(kGeocodeTimeout);
       if (marks.isNotEmpty) {
         final place = marks.first;
         final barangay = _firstCleanBarangay([
@@ -422,13 +599,20 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     final onlineLocation = phoneLocation?.barangay == null
         ? await _lookupOnlineLocation(lat, lng)
         : null;
+    // Phase 12A.1: Panabo defaults apply ONLY to positions inside the
+    // Panabo area. An out-of-area or unresolvable fix yields null
+    // city/province/barangay for the user to fill in — it is never
+    // silently labelled “Panabo City”.
+    final inArea = isWithinPanaboArea(lat, lng);
     final barangay = phoneLocation?.barangay ??
         onlineLocation?.barangay ??
-        _nearestPanaboBarangay(lat, lng);
-    final city = phoneLocation?.city ?? onlineLocation?.city ?? 'Panabo City';
+        (inArea ? _nearestPanaboBarangay(lat, lng) : null);
+    final city = phoneLocation?.city ??
+        onlineLocation?.city ??
+        (inArea ? 'Panabo City' : null);
     final province = phoneLocation?.province ??
         onlineLocation?.province ??
-        'Davao del Norte';
+        (inArea ? 'Davao del Norte' : null);
 
     return _ResolvedLocation(
       exactLocation: _cleanFullAddress([
@@ -446,6 +630,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
 
   Future<_ResolvedLocation?> _lookupOnlineLocation(
       double lat, double lng) async {
+    if (widget.skipOnlineLocationLookup) return null; // Phase 12B.1A test seam
     try {
       final uri = Uri.https('nominatim.openstreetmap.org', '/reverse', {
         'format': 'jsonv2',
@@ -580,20 +765,6 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
         .replaceFirst(RegExp(r'^brgy\.\s*', caseSensitive: false), 'Brgy. ');
   }
 
-  String? _cleanExactLocation(List<String?> values) {
-    final cleaned = values
-        .map((value) => value?.trim())
-        .whereType<String>()
-        .where((value) =>
-            value.isNotEmpty &&
-            !_looksLikePlusCode(value) &&
-            value.toLowerCase() != 'philippines')
-        .toSet()
-        .toList();
-    if (cleaned.isEmpty) return null;
-    return cleaned.take(2).join(', ');
-  }
-
   String? _cleanFullAddress(List<String?> values) {
     final cleaned = <String>[];
     for (final raw in values) {
@@ -650,30 +821,25 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     final dbhCm = _parseOptionalMeasurement(_dbhCtrl.text);
     final heightM = _parseOptionalMeasurement(_heightCtrl.text);
 
+    // Coordinate rules live in one place (gps_capture.dart) and mirror the
+    // backend schema exactly: empty = no coordinate, otherwise finite and
+    // within [-90, 90] / [-180, 180].
     double? lat;
     double? lng;
-    final rawLat = _latCtrl.text.trim();
-    if (rawLat.isNotEmpty) {
-      lat = double.tryParse(rawLat);
-      if (lat == null || !lat.isFinite || lat < -90 || lat > 90) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text(
-                'Latitude must be a number between -90 and 90, or leave it empty.'),
-            backgroundColor: kPoor));
-        return;
-      }
+    final latError = coordinateErrorText(_latCtrl.text, isLatitude: true);
+    if (latError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(latError), backgroundColor: kPoor));
+      return;
     }
-    final rawLng = _lngCtrl.text.trim();
-    if (rawLng.isNotEmpty) {
-      lng = double.tryParse(rawLng);
-      if (lng == null || !lng.isFinite || lng < -180 || lng > 180) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text(
-                'Longitude must be a number between -180 and 180, or leave it empty.'),
-            backgroundColor: kPoor));
-        return;
-      }
+    lat = tryParseCoordinate(_latCtrl.text);
+    final lngError = coordinateErrorText(_lngCtrl.text, isLatitude: false);
+    if (lngError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(lngError), backgroundColor: kPoor));
+      return;
     }
+    lng = tryParseCoordinate(_lngCtrl.text);
 
     final endangered = _checkEndangered(_nameCtrl.text.trim().toLowerCase());
     if (endangered != null) {
@@ -880,17 +1046,25 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
           } catch (_) {}
         }
       } else if (isCitizen) {
-        // G4 (decision 8): citizen submissions are online-only; the offline
-        // queue stays a staff tool. The pending key/payload written above
-        // are discarded only because nothing was ever sent.
+        // G6 (D2): citizens may save offline. The queue posts to the G4
+        // /tree-submissions/ endpoint with the same stable client_uuid, so
+        // sync can only ever create a PENDING submission - staff approval,
+        // the daily quota, and the duplicate safeguards are unchanged.
+        await api.queueOfflineAction(
+          'CREATE_TREE_SUBMISSION',
+          {...payload, 'source': 'mobile'},
+          photoPath: _photo?.path,
+        );
+        // The offline queue now owns the key + payload (nothing was sent).
         await api.clearPendingDraft();
         _pendingKey = null;
         _restoredSnapshot = null;
         if (mounted) {
+          Navigator.pop(context, true);
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
               content: Text(
-                  'Tree submissions need an internet connection. Please try again when you are back online.'),
-              backgroundColor: kPoor));
+                  'Saved offline. On sync it is sent as a PENDING submission that still needs expert approval.'),
+              backgroundColor: kHealthy));
         }
         return;
       } else {
@@ -1255,12 +1429,13 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     if (actualSpecies.isEmpty) return;
 
     final actualConservation = _conservationStatusFor(actualSpecies);
-    final predictedSpecies =
-        (_aiPrediction?['common_name'] ?? actualSpecies).toString();
+    // G5: predicted values are preserved EXACTLY as the model produced them.
+    // A missing prediction is stored as null — the entered/derived actual
+    // label is never substituted, so field rows can never fake agreement.
+    final predictedSpecies = _aiPrediction?['common_name']?.toString();
     final predictedConservation = (_aiPrediction?['endangered_status'] ??
-            _aiPrediction?['status'] ??
-            actualConservation)
-        .toString();
+            _aiPrediction?['status'])
+        ?.toString();
     final actualDbh = double.tryParse(_dbhCtrl.text.trim());
 
     await (api as dynamic).createEvaluationRow({
@@ -1270,7 +1445,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
       'actual_conservation': actualConservation,
       'predicted_conservation': predictedConservation,
       'actual_dbh_cm': actualDbh,
-      'predicted_dbh_cm': _predictedDbhCm ?? actualDbh,
+      'predicted_dbh_cm': _predictedDbhCm,
       'scan_success': _aiPrediction != null || _dbhConfidence != null,
       'app_success': true,
       'latency_ms': null,
@@ -1546,6 +1721,9 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 10),
+                  if (_gpsAccuracyM != null)
+                    _buildAccuracyPill(_gpsAccuracyM!),
                 ],
               ),
             ),
@@ -1613,6 +1791,44 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
       child: Text(text,
           style: const TextStyle(
               fontSize: 13, fontWeight: FontWeight.w500, color: kForeground)));
+
+  /// Shows the accuracy reported by the last fix, colour-graded: green
+  /// (≤15 m), amber (15–50 m), red (>50 m or unknown). Display only — the
+  /// confirmation gate lives in [_captureGps].
+  Widget _buildAccuracyPill(double accuracyMeters) {
+    final grade = classifyGpsAccuracy(accuracyMeters);
+    final color = grade == GpsAccuracyGrade.good
+        ? kHealthy
+        : grade == GpsAccuracyGrade.moderate
+            ? kFair
+            : kPoor;
+    final note = grade == GpsAccuracyGrade.good
+        ? ''
+        : grade == GpsAccuracyGrade.moderate
+            ? ' — fair, verify on the ground'
+            : ' — poor, confirm before relying on it';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.gps_fixed, size: 14, color: color),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              '${gpsAccuracyLabel(accuracyMeters)}$note',
+              style: TextStyle(
+                  color: color, fontSize: 11, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildAiProfilePreview() {
     final result = _aiPrediction ?? {};

@@ -44,8 +44,8 @@ class FakeSupabase:
 def fake_supabase(monkeypatch) -> FakeSupabase:
     fake = FakeSupabase()
     monkeypatch.setattr(storage, "get_supabase", lambda: fake)
+    monkeypatch.setattr(storage, "sandbox_local_storage_enabled", lambda: False)
     return fake
-
 
 @pytest.fixture
 def png_bytes() -> bytes:

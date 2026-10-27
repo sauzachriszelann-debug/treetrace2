@@ -1,8 +1,8 @@
 import api from "./client";
 
 export const treeSubmissionsApi = {
-  create: async (payload) => {
-    const { data } = await api.post("/tree-submissions/", payload);
+  create: async (payload, config) => {
+    const { data } = await api.post("/tree-submissions/", payload, config);
     return data;
   },
 

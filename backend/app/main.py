@@ -245,6 +245,29 @@ _SUBMISSION_INDEXES = {
 }
 
 
+def _normalize_index_predicate(expr):
+    """Reduce a PostgreSQL-declared partial-index predicate to a canonical,
+    whitespace-free form for semantic comparison.
+
+    PostgreSQL renders ``WHERE status = 'approved'`` on a varchar column as
+    ``((status)::text = ('approved'::character varying)::text)`` (PG 16) or
+    ``(status = 'approved'::text)`` (earlier). Both are semantically the same
+    predicate, but the explicit casts and whitespace differ from the literal
+    the verifier expects. Stripping whitespace and the redundant ``::text`` /
+    ``::character varying`` / ``::varchar`` casts makes the three forms
+    compare equal while leaving the column name, operator, and literal
+    intact - so a genuinely wrong predicate (e.g. ``status = 'linked'``)
+    still differs and is still rejected.
+    """
+    if not expr:
+        return ""
+    text = re.sub(
+        r"::(?:character\s+varying|[A-Za-z_]+)(?:\s*\([^)]*\))?", "", expr
+    )
+    text = re.sub(r"\s+", "", text)
+    return re.sub(r"[()]", "", text)
+
+
 def verify_submission_schema() -> None:
     """Fail fast unless the G4 tree_submissions schema is fully in place.
 
@@ -446,7 +469,7 @@ def verify_submission_schema() -> None:
                     f"(expected {exp_predicate!r}); LINKED submissions "
                     "must not be constrained"
                 )
-            elif exp_predicate not in (predicate or ""):
+            elif _normalize_index_predicate(exp_predicate) != _normalize_index_predicate(predicate):
                 problems.append(
                     f"index {name} predicate is {predicate!r}, expected "
                     f"{exp_predicate!r}"

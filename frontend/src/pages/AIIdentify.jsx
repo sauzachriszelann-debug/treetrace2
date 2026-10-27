@@ -9,12 +9,18 @@ import { useAuth } from "@/lib/AuthContext";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { useOfflineSyncStore } from "@/offline/OfflineSyncProvider";
+import {
+  readDraft as readDraftSlot,
+  persistDraft,
+  clearDraft as clearDraftSlot,
+  TREE_DRAFT_SLOT,
+  SUBMISSION_DRAFT_SLOT,
+} from "@/offline/drafts";
 
-const DRAFT_STORAGE_KEY = "treetrace_tree_draft";
 // G4 citizen submissions keep their client_uuid across uncertain failures
 // (safeguard D): the pending envelope lives in its own storage slot so the
 // staff draft machinery above stays untouched.
-const SUBMISSION_DRAFT_KEY = "treetrace_submission_draft";
 const SUBMISSION_PREFILL_KEY = "treetrace_submission_prefill";
 
 const normalizeName = (value) => (value || "").toString().trim().toLowerCase();
@@ -44,50 +50,20 @@ const generateSubmissionKey = () => {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 };
 
-const readDraft = () => {
-  try {
-    const raw = sessionStorage.getItem(DRAFT_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-};
+const readDraft = () => readDraftSlot(TREE_DRAFT_SLOT);
 const writeDraft = (draft) => {
-  try {
-    sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
-  } catch {
-    /* storage unavailable: the draft simply is not recoverable */
-  }
+  void persistDraft(TREE_DRAFT_SLOT, draft);
 };
 const clearDraft = () => {
-  try {
-    sessionStorage.removeItem(DRAFT_STORAGE_KEY);
-  } catch {
-    /* ignore */
-  }
+  void clearDraftSlot(TREE_DRAFT_SLOT);
 };
 
-const readSubmissionDraft = () => {
-  try {
-    const raw = sessionStorage.getItem(SUBMISSION_DRAFT_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-};
+const readSubmissionDraft = () => readDraftSlot(SUBMISSION_DRAFT_SLOT);
 const writeSubmissionDraft = (draft) => {
-  try {
-    sessionStorage.setItem(SUBMISSION_DRAFT_KEY, JSON.stringify(draft));
-  } catch {
-    /* storage unavailable: the pending envelope is not recoverable */
-  }
+  void persistDraft(SUBMISSION_DRAFT_SLOT, draft);
 };
 const clearSubmissionDraft = () => {
-  try {
-    sessionStorage.removeItem(SUBMISSION_DRAFT_KEY);
-  } catch {
-    /* ignore */
-  }
+  void clearDraftSlot(SUBMISSION_DRAFT_SLOT);
 };
 
 export default function AIIdentify() {
@@ -118,6 +94,7 @@ export default function AIIdentify() {
   const [nearbyError, setNearbyError] = useState(false);
   const [nearbyPendingData, setNearbyPendingData] = useState(null);
   const isCitizen = user?.role === "citizen";
+  const { enqueue } = useOfflineSyncStore();
 
   const resumeDraft = () => {
     if (!draft) return;
@@ -137,15 +114,40 @@ export default function AIIdentify() {
   const performSubmit = async (
     data,
     draftMeta,
-    { preserveSnapshot = false } = {},
+    { preserveSnapshot = false, photoFile = null } = {},
   ) => {
+    // G7: fully offline - nothing was sent, so the queue owns the payload
+    // and the photo Blob under the same stable client_uuid (G2).
+    if (!navigator.onLine) {
+      const offlineKey = draftMeta?.key || generateSubmissionKey();
+      try {
+        await enqueue(
+          "CREATE_TREE",
+          { ...data, client_uuid: offlineKey },
+          { photoBlob: photoFile },
+        );
+        clearDraft();
+        setDraft(null);
+        setPendingReplacement(null);
+        toast.success(
+          "Saved offline. Review it in Field Sync - only verified records upload.",
+        );
+        navigate("/field-sync");
+      } catch (error) {
+        toast.error(
+          `Could not save offline: ${error?.message || "browser storage unavailable"}. Nothing was sent.`,
+        );
+      }
+      return;
+    }
     setLoading(true);
     // Captured for the catch clause below (block-scoped to try is invisible
     // there): is there an earlier submission for this key that may exist on
     // the server?
     const hadPriorAttempt = Boolean(draftMeta?.original_payload);
+    // Hoisted so the failure path can enqueue under the SAME key (G7 D5).
+    const key = draftMeta?.key || generateSubmissionKey();
     try {
-      const key = draftMeta?.key || generateSubmissionKey();
       // Persist the pending submission BEFORE the request: if it reaches the
       // server and the response is lost, the retry carries the same key.
       // original_payload is written ONCE per key - the first payload that may
@@ -214,6 +216,28 @@ export default function AIIdentify() {
       } else {
         // Network failure or server error: the request MAY have reached the
         // server. Keep the key and payload for a safe retry.
+        if (photoFile) {
+          // A photo is attached: park the whole submission (payload + Blob)
+          // in the durable queue under the SAME key. CREATE_TREE is
+          // idempotent, so a later replay cannot duplicate it - and the photo
+          // survives a tab close (G7 D5).
+          try {
+            await enqueue(
+              "CREATE_TREE",
+              { ...data, client_uuid: draftMeta?.key || key },
+              { photoBlob: photoFile },
+            );
+            clearDraft();
+            setDraft(null);
+            toast.error(
+              "Connection problem - your submission with its photo is saved offline. Sync from Field Sync; retrying cannot create a duplicate.",
+            );
+            navigate("/field-sync");
+            return;
+          } catch {
+            /* fall through to the draft path below */
+          }
+        }
         if (current) writeDraft({ ...current, status: "uncertain" });
         setDraft(readDraft());
         toast.error(
@@ -230,8 +254,56 @@ export default function AIIdentify() {
   //    that survives uncertain network failures (safeguard D).
   //  * Species unknown -> the existing unknown-species endpoint (Path B),
   //    which staff can later convert into a pending submission.
-  const submitCitizenFlow = async (data) => {
+  const submitCitizenFlow = async (data, extra = {}) => {
     const hasSpecies = Boolean((data.common_name || "").trim());
+    // G7 (D2): offline citizens save their submission (or unknown-species
+    // report) to the durable queue under the same G4 client_uuid contract.
+    // It syncs to /tree-submissions/ as PENDING - staff approval, quota and
+    // duplicate safeguards are unchanged.
+    if (!navigator.onLine) {
+      try {
+        if (!hasSpecies) {
+          await enqueue(
+            "SUBMIT_UNKNOWN",
+            {
+              photo_url: data.photo_url || "",
+              barangay: data.barangay,
+              location_description: [data.lat, data.lng].filter(Boolean).join(", "),
+              possible_name: data.common_name,
+              submitter_notes: data.notes || "Submitted from web AI scanner.",
+              ai_candidates: [],
+            },
+            { photoBlob: extra.photoFile },
+          );
+        } else {
+          const prior = readSubmissionDraft();
+          const sameIdentity =
+            prior && identityOf(prior.payload || {}) === identityOf(data);
+          const pending =
+            prior &&
+            (prior.status === "uncertain" || prior.status === "in_flight") &&
+            sameIdentity
+              ? prior
+              : null;
+          const key = pending?.key || generateSubmissionKey();
+          await enqueue(
+            "CREATE_TREE_SUBMISSION",
+            { ...data, client_uuid: key, source: "ai_identify", ai_candidates: [] },
+            { photoBlob: extra.photoFile },
+          );
+          clearSubmissionDraft();
+        }
+        toast.success(
+          "Saved offline. On sync it is sent for expert review - submissions stay pending until staff approval.",
+        );
+        navigate("/field-sync");
+      } catch (error) {
+        toast.error(
+          `Could not save offline: ${error?.message || "browser storage unavailable"}. Nothing was sent.`,
+        );
+      }
+      return;
+    }
     setLoading(true);
     try {
       if (!hasSpecies) {
@@ -305,6 +377,42 @@ export default function AIIdentify() {
       } else {
         // Network failure or server error: the request MAY have reached the
         // server. Keep the key and payload so a retry cannot duplicate it.
+        if (extra.photoFile && current?.key) {
+          // Photo attached: park payload + Blob in the durable queue under
+          // the SAME G4 key - idempotent through client_uuid, and the photo
+          // survives a reload (G7 D5).
+          try {
+            await enqueue(
+              hasSpecies ? "CREATE_TREE_SUBMISSION" : "SUBMIT_UNKNOWN",
+              hasSpecies
+                ? {
+                    ...data,
+                    client_uuid: current.key,
+                    source: "ai_identify",
+                    ai_candidates: [],
+                  }
+                : {
+                    photo_url: data.photo_url || "",
+                    barangay: data.barangay,
+                    location_description: [data.lat, data.lng]
+                      .filter(Boolean)
+                      .join(", "),
+                    possible_name: data.common_name,
+                    submitter_notes: data.notes || "Submitted from web AI scanner.",
+                    ai_candidates: [],
+                  },
+              { photoBlob: extra.photoFile },
+            );
+            clearSubmissionDraft();
+            toast.error(
+              "Connection problem - your submission with its photo is saved offline. Sync from Field Sync; retrying cannot create a duplicate.",
+            );
+            navigate("/field-sync");
+            return;
+          } catch {
+            /* fall through to the draft path below */
+          }
+        }
         if (current) {
           writeSubmissionDraft({ ...current, status: "uncertain" });
         }
@@ -317,9 +425,9 @@ export default function AIIdentify() {
     }
   };
 
-  const handleSubmit = async (data) => {
+  const handleSubmit = async (data, extra = {}) => {
     if (isCitizen) {
-      await submitCitizenFlow(data);
+      await submitCitizenFlow(data, extra);
       return;
     }
     const existingDraft = readDraft();
@@ -329,10 +437,10 @@ export default function AIIdentify() {
     ) {
       // Never silently discard a pending submission. Its key and payload are
       // preserved until the user explicitly confirms a new submission.
-      setPendingReplacement({ data, previous: existingDraft });
+      setPendingReplacement({ data, extra, previous: existingDraft });
       return;
     }
-    await submitPossiblyWithNearbyCheck(data, existingDraft);
+    await submitPossiblyWithNearbyCheck(data, existingDraft, extra);
   };
 
   const confirmReplacement = async () => {
@@ -341,7 +449,7 @@ export default function AIIdentify() {
     if (!replacement) return;
     clearDraft();
     setDraft(null);
-    await submitPossiblyWithNearbyCheck(replacement.data, null);
+    await submitPossiblyWithNearbyCheck(replacement.data, null, replacement.extra);
   };
 
   const retryOriginal = async () => {
@@ -357,9 +465,15 @@ export default function AIIdentify() {
   // submission. G2 flows that reuse an existing key (Retry Original, edited
   // saves of a pending submission) skip it entirely, and a failed check is
   // never presented as "no matches".
-  const submitPossiblyWithNearbyCheck = async (data, draftMeta) => {
+  const submitPossiblyWithNearbyCheck = async (data, draftMeta, extra = {}) => {
+    // Offline: the nearby check cannot run and nothing can be sent - the
+    // queue takes over directly (G7).
+    if (!navigator.onLine) {
+      await performSubmit(data, draftMeta, { photoFile: extra.photoFile });
+      return;
+    }
     if (draftMeta?.key) {
-      await performSubmit(data, draftMeta);
+      await performSubmit(data, draftMeta, { photoFile: extra.photoFile });
       return;
     }
     if (
@@ -368,7 +482,7 @@ export default function AIIdentify() {
       data.lng === undefined ||
       data.lng === null
     ) {
-      await performSubmit(data, draftMeta);
+      await performSubmit(data, draftMeta, { photoFile: extra.photoFile });
       return;
     }
     setLoading(true);
@@ -381,24 +495,27 @@ export default function AIIdentify() {
       });
       if (candidates.length > 0) {
         setNearbyCandidates(candidates);
-        setNearbyPendingData(data);
+        setNearbyPendingData({ data, extra });
         return;
       }
-      await performSubmit(data, draftMeta);
+      await performSubmit(data, draftMeta, { photoFile: extra.photoFile });
     } catch {
       setNearbyError(true);
-      setNearbyPendingData(data);
+      setNearbyPendingData({ data, extra });
     } finally {
       setLoading(false);
     }
   };
 
   const proceedPastNearbyCheck = async () => {
-    const data = nearbyPendingData;
+    const pending = nearbyPendingData;
     setNearbyCandidates(null);
     setNearbyError(false);
     setNearbyPendingData(null);
-    if (data) await performSubmit(data, null);
+    if (pending)
+      await performSubmit(pending.data, null, {
+        photoFile: pending.extra?.photoFile,
+      });
   };
 
   const cancelNearbyCheck = () => {
@@ -433,14 +550,14 @@ export default function AIIdentify() {
           <p className="font-medium text-amber-900">
             {draft.status === "uncertain" || draft.status === "in_flight"
               ? "A previous save may have reached the server."
-              : "Unfinished submission recovered from this tab."}
+              : "Unfinished submission recovered from durable storage."}
           </p>
           <p className="mt-1 text-amber-800">
             {draft.snapshot?.common_name || "Unnamed tree"} · saved{" "}
             {draft.created_at ? new Date(draft.created_at).toLocaleString() : "earlier"}
             {draft.status === "uncertain" || draft.status === "in_flight"
-              ? " - retrying uses the same submission key, so no duplicate can be created. Recovery lasts only while this browser tab stays open."
-              : " - recovered from this tab only; closing the tab discards it."}
+              ? " - retrying uses the same submission key, so no duplicate can be created. The draft is saved in this browser and survives closing the tab."
+              : " - restored from this browser's durable draft storage."}
           </p>
           <div className="mt-3 flex gap-2">
             {(draft.status === "uncertain" || draft.status === "in_flight") &&

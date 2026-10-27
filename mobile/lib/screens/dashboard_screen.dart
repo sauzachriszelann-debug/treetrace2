@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 
 import '../services/api_service.dart';
 
+import '../format.dart';
+
 import '../services/auth_provider.dart';
 
 import '../services/theme.dart';
@@ -68,6 +70,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 
   Future<void> _load() async {
+    // Read the role before any await: GET /api/ai/unknown-species is
+    // admin-only on the backend (require_admin), and a field worker would
+    // only provoke a 403 they cannot resolve, so the request is skipped
+    // unless this user is an admin (Phase 11D).
+    final isAdminReviewAllowed =
+        usesAdminUnknownSpeciesReview(context.read<AuthProvider>().user?.role);
 
     try {
 
@@ -81,9 +89,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         planting = await api.getPlantingSuggestions();
       } catch (_) {}
       List<dynamic> unknown = [];
-      try {
-        unknown = await api.getUnknownSpeciesReview();
-      } catch (_) {}
+      if (isAdminReviewAllowed) {
+        try {
+          unknown = await api.getUnknownSpeciesReview();
+        } catch (_) {}
+      }
       List<dynamic> plantingRecords = [];
       try {
         plantingRecords = await api.getPlantingRecommendations();
@@ -415,7 +425,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                       _CompactStatsCard(
                           title: 'Carbon Stock',
-                          value: '${(carbon / 1000).toStringAsFixed(2)} t',
+                          // Display-only: kg below one tonne, tonnes at or
+                          // above it, matching the web dashboard (Phase 11D).
+                          value: formatCarbonKg(carbon),
                           subtitle: 'Total CO2 equivalent',
                           icon: Icons.cloud_outlined,
                           color: Colors.blue.shade600,

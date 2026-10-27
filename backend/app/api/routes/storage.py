@@ -1,7 +1,11 @@
 import io
 import re
 import uuid
+from pathlib import Path
+from fastapi import Request
 from typing import Literal
+
+from fastapi.responses import FileResponse
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from PIL import Image, UnidentifiedImageError
@@ -12,6 +16,75 @@ from app.models.user import User, UserRole
 from supabase import create_client, Client
 
 router = APIRouter()
+
+def sandbox_local_storage_enabled() -> bool:
+    """Allow local photo storage only in an isolated SQLite test environment."""
+    return (
+        settings.SANDBOX_LOCAL_STORAGE is True
+        and settings.TESTING is True
+        and settings.SQLALCHEMY_DATABASE_URL.startswith("sqlite:///")
+    )
+
+SANDBOX_UPLOAD_DIR = Path(__file__).resolve().parents[3] / "sandbox_uploads"
+
+
+def save_sandbox_photo(
+    contents: bytes,
+    path: str,
+    request: Request,
+) -> str:
+    """Save a test photo locally without contacting Supabase."""
+    if not sandbox_local_storage_enabled():
+        raise HTTPException(
+            status_code=403,
+            detail="Sandbox local storage is disabled.",
+        )
+
+    if (
+        not _is_permitted_photo_path(path)
+        or "\\" in path
+        or any(
+            part in (".", "..")
+            for part in path.split("/")
+        )
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid sandbox photo path.",
+        )
+
+    root = SANDBOX_UPLOAD_DIR.resolve()
+    destination = (root / path).resolve()
+
+    if not destination.is_relative_to(root):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid sandbox photo path.",
+        )
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(contents)
+    return str(request.url_for("sandbox_photo", path=path))
+
+@router.get("/sandbox-photos/{path:path}", name="sandbox_photo")
+def sandbox_photo(path: str):
+    """Serve locally saved photos in the isolated sandbox only."""
+    if not sandbox_local_storage_enabled():
+        raise HTTPException(status_code=404, detail="Not found.")
+
+    if not _is_permitted_photo_path(path):
+        raise HTTPException(status_code=404, detail="Not found.")
+
+    destination = (SANDBOX_UPLOAD_DIR / path).resolve()
+    root = SANDBOX_UPLOAD_DIR.resolve()
+
+    if not destination.is_relative_to(root):
+        raise HTTPException(status_code=404, detail="Not found.")
+
+    if not destination.is_file():
+        raise HTTPException(status_code=404, detail="Photo not found.")
+
+    return FileResponse(destination)
 
 UploadPurpose = Literal["tree_photo", "unknown_species", "planting_submission"]
 
@@ -108,6 +181,7 @@ def _is_permitted_photo_path(path: str) -> bool:
 
 @router.post("/upload-photo")
 async def upload_photo(
+        request: Request,
     file: UploadFile = File(...),
     purpose: UploadPurpose = Form(...),
     current_user: User = Depends(get_current_user),
@@ -122,6 +196,11 @@ async def upload_photo(
     contents = await _read_limited(file, MAX_PHOTO_BYTES)
     extension = _validate_image(contents, file.content_type)
     path = _photo_path(purpose, current_user, extension)
+
+    if sandbox_local_storage_enabled():
+        local_url = save_sandbox_photo(contents, path, request)
+        return {"file_url": local_url, "path": path}
+
     supabase = get_supabase()
     supabase.storage.from_(settings.SUPABASE_BUCKET_PHOTOS).upload(
         path=path,

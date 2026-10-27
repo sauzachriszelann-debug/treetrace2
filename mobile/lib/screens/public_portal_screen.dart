@@ -742,157 +742,13 @@ class _PublicPortalScreenState extends State<PublicPortalScreen> {
     );
   }
 
-  Widget _buildMapCard({double height = 280}) {
-    final mappedTrees =
-        _trees.where((t) => t.lat != null && t.lng != null).toList();
-
-    return Container(
-      height: height,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          )
-        ],
-        border: Border.all(color: kBorder),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: Stack(
-          children: [
-            if (mappedTrees.isNotEmpty)
-              FlutterMap(
-                options: MapOptions(
-                  initialCenter: LatLng(
-                    mappedTrees.first.lat ?? 7.3047,
-                    mappedTrees.first.lng ?? 125.6856,
-                  ),
-                  initialZoom: 13,
-                  minZoom: 2,
-                  maxZoom: 22,
-                ),
-                children: [
-                  TileLayer(
-                    urlTemplate:
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.treetrace.mobile',
-                    maxNativeZoom: 19,
-                  ),
-                  MarkerLayer(
-                    markers: mappedTrees.take(20).map((tree) {
-                      final color = healthColor(tree.healthStatus);
-                      return Marker(
-                        point: LatLng(tree.lat!, tree.lng!),
-                        width: 32,
-                        height: 32,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: color,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
-                            boxShadow: [
-                              BoxShadow(
-                                  color: color.withOpacity(0.4), blurRadius: 6)
-                            ],
-                          ),
-                          child: const Icon(Icons.park,
-                              color: Colors.white, size: 14),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              )
-            else
-              Container(
-                color: kBackground,
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.location_off_rounded,
-                          size: 40, color: kMutedFg.withOpacity(0.5)),
-                      const SizedBox(height: 8),
-                      Text(
-                        'No GPS data available',
-                        style: TextStyle(
-                            color: kMutedFg.withOpacity(0.6), fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: IgnorePointer(
-                ignoring: true,
-                child: Container(
-                  height: 76,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withOpacity(0.68),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 14,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Interactive Tree Map',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      Text(
-                        '${mappedTrees.length} trees with location',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.75),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                  GestureDetector(
-                    onTap: _openMap,
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.22),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.arrow_forward_rounded,
-                          color: Colors.white, size: 18),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  /// Phase 12C.2: delegates to the extracted, testable preview widget so
+  /// every existing call site keeps its exact layout and behavior.
+  Widget _buildMapCard({double height = 280}) => PublicMapPreviewCard(
+        trees: _trees,
+        height: height,
+        onOpenMap: _openMap,
+      );
 
   Widget _buildSectionHeader(String title, String action, {VoidCallback? onTap}) {
     return Row(
@@ -1571,6 +1427,175 @@ class _FeaturedTreeCard extends StatelessWidget {
                   child: HealthBadge(tree.healthStatus, small: true)),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Phase 12C.2: the portal's embedded map preview, extracted as a
+/// standalone widget so fixture-driven tests can pump it without any
+/// network access. Layout and behavior are identical to the original
+/// inline card; OpenStreetMap attribution has been added.
+class PublicMapPreviewCard extends StatelessWidget {
+  final List<TreeModel> trees;
+  final double height;
+  final VoidCallback? onOpenMap;
+  const PublicMapPreviewCard(
+      {super.key, required this.trees, this.height = 280, this.onOpenMap});
+
+  Widget build(BuildContext context) {
+    final mappedTrees =
+        trees.where((t) => t.lat != null && t.lng != null).toList();
+
+    return Container(
+      height: height,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          )
+        ],
+        border: Border.all(color: kBorder),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Stack(
+          children: [
+            if (mappedTrees.isNotEmpty)
+              FlutterMap(
+                options: MapOptions(
+                  initialCenter: LatLng(
+                    mappedTrees.first.lat ?? 7.3047,
+                    mappedTrees.first.lng ?? 125.6856,
+                  ),
+                  initialZoom: 13,
+                  minZoom: 2,
+                  maxZoom: 22,
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.treetrace.mobile',
+                    maxNativeZoom: 19,
+                  ),
+                  MarkerLayer(
+                    markers: mappedTrees.take(20).map((tree) {
+                      final color = healthColor(tree.healthStatus);
+                      return Marker(
+                        key: ValueKey('preview-marker-${tree.id}'),
+                        point: LatLng(tree.lat!, tree.lng!),
+                        width: 32,
+                        height: 32,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: color,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                            boxShadow: [
+                              BoxShadow(
+                                  color: color.withOpacity(0.4), blurRadius: 6)
+                            ],
+                          ),
+                          child: const Icon(Icons.park,
+                              color: Colors.white, size: 14),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SimpleAttributionWidget(
+                    source: Text('OpenStreetMap contributors'),
+                    alignment: Alignment.topRight,
+                  ),
+                ],
+              )
+            else
+              Container(
+                color: kBackground,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.location_off_rounded,
+                          size: 40, color: kMutedFg.withOpacity(0.5)),
+                      const SizedBox(height: 8),
+                      Text(
+                        'No GPS data available',
+                        style: TextStyle(
+                            color: kMutedFg.withOpacity(0.6), fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: IgnorePointer(
+                ignoring: true,
+                child: Container(
+                  height: 76,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withOpacity(0.68),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 14,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Interactive Tree Map',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        '${mappedTrees.length} trees with location',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.75),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                  GestureDetector(
+                    onTap: onOpenMap,
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.22),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.arrow_forward_rounded,
+                          color: Colors.white, size: 18),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

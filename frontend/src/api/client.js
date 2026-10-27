@@ -28,13 +28,13 @@ api.interceptors.response.use(
       };
     }
     if (status === 401) {
-      // Only redirect if token is actually missing/invalid (not just a permission error)
-      const token = localStorage.getItem("treetrace_token");
-      if (!token) {
-        window.location.href = "/login";
-      } else {
-        // Token expired — clear and redirect
-        localStorage.removeItem("treetrace_token");
+      // G7 D4: a background sync request (offlineSync) keeps the queue and
+      // must not yank the user out of the app mid-run - the sync UI shows a
+      // session-expired banner instead. The dead token is still removed
+      // (security behavior unchanged); redirects stay for every other call.
+      const isBackgroundSync = Boolean(error.config?.offlineSync);
+      localStorage.removeItem("treetrace_token");
+      if (!isBackgroundSync) {
         window.location.href = "/login";
       }
     }

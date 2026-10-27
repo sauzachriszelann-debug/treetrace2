@@ -11,8 +11,8 @@ export const treesApi = {
     return data;
   },
 
-  create: async (payload) => {
-    const { data } = await api.post("/trees/", payload);
+  create: async (payload, config) => {
+    const { data } = await api.post("/trees/", payload, config);
     return data;
   },
 

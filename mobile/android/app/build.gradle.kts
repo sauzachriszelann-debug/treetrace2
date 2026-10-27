@@ -19,6 +19,19 @@ android {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
+flavorDimensions += "environment"
+
+productFlavors {
+    create("production") {
+        dimension = "environment"
+    }
+   create("sandbox") {
+        dimension = "environment"
+        applicationIdSuffix = ".testing"
+        versionNameSuffix = "-test"
+    }
+}
+
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.treetrace_mobile"

@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { MapPin, Ruler, TreePine, Leaf } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import HealthBadge from "./HealthBadge";
+import { formatCarbonKg } from "@/lib/format";
 
 export default function TreeCard({ tree }) {
   return (
@@ -49,7 +50,7 @@ export default function TreeCard({ tree }) {
             {tree.carbon_kg && (
               <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
                 <Leaf className="w-3 h-3" />
-                <span>Carbon: {tree.carbon_kg.toFixed(2)} kg</span>
+                <span>Carbon: {formatCarbonKg(tree.carbon_kg)}</span>
               </div>
             )}
           </div>

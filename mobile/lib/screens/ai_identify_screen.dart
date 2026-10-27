@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -11,9 +12,28 @@ import '../widgets/widgets.dart';
 import 'add_tree_screen.dart';
 import 'upgrade_screen.dart';
 
+/// Phase 13.4: lifecycle of the one-shot usage fetch behind the badges.
+enum _UsageFetchState { loading, ready, error }
+
 class AIIdentifyScreen extends StatefulWidget {
   final VoidCallback? onBack;
-  const AIIdentifyScreen({super.key, this.onBack});
+
+  /// Phase 13.6 test seams: tests inject fixture loaders so no socket is ever
+  /// opened. Production call sites pass none and keep the real [api] calls.
+  final Future<Map<String, dynamic>> Function()? usageLoader;
+  final Future<Map<String, dynamic>> Function(File file)? identifyFn;
+
+  /// Lets a widget test start with a photo already selected, since the
+  /// image-picker plugin does not exist in the test environment.
+  final File? initialPhoto;
+
+  const AIIdentifyScreen({
+    super.key,
+    this.onBack,
+    this.usageLoader,
+    this.identifyFn,
+    this.initialPhoto,
+  });
   @override
   State<AIIdentifyScreen> createState() => _AIIdentifyScreenState();
 }
@@ -23,20 +43,44 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
   bool _identifying = false;
   Map<String, dynamic>? _result;
   Map<String, dynamic>? _usage;
+  /// Phase 13.4: the usage badges used to show "Loading" forever whenever
+  /// the single initState fetch failed (e.g. the adb tunnel was momentarily
+  /// down) because the error was swallowed. Track the fetch state so a
+  /// failure can surface as a tappable retry instead of an infinite spinner.
+  _UsageFetchState _usageState = _UsageFetchState.loading;
   int _profileTab = 0;
 
   @override
   void initState() {
     super.initState();
+    _photo = widget.initialPhoto;
     _loadUsage();
   }
 
-  Future<void> _loadUsage() async {
+  /// Phase 13.6: test-only entry point to run a scan on an already-selected
+  /// photo (the widget-test environment has no image-picker plugin).
+  @visibleForTesting
+  Future<void> debugIdentify(File file) => _identify(file, markLoading: false);
+
+  Future<void> _loadUsage({bool retrying = false}) async {
+    if (retrying) {
+      setState(() => _usageState = _UsageFetchState.loading);
+    }
     try {
-      final usage = await api.getAiUsage();
-      if (mounted) setState(() => _usage = usage);
-    } catch (_) {
-      // Usage badges are helpful, but scanning should still work if this call fails.
+      final usage = await (widget.usageLoader ?? api.getAiUsage)();
+      if (mounted) {
+        setState(() {
+          _usage = usage;
+          _usageState = _UsageFetchState.ready;
+        });
+      }
+    } catch (e) {
+      debugPrint('AI usage load failed: $e');
+      if (mounted) {
+        setState(() => _usageState = _UsageFetchState.error);
+      }
+      // Usage badges are helpful, but scanning should still work if this
+      // call fails — the screen stays fully usable without them.
     }
   }
 
@@ -85,7 +129,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
       });
     }
     try {
-      final r = await api.identifyTree(f);
+      final r = await (widget.identifyFn ?? api.identifyTree)(f);
       _incrementUsage('ai');
       setState(() => _result = r);
     } catch (e) {
@@ -307,6 +351,13 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
   }
 
   Widget _buildUsageStrip() {
+    // Phase 13.4: error state is tappable for a retry; ready/loading keep the
+    // original upgrade-sheet behaviour.
+    final usageFailed = _usageState == _UsageFetchState.error && _usage == null;
+    final fallback = usageFailed ? 'Unavailable — tap to retry' : 'Loading';
+    final onTap = usageFailed
+        ? () => _loadUsage(retrying: true)
+        : () => showUpgradeSheet(context);
     return Row(
       children: [
         Expanded(
@@ -314,8 +365,8 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
             icon: Icons.auto_awesome,
             title: 'AI Scan',
             usage: _aiUsage,
-            fallback: 'Loading',
-            onTap: () => showUpgradeSheet(context),
+            fallback: fallback,
+            onTap: onTap,
           ),
         ),
         const SizedBox(width: 10),
@@ -324,8 +375,8 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
             icon: Icons.science_outlined,
             title: 'Expert Review',
             usage: _unknownUsage,
-            fallback: 'Loading',
-            onTap: () => showUpgradeSheet(context),
+            fallback: fallback,
+            onTap: onTap,
           ),
         ),
       ],
@@ -434,7 +485,11 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
           Positioned(
             top: 16,
             right: 16,
-            child: HealthBadge(confidence ?? 'High Match', color: kHealthy),
+            // G5: never fabricate a confidence label — a missing model
+            // confidence is reported as missing, not as "High Match".
+            child: (confidence != null && confidence.trim().isNotEmpty)
+                ? HealthBadge(confidence.trim(), color: kHealthy)
+                : const HealthBadge('Confidence not reported', color: kMutedFg),
           ),
         Positioned(
           bottom: 16,
@@ -567,7 +622,11 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  _MiniBadge(Icons.auto_awesome, confidence ?? 'AI Match'),
+                  _MiniBadge(
+                      Icons.auto_awesome,
+                      (confidence != null && confidence.trim().isNotEmpty)
+                          ? confidence.trim()
+                          : 'Confidence not reported'),
                   _MiniBadge(Icons.shield_outlined, status),
                   _MiniBadge(Icons.category_outlined, family),
                 ],

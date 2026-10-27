@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
-    # Frontend URL (used in email links)
+    # Frontend URL (used in email links)SQLALCHEMY_DATABASE_URL and DATABASE_URL
     FRONTEND_URL: str = "http://localhost:5173"
 
     # Database
@@ -27,6 +27,10 @@ class Settings(BaseSettings):
         if self.DATABASE_URL.startswith("postgres://"):
             return self.DATABASE_URL.replace("postgres://", "postgresql://", 1)
         return self.DATABASE_URL
+
+
+    # Local photo storage is opt-in for isolated sandbox testing.
+    SANDBOX_LOCAL_STORAGE: bool = False
 
 
     # Supabase — file storage only
@@ -42,6 +46,13 @@ class Settings(BaseSettings):
     #API identification
     PERENUAL_API_KEY: str = ""
     TREFLE_API_KEY: str = ""
+
+    # Phase 13.1: gemini-2.0-flash-lite was shut down by Google on 2026-06-01
+    # (every request answered HTTP 404, surfacing in-app as
+    # "AI error: Gemini 404"). The active model lives here, env-overridable,
+    # with a fallback tried whenever the primary is rejected as unavailable.
+    GEMINI_MODEL: str = "gemini-3.5-flash-lite"
+    GEMINI_FALLBACK_MODEL: str = "gemini-3.1-flash-lite"
 
 
     # Anthropic — AI identification

@@ -7,8 +7,23 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/AuthContext";
+import { useOfflineSyncStore } from "@/offline/OfflineSyncProvider";
+import {
+  readDraft as readDraftSlot,
+  persistDraft,
+  clearDraft as clearDraftSlot,
+  TREE_DRAFT_SLOT,
+} from "@/offline/drafts";
 
-const DRAFT_STORAGE_KEY = "treetrace_tree_draft";
+// Local wrappers keep the original sync call-site contract while the durable
+// module mirrors every write into IndexedDB (G7 D5).
+const readDraft = () => readDraftSlot(TREE_DRAFT_SLOT);
+const writeDraft = (draft) => {
+  void persistDraft(TREE_DRAFT_SLOT, draft);
+};
+const clearDraft = () => {
+  void clearDraftSlot(TREE_DRAFT_SLOT);
+};
 
 const normalizeName = (value) => (value || "").toString().trim().toLowerCase();
 const normalizeCoord = (value) => {
@@ -37,29 +52,6 @@ const generateSubmissionKey = () => {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 };
 
-const readDraft = () => {
-  try {
-    const raw = sessionStorage.getItem(DRAFT_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-};
-const writeDraft = (draft) => {
-  try {
-    sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
-  } catch {
-    /* storage unavailable: the draft simply is not recoverable */
-  }
-};
-const clearDraft = () => {
-  try {
-    sessionStorage.removeItem(DRAFT_STORAGE_KEY);
-  } catch {
-    /* ignore */
-  }
-};
-
 export default function AddTree() {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -75,6 +67,7 @@ export default function AddTree() {
   const [nearbyError, setNearbyError] = useState(false);
   const [nearbyPendingData, setNearbyPendingData] = useState(null);
   const { user } = useAuth();
+  const { enqueue } = useOfflineSyncStore();
 
   if (user?.role === "citizen") {
     return (
@@ -125,15 +118,40 @@ export default function AddTree() {
   const performSubmit = async (
     data,
     draftMeta,
-    { preserveSnapshot = false } = {},
+    { preserveSnapshot = false, photoFile = null } = {},
   ) => {
+    // G7: fully offline - nothing was sent, so the queue owns the payload
+    // and the photo Blob under the same stable client_uuid (G2).
+    if (!navigator.onLine) {
+      const key = draftMeta?.key || generateSubmissionKey();
+      try {
+        await enqueue(
+          "CREATE_TREE",
+          { ...data, client_uuid: key },
+          { photoBlob: photoFile },
+        );
+        clearDraft();
+        setDraft(null);
+        setPendingReplacement(null);
+        toast.success(
+          "Saved offline. Review it in Field Sync - only verified records upload.",
+        );
+        navigate("/field-sync");
+      } catch (error) {
+        toast.error(
+          `Could not save offline: ${error?.message || "browser storage unavailable"}. Nothing was sent.`,
+        );
+      }
+      return;
+    }
     setLoading(true);
     // Captured for the catch clause below (block-scoped to try is invisible
     // there): is there an earlier submission for this key that may exist on
     // the server?
     const hadPriorAttempt = Boolean(draftMeta?.original_payload);
+    // Hoisted so the failure path can enqueue under the SAME key (G7 D5).
+    const key = draftMeta?.key || generateSubmissionKey();
     try {
-      const key = draftMeta?.key || generateSubmissionKey();
       // Persist the pending submission BEFORE the request: if it reaches the
       // server and the response is lost, the retry carries the same key.
       // original_payload is written ONCE per key - the first payload that may
@@ -202,6 +220,28 @@ export default function AddTree() {
       } else {
         // Network failure or server error: the request MAY have reached the
         // server. Keep the key and payload for a safe retry.
+        if (photoFile) {
+          // A photo is attached: park the whole submission (payload + Blob)
+          // in the durable queue under the SAME key. CREATE_TREE is
+          // idempotent, so a later replay cannot duplicate it - and the photo
+          // survives a tab close (G7 D5).
+          try {
+            await enqueue(
+              "CREATE_TREE",
+              { ...data, client_uuid: draftMeta?.key || key },
+              { photoBlob: photoFile },
+            );
+            clearDraft();
+            setDraft(null);
+            toast.error(
+              "Connection problem - your submission with its photo is saved offline. Sync from Field Sync; retrying cannot create a duplicate.",
+            );
+            navigate("/field-sync");
+            return;
+          } catch {
+            /* fall through to the draft path below */
+          }
+        }
         if (current) writeDraft({ ...current, status: "uncertain" });
         setDraft(readDraft());
         toast.error(
@@ -213,7 +253,7 @@ export default function AddTree() {
     }
   };
 
-  const handleSubmit = async (data) => {
+  const handleSubmit = async (data, extra = {}) => {
     const existingDraft = readDraft();
     if (
       existingDraft &&
@@ -221,10 +261,10 @@ export default function AddTree() {
     ) {
       // Never silently discard a pending submission. Its key and payload are
       // preserved until the user explicitly confirms a new submission.
-      setPendingReplacement({ data, previous: existingDraft });
+      setPendingReplacement({ data, extra, previous: existingDraft });
       return;
     }
-    await submitPossiblyWithNearbyCheck(data, existingDraft);
+    await submitPossiblyWithNearbyCheck(data, existingDraft, extra);
   };
 
   const confirmReplacement = async () => {
@@ -233,7 +273,7 @@ export default function AddTree() {
     if (!replacement) return;
     clearDraft();
     setDraft(null);
-    await submitPossiblyWithNearbyCheck(replacement.data, null);
+    await submitPossiblyWithNearbyCheck(replacement.data, null, replacement.extra);
   };
 
   const retryOriginal = async () => {
@@ -249,9 +289,15 @@ export default function AddTree() {
   // submission. G2 flows that reuse an existing key (Retry Original, edited
   // saves of a pending submission) skip it entirely, and a failed check is
   // never presented as "no matches".
-  const submitPossiblyWithNearbyCheck = async (data, draftMeta) => {
+  const submitPossiblyWithNearbyCheck = async (data, draftMeta, extra = {}) => {
+    // Offline: the nearby check cannot run and nothing can be sent - the
+    // queue takes over directly (G7).
+    if (!navigator.onLine) {
+      await performSubmit(data, draftMeta, { photoFile: extra.photoFile });
+      return;
+    }
     if (draftMeta?.key) {
-      await performSubmit(data, draftMeta);
+      await performSubmit(data, draftMeta, { photoFile: extra.photoFile });
       return;
     }
     if (
@@ -260,7 +306,7 @@ export default function AddTree() {
       data.lng === undefined ||
       data.lng === null
     ) {
-      await performSubmit(data, draftMeta);
+      await performSubmit(data, draftMeta, { photoFile: extra.photoFile });
       return;
     }
     setLoading(true);
@@ -273,24 +319,27 @@ export default function AddTree() {
       });
       if (candidates.length > 0) {
         setNearbyCandidates(candidates);
-        setNearbyPendingData(data);
+        setNearbyPendingData({ data, extra });
         return;
       }
-      await performSubmit(data, draftMeta);
+      await performSubmit(data, draftMeta, { photoFile: extra.photoFile });
     } catch {
       setNearbyError(true);
-      setNearbyPendingData(data);
+      setNearbyPendingData({ data, extra });
     } finally {
       setLoading(false);
     }
   };
 
   const proceedPastNearbyCheck = async () => {
-    const data = nearbyPendingData;
+    const pending = nearbyPendingData;
     setNearbyCandidates(null);
     setNearbyError(false);
     setNearbyPendingData(null);
-    if (data) await performSubmit(data, null);
+    if (pending)
+      await performSubmit(pending.data, null, {
+        photoFile: pending.extra?.photoFile,
+      });
   };
 
   const cancelNearbyCheck = () => {
@@ -322,14 +371,14 @@ export default function AddTree() {
           <p className="font-medium text-amber-900">
             {draft.status === "uncertain" || draft.status === "in_flight"
               ? "A previous save may have reached the server."
-              : "Unfinished submission recovered from this tab."}
+              : "Unfinished submission recovered from durable storage."}
           </p>
           <p className="mt-1 text-amber-800">
             {draft.snapshot?.common_name || "Unnamed tree"} · saved{" "}
             {draft.created_at ? new Date(draft.created_at).toLocaleString() : "earlier"}
             {draft.status === "uncertain" || draft.status === "in_flight"
-              ? " - retrying uses the same submission key, so no duplicate can be created. Recovery lasts only while this browser tab stays open."
-              : " - recovered from this tab only; closing the tab discards it."}
+              ? " - retrying uses the same submission key, so no duplicate can be created. The draft is saved in this browser and survives closing the tab."
+              : " - restored from this browser's durable draft storage."}
           </p>
           <div className="mt-3 flex gap-2">
             {(draft.status === "uncertain" || draft.status === "in_flight") &&

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -11,10 +13,16 @@ import '../widgets/widgets.dart';
 import 'public_tree_profile_screen.dart';
 import 'tree_detail_screen.dart';
 
+/// Phase 12C.2 test seam: tests inject fixture loaders so no socket is ever
+/// opened. Production call sites pass nothing and keep the public endpoint.
+typedef MapTreeLoader = Future<List<dynamic>> Function();
+
 class MapScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final int refreshKey;
-  const MapScreen({super.key, this.onBack, this.refreshKey = 0});
+  final MapTreeLoader? treeLoader;
+  const MapScreen(
+      {super.key, this.onBack, this.refreshKey = 0, this.treeLoader});
   @override
   State<MapScreen> createState() => _MapScreenState();
 }
@@ -22,6 +30,7 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   List<TreeModel> _trees = [];
   bool _loading = true;
+  bool _loadError = false;
   String _filter = 'all';
   String _search = '';
   bool _isSatellite = false;
@@ -50,18 +59,48 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _loadError = false;
+    });
     try {
-      final data = await api.getPublicTrees();
+      final data = await (widget.treeLoader ?? api.getPublicTrees)();
       setState(() {
         _trees = data.map((j) => TreeModel.fromJson(j))
             .where((t) => t.lat != null && t.lng != null)
             .toList();
         _loading = false;
       });
+      _frameMarkers();
     } catch (_) {
-      setState(() => _loading = false);
+      // Phase 12C.2: a failed fetch is surfaced with a clear message and a
+      // Retry instead of silently rendering an empty map.
+      setState(() {
+        _loading = false;
+        _loadError = true;
+      });
     }
+  }
+
+  /// Phase 12C.5 (C): frame all loaded markers so records outside the
+  /// hardcoded default center remain visible. Empty data keeps the default
+  /// center/zoom as the fallback view.
+  void _frameMarkers() {
+    if (!mounted || _trees.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _trees.isEmpty) return;
+      final lats = _trees.map((t) => t.lat!).toList();
+      final lngs = _trees.map((t) => t.lng!).toList();
+      final bounds = LatLngBounds(
+        LatLng(lats.reduce(math.min), lngs.reduce(math.min)),
+        LatLng(lats.reduce(math.max), lngs.reduce(math.max)),
+      );
+      _mapController.fitCamera(CameraFit.bounds(
+        bounds: bounds,
+        padding: const EdgeInsets.fromLTRB(48, 200, 48, 150),
+        maxZoom: 16,
+      ));
+    });
   }
 
   List<TreeModel> get _filtered {
@@ -114,9 +153,12 @@ class _MapScreenState extends State<MapScreen> {
       body: Stack(
         children: [
           // ── Map Layer ──────────────────────────────────────────────────────
-          _loading
-              ? const Center(child: CircularProgressIndicator(color: kPrimary))
-              : FlutterMap(
+          if (_loading)
+            const Center(child: CircularProgressIndicator(color: kPrimary))
+          else if (_loadError)
+            _buildLoadError()
+          else
+              FlutterMap(
                   mapController: _mapController,
                   options: const MapOptions(
                     initialCenter: _center,
@@ -136,6 +178,7 @@ class _MapScreenState extends State<MapScreen> {
                       markers: _filtered.map((tree) {
                         final color = healthColor(tree.healthStatus);
                         return Marker(
+                          key: ValueKey('map-marker-${tree.id}'),
                           point: LatLng(tree.lat!, tree.lng!),
                           width: 40, height: 40,
                           child: GestureDetector(
@@ -162,8 +205,77 @@ class _MapScreenState extends State<MapScreen> {
           ),
 
           // ── Data Legend ────────────────────────────────────────────────────
-          if (!_loading) _buildFloatingLegend(),
+          if (!_loading && !_loadError) _buildFloatingLegend(),
+
+          // Phase 12C.5 (A): always-visible tile credit. flutter_map's
+          // attribution layer did not paint on the test device (verified on
+          // Realme RMX3363), so the required OSM/Esri credit is rendered
+          // directly in the screen's own stack.
+          if (!_loading && !_loadError)
+            Positioned(
+              right: 10,
+              bottom: 10,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(6),
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 4),
+                  ],
+                ),
+                child: Text(
+                  _isSatellite
+                      ? '© OpenStreetMap · Imagery © Esri, Maxar, Earthstar Geographics'
+                      : '© OpenStreetMap contributors',
+                  style: const TextStyle(
+                      color: kForeground,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
         ],
+      ),
+    );
+  }
+
+  /// Phase 12C.2: honest failure state with an explicit Retry action.
+  Widget _buildLoadError() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.wifi_off_rounded,
+                size: 44, color: kMutedFg.withOpacity(0.6)),
+            const SizedBox(height: 12),
+            const Text(
+              'Cannot load the map right now.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Tree markers could not be fetched from the server. '
+              'Check the connection and try again.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 12.5, color: kMutedFg.withOpacity(0.9)),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: _load,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Retry',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -341,7 +453,6 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _showTreePopup(TreeModel tree) {
-    final exactLocation = _exactLocationFromNotes(tree.notes);
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -394,7 +505,6 @@ class _MapScreenState extends State<MapScreen> {
                 children: [
                   Text(
                     [
-                      if (exactLocation != null) exactLocation,
                       if ((tree.barangay ?? '').isNotEmpty) tree.barangay,
                       if ((tree.city ?? '').isNotEmpty) tree.city,
                       if ((tree.province ?? '').isNotEmpty) tree.province,
@@ -406,7 +516,7 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                   const SizedBox(height: 5),
                   Text(
-                    '${tree.lat?.toStringAsFixed(6)}, ${tree.lng?.toStringAsFixed(6)}',
+                    '${tree.lat?.toStringAsFixed(4)}, ${tree.lng?.toStringAsFixed(4)}',
                     style: const TextStyle(color: kMutedFg, fontSize: 12),
                   ),
                 ],
@@ -439,14 +549,6 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  String? _exactLocationFromNotes(String? notes) {
-    if (notes == null || notes.trim().isEmpty) return null;
-    final firstLine = notes.split('\n').first.trim();
-    const prefix = 'Exact location:';
-    if (!firstLine.toLowerCase().startsWith(prefix.toLowerCase())) return null;
-    final value = firstLine.substring(prefix.length).trim();
-    return value.isEmpty ? null : value;
-  }
 }
 
 class _MapInfoPill extends StatelessWidget {

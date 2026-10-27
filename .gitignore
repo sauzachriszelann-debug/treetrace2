@@ -18,9 +18,25 @@ backend/app/**/__pycache__/
 mobile/build/
 mobile/.dart_tool/
 runs/
+# G5: official evaluation runs live in capstone/evaluation_outputs/runs and
+# must be committable (artifact JSON + sanitized raw sidecar travel together;
+# validation and recalculation both require the sidecar). Nothing ever
+# auto-commits them: scripts never run git, and raw sidecars are added only
+# manually after sanitization review.
+!capstone/evaluation_outputs/runs/
 scratch/
 timbervision/
 backend/models/*.pt
 !backend/models/tree_trunk_segmentation.pt
 yolov8n-seg.pt
 *.zip
+
+# Working-copy scratch output (logs, screenshots, local probe scripts) is never
+# committed: it can contain session tokens and machine-specific artifacts.
+/tmp/
+
+# Local TreeTrace sandbox photo uploads
+/backend/sandbox_uploads/
+# Local Sandbox database and original Android APK backup
+/backend/treetrace_sandbox.db
+/mobile/treetrace_installed_backup.apk

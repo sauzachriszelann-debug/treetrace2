@@ -3,7 +3,7 @@ import {
   LayoutDashboard, TreePine, Map, Plus, QrCode,
   Users, BarChart3, LogOut, Leaf, ScanLine, Globe,
   Network, WifiOff,
-  FileText, SearchCheck, X, Sprout, CloudUpload, ClipboardList,
+  FileText, ClipboardCheck, X, Sprout, CloudUpload, ClipboardList,
 } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
@@ -25,7 +25,9 @@ const navItems = [
 const adminItems = [
   { label: "QR Generator", icon: QrCode, path: "/qr-manager" },
   { label: "Health Logs", icon: BarChart3, path: "/health-logs" },
-  { label: "Unknown Review", icon: SearchCheck, path: "/unknown-species" },
+  // Phase 10C: one "Tree Reviews" item replaces the old "Unknown Review".
+  // Shown to admins AND field workers (the backend allows both to review).
+  { label: "Tree Reviews", icon: ClipboardCheck, path: "/tree-reviews", staffOnly: true },
   { label: "Reports & Tools", icon: FileText, path: "/reports" },
   { label: "Users", icon: Users, path: "/admin/users" },
 ];
@@ -36,6 +38,7 @@ export default function Sidebar({ user, mobileOpen = false, onMobileClose }) {
   const { isOnline, queueLength } = useOfflineSync();
   const role = String(user?.role || "");
   const isAdmin = role === "admin" || role.includes("UserRole.admin");
+  const isStaff = isAdmin || role === "field_worker" || role.includes("field_worker");
   const isCitizen = role === "citizen" || role.includes("UserRole.citizen");
   const roleText = role.split(".").pop()?.replace("_", " ") || "field worker";
   const planText = isAdmin || role.includes("field_worker")
@@ -112,19 +115,21 @@ export default function Sidebar({ user, mobileOpen = false, onMobileClose }) {
             ))}
           </div>
 
-          {isAdmin && (
+          {(isAdmin || isStaff) && (
             <div className="mt-4">
               <p className="mb-2 px-3 text-xs font-medium uppercase tracking-widest text-sidebar-foreground/40">
                 Admin
               </p>
-              {adminItems.map((item) => (
-                <NavItem
-                  key={item.path}
-                  item={item}
-                  active={location.pathname === item.path}
-                  onClick={onMobileClose}
-                />
-              ))}
+              {adminItems
+                .filter((item) => !item.staffOnly || isStaff)
+                .map((item) => (
+                  <NavItem
+                    key={item.path}
+                    item={item}
+                    active={location.pathname === item.path}
+                    onClick={onMobileClose}
+                  />
+                ))}
             </div>
           )}
         </nav>

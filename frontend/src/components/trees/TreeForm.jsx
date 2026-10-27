@@ -419,21 +419,39 @@ export default function TreeForm({
 
     // Upload photo to Supabase if a new file was selected
     let finalPhotoUrl = form.photo_url;
+    let pendingPhotoFile = null;
     if (photoFile && !form.photo_url) {
-      setPhotoLoading(true);
-      try {
-        const { file_url } = await storageApi.uploadPhoto(
-          photoFile,
-          photoUploadPurpose,
-        );
-        finalPhotoUrl = file_url;
-        // Cache the uploaded URL so a retry of the same form does not
-        // upload the same photo again.
-        set("photo_url", file_url);
-      } catch {
-        toast.error("Photo upload failed. Saving without photo.");
-      } finally {
-        setPhotoLoading(false);
+      if (!navigator.onLine) {
+        // G7: offline - the photo stays with the record and uploads during
+        // sync. It is never dropped silently.
+        pendingPhotoFile = photoFile;
+        toast.info("Offline - your photo is saved with this record and uploads during sync.");
+      } else {
+        setPhotoLoading(true);
+        try {
+          const { file_url } = await storageApi.uploadPhoto(
+            photoFile,
+            photoUploadPurpose,
+          );
+          finalPhotoUrl = file_url;
+          // Cache the uploaded URL so a retry of the same form does not
+          // upload the same photo again.
+          set("photo_url", file_url);
+        } catch (error) {
+          if (!error?.response) {
+            // Connection dropped mid-upload: keep the photo attached and let
+            // the caller decide (offline queue / explicit retry).
+            pendingPhotoFile = photoFile;
+            toast.warning(
+              "Connection lost during photo upload. The photo stays with this record.",
+            );
+          } else {
+            // Server rejected the upload outright - explicit, never silent.
+            toast.error("Photo upload failed. Saving without photo.");
+          }
+        } finally {
+          setPhotoLoading(false);
+        }
       }
     }
 
@@ -469,7 +487,9 @@ export default function TreeForm({
     if (dbhUpdate.value !== undefined) payload.dbh_cm = dbhUpdate.value;
     if (heightUpdate.value !== undefined) payload.height_m = heightUpdate.value;
 
-    onSubmit(payload);
+    // G7: hand the raw photo file to the caller so offline saves can store it
+    // as a durable Blob instead of losing it.
+    onSubmit(payload, { photoFile: pendingPhotoFile });
   };
 
   const isAiLoading = aiStatus === "identifying" || aiStatus === "estimating";

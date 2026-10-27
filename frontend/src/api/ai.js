@@ -46,8 +46,8 @@ export const aiApi = {
     return data;
   },
 
-  submitUnknown: async (payload) => {
-    const { data } = await api.post("/ai/unknown-species", payload);
+  submitUnknown: async (payload, config) => {
+    const { data } = await api.post("/ai/unknown-species", payload, config);
     return data;
   },
 

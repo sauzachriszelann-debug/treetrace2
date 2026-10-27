@@ -3,27 +3,134 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:math';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:path_provider/path_provider.dart';
+
+import 'offline_queue.dart';
+
+/// Narrow secure-storage surface. G6 safeguard: authentication cleanup must
+/// NEVER wipe unrelated keys (the legacy code called deleteAll() on error,
+/// which could destroy the offline queue). Implemented without deleteAll so
+/// the prohibition is structural, not just a convention.
+abstract class SecureStore {
+  Future<String?> read(String key);
+  Future<void> write(String key, String value);
+  Future<void> delete(String key);
+}
+
+class FlutterSecureStore implements SecureStore {
+  const FlutterSecureStore();
+  static const FlutterSecureStorage _storage = FlutterSecureStorage();
+
+  @override
+  Future<String?> read(String key) => _storage.read(key: key);
+  @override
+  Future<void> write(String key, String value) =>
+      _storage.write(key: key, value: value);
+  @override
+  Future<void> delete(String key) => _storage.delete(key: key);
+}
 
 // OLD: const String kBaseUrl = 'http://10.0.2.2:8000/api';
 // For real device on same WiFi: 'http://192.168.x.x:8000/api'
-// NEW:
-const String kBaseUrl = 'https://treetrace2.onrender.com/api';
+//
+// Phase 11B: the base URL is now selected at BUILD time, never at runtime,
+// so a value can never be overwritten on a device and the production default
+// is preserved exactly. Local USB testing injects the loopback address:
+//   flutter run --dart-define=TREETRACE_API_BASE_URL=http://127.0.0.1:8000/api
+// which pairs with `adb reverse tcp:8000 tcp:8000`. A build without the
+// define behaves exactly as before (the deployed Render backend).
+const String kBaseUrl = String.fromEnvironment(
+  'TREETRACE_API_BASE_URL',
+  defaultValue: 'https://treetrace2.onrender.com/api',
+);
+
+@visibleForTesting
+Future<bool> checkBackendHealth(Dio client, String baseUrl) async {
+  try {
+    final response = await client
+        .get(
+          '$baseUrl/health',
+          options: Options(
+            sendTimeout: const Duration(seconds: 3),
+            receiveTimeout: const Duration(seconds: 3),
+          ),
+        )
+        .timeout(const Duration(seconds: 5));
+
+    return response.statusCode == 200 &&
+        response.data is Map &&
+        response.data['status'] == 'ok';
+  } catch (_) {
+    return false;
+  }
+}
+
+/// True when [error] means the TreeTrace backend could not be reached at all:
+/// no HTTP response arrived (DNS failure, refused connection, timeout).
+///
+/// Anything carrying a response is a real server answer and must never be
+/// reported to the user as "the backend is unreachable" — a 404 means the
+/// record is genuinely missing, not that the phone is offline. Screens use
+/// this to pick an honest message instead of a blanket failure state.
+bool isConnectionFailure(Object error) {
+  if (error is! DioException) return false;
+  if (error.response != null) return false; // the server answered
+  switch (error.type) {
+    case DioExceptionType.connectionTimeout:
+    case DioExceptionType.sendTimeout:
+    case DioExceptionType.receiveTimeout:
+    case DioExceptionType.connectionError:
+      return true;
+    case DioExceptionType.unknown:
+      // Dio wraps transport errors (SocketException, HttpException) here.
+      return error.error is SocketException || error.error is HttpException;
+    default:
+      return false;
+  }
+}
+
+/// True when the server answered 404: the record really is missing.
+bool isNotFoundFailure(Object error) =>
+    error is DioException && error.response?.statusCode == 404;
+
+/// GET /api/ai/unknown-species is admin-only on the backend
+/// (require_admin in app/api/routes/identify.py). There is no staff-scoped
+/// equivalent, so non-admin staff must skip the request entirely instead of
+/// provoking a 403 they cannot act on.
+bool usesAdminUnknownSpeciesReview(String? role) => role == 'admin';
 
 class ApiService {
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
-  ApiService._internal();
+  ApiService._internal()
+      : _storage = FlutterSecureStore(),
+        _testOnline = null;
 
-  final _storage = const FlutterSecureStorage();
+  /// Test-only instance: injected storage/online check, no plugins, no Dio
+  /// (network calls are faked by callers in tests).
+  @visibleForTesting
+  ApiService.forTest({
+    required SecureStore storage,
+    Future<bool> Function()? onlineCheck,
+  })  : _storage = storage,
+        _testOnline = onlineCheck;
+
+  final SecureStore _storage;
   final _connectivity = Connectivity();
+  final Future<bool> Function()? _testOnline;
   late final Dio _dio;
   StreamSubscription? _connectivitySub;
   String? _cachedToken;
+  OfflineQueueService? _queueService;
 
-  static const _queueKey = 'treetrace_offline_queue';
+  /// Result of the most recent sync run (auto or manual) for UI banners.
+  SyncResult? lastSyncResult;
+
   static const _aiHistoryKey = 'treetrace_ai_history';
+  static const _meCacheKey = 'treetrace_me_cache';
 
   void init() {
     _dio = Dio(BaseOptions(
@@ -42,88 +149,131 @@ class ApiService {
       },
       onError: (error, handler) {
         if (error.response?.statusCode == 401) {
+          // Scoped: token only. Queue, drafts, and caches are preserved.
           clearToken();
         }
         return handler.next(error);
       },
     ));
 
-    _connectivitySub ??= _connectivity.onConnectivityChanged.listen((result) {
-      // Offline records are reviewed by the user before upload.
-      // Connectivity changes no longer trigger automatic sync.
+    // G6 (D1-B): when connectivity RETURNS, previously verified queue items
+    // are synchronized automatically. Unverified items always wait for
+    // explicit review; concurrent runs are refused by the service itself.
+    bool? wasOffline;
+    _connectivitySub ??= _connectivity.onConnectivityChanged.listen((results) {
+      final online = !results.contains(ConnectivityResult.none);
+      if (online && wasOffline == true) {
+        unawaited(_autoSyncVerified());
+      }
+      wasOffline = !online;
     });
+  }
+
+  Future<void> _autoSyncVerified() async {
+    try {
+      if (await getToken() == null) return; // no session: keep quiet
+      final result = await syncOfflineQueue(auto: true);
+      debugPrint('G6 auto-sync: ${result.synced} synced, '
+          '${result.heldForReview} held, ${result.keptForRetry} retrying');
+    } catch (_) {
+      // Auto-sync must never crash the app; the queue stays intact.
+    }
   }
 
   Future<bool> isOnline() async {
+    if (_testOnline != null) return _testOnline!();
+
     final result = await _connectivity.checkConnectivity();
-    return !result.contains(ConnectivityResult.none);
+    if (result.contains(ConnectivityResult.none)) {
+      return false;
+    }
+
+    return checkBackendHealth(Dio(), kBaseUrl);
   }
 
-  Future<List<Map<String, dynamic>>> _readQueue() async {
-    final raw = await _storage.read(key: _queueKey);
-    if (raw == null || raw.isEmpty) return [];
+  // ── Offline queue (G6: file-backed service, see offline_queue.dart) ─────
+
+  Future<OfflineQueueService> get offlineQueueService async {
+    if (_queueService != null) return _queueService!;
+    Directory base;
     try {
-      final decoded = jsonDecode(raw) as List;
-      return decoded.cast<Map<String, dynamic>>();
+      base = await getApplicationDocumentsDirectory();
     } catch (_) {
-      return [];
+      // No platform channel (tests): keep the queue usable on disk.
+      base = Directory.systemTemp;
     }
+    _queueService = OfflineQueueService(
+      directory:
+          Directory('${base.path}${Platform.pathSeparator}treetrace_offline'),
+      legacyRead: _storage.read,
+      legacyDelete: _storage.delete,
+      isOnline: isOnline,
+      sender: _dispatchQueueItem,
+      uploader: (path, purpose) =>
+          uploadPhotoStrict(File(path), purpose: purpose),
+    );
+    return _queueService!;
   }
 
-  Future<int> queuedCount() async => (await _readQueue()).length;
+  Future<int> queuedCount() async => (await offlineQueueService).count();
 
-  Future<void> _writeQueue(List<Map<String, dynamic>> queue) =>
-      _storage.write(key: _queueKey, value: jsonEncode(queue));
-
-  Future<void> queueOfflineAction(String type, Map<String, dynamic> payload,
-      {String? photoPath}) async {
-    final queue = await _readQueue();
-    queue.add({
-      'id': DateTime.now().millisecondsSinceEpoch,
-      'type': type,
-      'payload': payload,
-      'photo_path': photoPath,
-      'verified': false,
-      'created_at': DateTime.now().toIso8601String(),
-    });
-    await _writeQueue(queue);
+  Future<void> queueOfflineAction(
+    String type,
+    Map<String, dynamic> payload, {
+    String? photoPath,
+    bool requiresReview = false,
+    String? reviewReason,
+  }) async {
+    await (await offlineQueueService).enqueue(
+      type,
+      payload,
+      photoPath: photoPath,
+      requiresReview: requiresReview,
+      reviewReason: reviewReason,
+    );
   }
 
-  Future<List<Map<String, dynamic>>> offlineQueue() async => _readQueue();
+  Future<List<OfflineQueueItem>> offlineQueue() async =>
+      (await offlineQueueService).all();
 
-  Future<void> setOfflineActionVerified(int id, bool verified) async {
-    final queue = await _readQueue();
-    for (final item in queue) {
-      if (item['id'] == id) {
-        item['verified'] = verified;
-      }
-    }
-    await _writeQueue(queue);
+  Future<void> setOfflineActionVerified(String itemId, bool verified) async {
+    await (await offlineQueueService).setVerified(itemId, verified);
   }
 
   Future<void> verifyAllOfflineActions() async {
-    final queue = await _readQueue();
-    for (final item in queue) {
-      item['verified'] = true;
-    }
-    await _writeQueue(queue);
+    await (await offlineQueueService).verifyAll();
   }
 
-  Future<void> deleteOfflineAction(int id) async {
-    final queue = await _readQueue();
-    queue.removeWhere((item) => item['id'] == id);
-    await _writeQueue(queue);
+  Future<void> deleteOfflineAction(String itemId) async {
+    await (await offlineQueueService).remove(itemId);
   }
 
-  Future<void> _updateQueuedPayload(
-      int id, Map<String, dynamic> payload) async {
-    final queue = await _readQueue();
-    for (final item in queue) {
-      if (item['id'] == id) {
-        item['payload'] = payload;
-      }
+  Future<SyncResult> syncOfflineQueue({bool auto = false}) async {
+    final service = await offlineQueueService;
+    final result = await service.sync(auto: auto);
+    lastSyncResult = result;
+    return result;
+  }
+
+  /// Routes a queue item to its endpoint. Trees and tree-submissions are
+  /// idempotent through client_uuid (G2/G4); the other types rely on the
+  /// queue's ambiguity handling (D3 - see classifyFailure).
+  Future<Map<String, dynamic>> _dispatchQueueItem(
+      String type, Map<String, dynamic> payload) async {
+    switch (type) {
+      case 'CREATE_TREE':
+        return await createTree(payload);
+      case 'CREATE_TREE_SUBMISSION':
+        return await createTreeSubmission(payload);
+      case 'CREATE_HEALTH_LOG':
+        return await createHealthLog(payload);
+      case 'SUBMIT_UNKNOWN':
+        return await submitUnknownSpecies(payload);
+      case 'CREATE_PLANTING_RECOMMENDATION':
+        return await createPlantingRecommendation(payload);
+      default:
+        throw StateError('Unknown offline queue type: $type');
     }
-    await _writeQueue(queue);
   }
 
   // ── Idempotent submission key (G2) ─────────────────────────────────────
@@ -143,7 +293,7 @@ class ApiService {
   /// Pending submission envelope (key + payload snapshot). Survives app
   /// restarts; cleared only on confirmed success or explicit discard.
   Future<Map<String, dynamic>?> readPendingDraft() async {
-    final raw = await _storage.read(key: _pendingDraftKey);
+    final raw = await _storage.read(_pendingDraftKey);
     if (raw == null || raw.isEmpty) return null;
     try {
       return Map<String, dynamic>.from(jsonDecode(raw) as Map);
@@ -153,11 +303,11 @@ class ApiService {
   }
 
   Future<void> writePendingDraft(Map<String, dynamic> draft) async {
-    await _storage.write(key: _pendingDraftKey, value: jsonEncode(draft));
+    await _storage.write(_pendingDraftKey, jsonEncode(draft));
   }
 
   Future<void> clearPendingDraft() async {
-    await _storage.delete(key: _pendingDraftKey);
+    await _storage.delete(_pendingDraftKey);
   }
 
   /// Reads the pending draft while distinguishing three cases:
@@ -170,7 +320,7 @@ class ApiService {
   Future<Map<String, dynamic>> readPendingDraftResult() async {
     String? raw;
     try {
-      raw = await _storage.read(key: _pendingDraftKey);
+      raw = await _storage.read(_pendingDraftKey);
     } catch (_) {
       return {'draft': null, 'error': 'storage', 'raw': null};
     }
@@ -190,7 +340,7 @@ class ApiService {
   }
 
   Future<List<Map<String, dynamic>>> aiIdentificationHistory() async {
-    final raw = await _storage.read(key: _aiHistoryKey);
+    final raw = await _storage.read(_aiHistoryKey);
     if (raw == null || raw.isEmpty) return [];
     try {
       final decoded = jsonDecode(raw) as List;
@@ -213,99 +363,59 @@ class ApiService {
       'created_at': DateTime.now().toIso8601String(),
     });
     await _storage.write(
-      key: _aiHistoryKey,
-      value: jsonEncode(history.take(30).toList()),
+      _aiHistoryKey,
+      jsonEncode(history.take(30).toList()),
     );
-  }
-
-  Future<int> syncOfflineQueue() async {
-    if (!await isOnline()) return 0;
-    final queue = await _readQueue();
-    if (queue.isEmpty) return 0;
-
-    final remaining = <Map<String, dynamic>>[];
-    var synced = 0;
-    for (final item in queue) {
-      if (item['verified'] != true) {
-        remaining.add(item);
-        continue;
-      }
-      try {
-        final payload = Map<String, dynamic>.from(item['payload'] ?? {});
-        final photoPath = item['photo_path'] as String?;
-        if (item['type'] == 'CREATE_TREE') {
-          if (photoPath != null &&
-              photoPath.isNotEmpty &&
-              File(photoPath).existsSync()) {
-            final uploadedUrl = await uploadPhoto(
-              File(photoPath),
-              purpose: 'tree_photo',
-            );
-            if (uploadedUrl != null) {
-              payload['photo_url'] = uploadedUrl;
-              // Persist the uploaded URL so a later retry of this queue item
-              // does not upload the same photo again.
-              await _updateQueuedPayload(item['id'] as int, payload);
-            }
-          }
-          await createTree(payload);
-        } else if (item['type'] == 'CREATE_HEALTH_LOG') {
-          await createHealthLog(payload);
-        } else if (item['type'] == 'SUBMIT_UNKNOWN') {
-          if (photoPath != null &&
-              photoPath.isNotEmpty &&
-              File(photoPath).existsSync()) {
-            payload['photo_url'] = await uploadPhoto(
-                  File(photoPath),
-                  purpose: 'unknown_species',
-                ) ??
-                '';
-          }
-          await submitUnknownSpecies(payload);
-        } else if (item['type'] == 'CREATE_PLANTING_RECOMMENDATION') {
-          if (photoPath != null &&
-              photoPath.isNotEmpty &&
-              File(photoPath).existsSync()) {
-            payload['photo_url'] = await uploadPhoto(
-              File(photoPath),
-              purpose: 'planting_submission',
-            );
-          }
-          await createPlantingRecommendation(payload);
-        }
-        synced++;
-      } catch (_) {
-        remaining.add(item);
-      }
-    }
-    await _writeQueue(remaining);
-    return synced;
   }
 
   Future<void> saveToken(String token) async {
     _cachedToken = token;
-    await _storage.write(key: 'token', value: token);
+    await _storage.write('token', token);
   }
 
   Future<void> clearToken() async {
     _cachedToken = null;
+    // G6 safeguard 3: ONLY the token key is touched. Queue, drafts, AI
+    // history, and the profile cache always survive auth cleanup.
     try {
-      await _storage.delete(key: 'token');
-    } catch (_) {
-      await _storage.deleteAll();
-    }
+      await _storage.delete('token');
+    } catch (_) {}
   }
 
   Future<String?> getToken() async {
     if (_cachedToken != null) return _cachedToken;
     try {
-      _cachedToken = await _storage.read(key: 'token');
+      _cachedToken = await _storage.read('token');
       return _cachedToken;
     } catch (_) {
+      // A read failure must never destroy stored records (safeguard 3).
       _cachedToken = null;
-      await _storage.deleteAll();
       return null;
     }
+  }
+
+  // ── Cached profile: lets an offline cold start keep the session usable ──
+  Future<void> saveMeCache(Map<String, dynamic> data) async {
+    try {
+      await _storage.write(_meCacheKey, jsonEncode(data));
+    } catch (_) {}
+  }
+
+  Future<Map<String, dynamic>?> readMeCache() async {
+    try {
+      final raw = await _storage.read(_meCacheKey);
+      if (raw == null || raw.isEmpty) return null;
+      final decoded = jsonDecode(raw);
+      return decoded is Map ? Map<String, dynamic>.from(decoded) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> clearMeCache() async {
+    try {
+      await _storage.delete(_meCacheKey);
+    } catch (_) {}
   }
 
   // ── Auth ──────────────────────────────────────────────────────────────────
@@ -562,20 +672,27 @@ class ApiService {
     };
   }
 
+  /// Strict variant used by the offline queue: DioException propagates so
+  /// the sync engine can classify it (network vs server vs auth).
+  Future<String?> uploadPhotoStrict(File file,
+      {required String purpose}) async {
+    final formData = FormData.fromMap({
+      'file': await MultipartFile.fromFile(file.path,
+          filename: file.path.split('/').last,
+          contentType: _imageContentType(file)),
+      'purpose': purpose,
+    });
+    final res = await _dio.post(
+      '/storage/upload-photo',
+      data: formData,
+      options: Options(contentType: 'multipart/form-data'),
+    );
+    return res.data['file_url'];
+  }
+
   Future<String?> uploadPhoto(File file, {required String purpose}) async {
     try {
-      final formData = FormData.fromMap({
-        'file': await MultipartFile.fromFile(file.path,
-            filename: file.path.split('/').last,
-            contentType: _imageContentType(file)),
-        'purpose': purpose,
-      });
-      final res = await _dio.post(
-        '/storage/upload-photo',
-        data: formData,
-        options: Options(contentType: 'multipart/form-data'),
-      );
-      return res.data['file_url'];
+      return await uploadPhotoStrict(file, purpose: purpose);
     } catch (_) {
       return null;
     }

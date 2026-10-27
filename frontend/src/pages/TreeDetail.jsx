@@ -17,12 +17,15 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { formatCarbonKg } from "@/lib/format";
+import { useOfflineSyncStore } from "@/offline/OfflineSyncProvider";
 
 export default function TreeDetail() {
   const { id }      = useParams();
   const navigate    = useNavigate();
   const { user }    = useAuth();
   const qc          = useQueryClient();
+  const { enqueue } = useOfflineSyncStore();
   const [editing, setEditing]         = useState(false);
   const [showLogForm, setShowLogForm] = useState(false);
   const [saving, setSaving]           = useState(false);
@@ -76,17 +79,53 @@ export default function TreeDetail() {
       toast.error("Citizen accounts cannot add official health assessments.");
       return;
     }
+    const payload = { ...data, tree_id: Number(id) };
+    // G7: fully offline - nothing was sent, so the queue may replay it
+    // later (verified-only) under the D3 rules.
+    if (!navigator.onLine) {
+      try {
+        await enqueue("CREATE_HEALTH_LOG", payload);
+        toast.info(
+          "Saved offline. Review it in Field Sync - only verified records upload.",
+        );
+        setShowLogForm(false);
+      } catch (error) {
+        toast.error(
+          `Could not save offline: ${error?.message || "browser storage unavailable"}. Nothing was sent.`,
+        );
+      }
+      return;
+    }
     try {
-      await healthLogsApi.create({
-        ...data,
-        tree_id: Number(id),
-      });
+      await healthLogsApi.create(payload);
       qc.invalidateQueries({ queryKey: ["healthlogs", id] });
       qc.invalidateQueries({ queryKey: ["tree", id] });
       toast.success("Health assessment logged!");
       setShowLogForm(false);
-    } catch {
-      toast.error("Failed to save health log.");
+    } catch (error) {
+      if (!error?.response) {
+        // The request may have committed server-side. Health logs have NO
+        // idempotency key (G7 D2/req 6): hold it for review, never retry.
+        try {
+          await enqueue("CREATE_HEALTH_LOG", payload, {
+            requiresReview: true,
+            reviewReason:
+              "This save failed after the request may have reached the server. " +
+              "It is kept for review and will not be retried automatically, " +
+              "because a blind retry could create a duplicate health log.",
+          });
+          toast.warning(
+            "Connection dropped - the log may have reached the server. Saved for review in Field Sync; it will not be retried automatically.",
+          );
+          setShowLogForm(false);
+          return;
+        } catch {
+          /* fall through to the generic error below */
+        }
+      }
+      toast.error(
+        error?.response?.data?.detail || "Failed to save health log.",
+      );
     }
   };
 
@@ -224,7 +263,7 @@ export default function TreeDetail() {
                     <Info label="DBH"          value={tree.dbh_cm    ? `${tree.dbh_cm} cm`    : "—"} icon={Ruler} />
                     <Info label="Height"       value={tree.height_m  ? `${tree.height_m} m`   : "—"} icon={Ruler} />
                     <Info label="Biomass"      value={tree.biomass_kg ? `${tree.biomass_kg} kg` : "—"} icon={Leaf} />
-                    <Info label="Carbon Stock" value={tree.carbon_kg  ? `${tree.carbon_kg} kg`  : "—"} icon={Leaf} />
+                    <Info label="Carbon Stock" value={tree.carbon_kg ? formatCarbonKg(tree.carbon_kg) : "—"} icon={Leaf} />
                   </CardContent>
                 </Card>
 

@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { plantingApi } from "@/api/planting";
 import { storageApi } from "@/api/storage";
+import { useOfflineSyncStore } from "@/offline/OfflineSyncProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,7 @@ import { Check, ImageIcon, Loader2, Plus, Search, X } from "lucide-react";
 
 export default function PlantingRecommendations() {
   const qc = useQueryClient();
+  const { enqueue } = useOfflineSyncStore();
   const [params] = useSearchParams();
   const focusReview = params.get("review") === "pending";
   const [barangay, setBarangay] = useState("");
@@ -44,13 +46,29 @@ export default function PlantingRecommendations() {
       return;
     }
     setSaving(true);
+    let photo_url = source.photo_url || "";
+    let photoBlob = null;
+    let payload = null;
     try {
-      let photo_url = source.photo_url || "";
       if (photo) {
-        const uploaded = await storageApi.uploadPhoto(photo, "planting_submission");
-        photo_url = uploaded.file_url;
+        if (!navigator.onLine) {
+          // G7: keep the photo with the record; it uploads during sync.
+          photoBlob = photo;
+        } else {
+          try {
+            const uploaded = await storageApi.uploadPhoto(photo, "planting_submission");
+            photo_url = uploaded.file_url;
+          } catch (error) {
+            if (!error?.response) {
+              // Connection dropped mid-upload: keep the photo attached.
+              photoBlob = photo;
+            } else {
+              throw error; // server rejection: existing explicit error path
+            }
+          }
+        }
       }
-      await plantingApi.create({
+      payload = {
         species_name: source.species_name,
         scientific_name: source.scientific_name || null,
         barangay: source.barangay || source.recommended_area || barangay || null,
@@ -58,13 +76,46 @@ export default function PlantingRecommendations() {
         photo_url: photo_url || null,
         status: "recommended",
         planted: false,
-      });
+      };
+      if (!navigator.onLine || photoBlob) {
+        // Fully offline (or the photo upload never completed): nothing was
+        // created server-side, so the queue may replay this after review.
+        await enqueue("CREATE_PLANTING_RECOMMENDATION", payload, { photoBlob });
+        setDraft({});
+        setPhoto(null);
+        toast.success(
+          "Saved offline. Review it in Field Sync - only verified records upload.",
+        );
+        return;
+      }
+      await plantingApi.create(payload);
       setDraft({});
       setPhoto(null);
       qc.invalidateQueries({ queryKey: ["planting-records"] });
       qc.invalidateQueries({ queryKey: ["planting-suggestions"] });
       toast.success("Planting recommendation saved.");
     } catch (err) {
+      if (!err?.response && payload) {
+        // Uncertain outcome, no idempotency key (G7 req 6): hold for review,
+        // never auto-retry.
+        try {
+          await enqueue("CREATE_PLANTING_RECOMMENDATION", payload, {
+            requiresReview: true,
+            reviewReason:
+              "This save failed after the request may have reached the server. " +
+              "It is kept for review and will not be retried automatically, " +
+              "because a blind retry could create a duplicate planting recommendation.",
+          });
+          setDraft({});
+          setPhoto(null);
+          toast.warning(
+            "Connection dropped - the recommendation may have reached the server. Saved for review in Field Sync; it will not be retried automatically.",
+          );
+          return;
+        } catch {
+          /* fall through to the generic error below */
+        }
+      }
       toast.error(err?.response?.data?.detail || "Could not save recommendation.");
     } finally {
       setSaving(false);

@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { format } from "date-fns";
+import { formatCarbonKg } from "@/lib/format";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -91,7 +92,7 @@ export default function Dashboard() {
         <StatsCard title="Healthy" value={stats.healthy} icon={Leaf} color="emerald" onClick={() => navigate("/trees?health=Healthy")} />
         <StatsCard title="Need Attention" value={stats.fair + stats.poor}
           subtitle={`${stats.fair} Fair, ${stats.poor} Poor`} icon={AlertTriangle} color="amber" onClick={() => navigate("/trees?health=attention")} />
-        <StatsCard title="Carbon Stock" value={`${(stats.totalCarbon / 1000).toFixed(2)} t`}
+        <StatsCard title="Carbon Stock" value={formatCarbonKg(stats.totalCarbon)}
           subtitle="Total CO2 equivalent" icon={Activity} color="blue" onClick={() => navigate("/trees")} />
       </div>
 
@@ -178,7 +179,7 @@ export default function Dashboard() {
                     <div className="flex flex-shrink-0 items-center justify-between gap-3 sm:justify-end">
                       {tree.carbon_kg && (
                         <span className="text-xs text-muted-foreground">
-                          {tree.carbon_kg.toFixed(1)} kg C
+                          C: {formatCarbonKg(tree.carbon_kg)}
                         </span>
                       )}
                       <HealthBadge status={tree.health_status} />

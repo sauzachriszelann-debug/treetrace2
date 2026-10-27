@@ -10,9 +10,36 @@ import unicodedata
 try:
     from app.core.config import settings
     GEMINI_API_KEY = settings.GEMINI_API_KEY
+    # Phase 13.1: retired-model fix, kept in one configurable place.
+    GEMINI_MODEL = settings.GEMINI_MODEL
 except Exception:
     import os
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+
+# ── TEMPORARY: Phase 13 final-verification instrumentation ────────────────────
+# Append-only evidence of exactly which external AI providers were called, so
+# the approved verification session can report exact outbound request counts.
+# Written OUTSIDE backend/ on purpose: uvicorn --reload does not watch it, so
+# appends never trigger a reload loop. Inert in normal operation; this whole
+# block is reverted immediately after the verification test.
+import os as _os
+from datetime import datetime as _datetime
+
+_VERIFY_LOG = _os.path.join(
+    _os.path.dirname(_os.path.dirname(_os.path.dirname(
+        _os.path.dirname(_os.path.abspath(__file__))))),
+    "tmp", "provider_calls.log",
+)
+
+
+def _log_verify(event: str) -> None:
+    try:
+        _os.makedirs(_os.path.dirname(_VERIFY_LOG), exist_ok=True)
+        with open(_VERIFY_LOG, "a", encoding="utf-8") as _fh:
+            _fh.write(f"{_datetime.now().isoformat(timespec='seconds')} {event}\n")
+    except Exception:
+        pass
 
 # ── Local database (fast lookup, no API needed) ───────────────────────────────
 PHILIPPINE_ENDANGERED_SPECIES = {
@@ -430,12 +457,13 @@ Respond ONLY with valid JSON, no markdown:
   "denr_protected": true or false (is it protected under Philippine DENR regulations?)
 }}"""
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={GEMINI_API_KEY}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {"temperature": 0.1, "maxOutputTokens": 300},
         }
         async with httpx.AsyncClient(timeout=15) as http:
+            _log_verify("gemini_status_check_request")
             resp = await http.post(url, json=payload)
         if resp.status_code != 200:
             return None
@@ -546,7 +574,13 @@ async def auto_check_species(common_name: str, scientific_name: str = "") -> dic
             return result
 
     # Step 4: Gemini (free, 1500/day)
-    gemini = await _check_gemini(common_name, scientific_name)
+    # TEMPORARY (Phase 13 final verification): the approved session allows one
+    # Gemini request in total, so the conservation-status check must not
+    # consume it. Inert unless TREETRACE_BLOCK_STATUS_GEMINI=1; reverted
+    # right after the verification test.
+    gemini = None
+    if _os.getenv("TREETRACE_BLOCK_STATUS_GEMINI") != "1":
+        gemini = await _check_gemini(common_name, scientific_name)
     if gemini:
         result = {
             "scientific_name": scientific_name,

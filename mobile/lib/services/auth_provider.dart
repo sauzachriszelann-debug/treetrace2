@@ -1,14 +1,55 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+
 import '../models/models.dart';
 import '../services/api_service.dart';
 
+/// True ONLY for a genuine authentication rejection: the server responded
+/// 401 to a presented token. Network problems (no response) must never log
+/// the user out - G6 safeguard 4: offline records and the session survive
+/// connectivity failures and expired-but-unverifiable tokens alike.
+bool isAuthRejection(Object error) =>
+    error is DioException && error.response?.statusCode == 401;
+
+/// Test seam. Production uses the defaults (real ApiService methods, the
+/// 5-second splash floor); tests inject fakes so no network or timer is
+/// touched.
+class AuthProviderDeps {
+  final Future<Map<String, dynamic>> Function()? fetchMe;
+  final Future<Map<String, dynamic>> Function(String email, String password)?
+      login;
+  final Future<String?> Function()? readToken;
+  final Future<void> Function()? clearToken;
+  final Future<void> Function(Map<String, dynamic>)? saveCachedMe;
+  final Future<Map<String, dynamic>?> Function()? readCachedMe;
+  final Future<void> Function()? clearCachedMe;
+  final Duration minimumSplash;
+
+  const AuthProviderDeps({
+    this.fetchMe,
+    this.login,
+    this.readToken,
+    this.clearToken,
+    this.saveCachedMe,
+    this.readCachedMe,
+    this.clearCachedMe,
+    this.minimumSplash = const Duration(seconds: 5),
+  });
+}
+
 class AuthProvider extends ChangeNotifier {
+  AuthProvider({ApiService? apiOverride, this.deps = const AuthProviderDeps()})
+      : _api = apiOverride ?? api;
+
+  final ApiService _api;
+  final AuthProviderDeps deps;
+
   UserModel? _user;
   bool _loading = true;
   String? _lastError;
+  bool _startedOffline = false;
 
   UserModel? get user => _user;
   bool get loading => _loading;
@@ -16,42 +57,73 @@ class AuthProvider extends ChangeNotifier {
   bool get isAdmin => _user?.isAdmin ?? false;
   String? get lastError => _lastError;
 
+  /// True when the session could only be restored from the on-device cache
+  /// (backend unreachable at startup).
+  bool get startedOffline => _startedOffline;
+
   Future<void> init() async {
     final startedAt = DateTime.now();
-    print("DEBUG: AuthProvider.init() started");
     try {
-      final token = await api.getToken();
-      print("DEBUG: Token found: ${token != null}");
+      final token = await (deps.readToken ?? _api.getToken)();
       if (token != null) {
-        print("DEBUG: Fetching user info...");
-        final data = await api.getMe().timeout(const Duration(seconds: 10));
-        print("DEBUG: User data received: $data");
-        _user = UserModel.fromJson(data);
+        final fetch = deps.fetchMe ?? (() => _api.getMe());
+        try {
+          final data = await fetch().timeout(const Duration(seconds: 10));
+          _user = UserModel.fromJson(data);
+          await (deps.saveCachedMe ?? _api.saveMeCache)(data);
+        } on TimeoutException {
+          // Slow/unreachable backend: keep the token, restore the cached
+          // profile so the app and the offline queue stay usable.
+          await _restoreCachedUser();
+        } catch (e) {
+          if (isAuthRejection(e)) {
+            // Genuinely expired/invalid token: clear ONLY auth state.
+            await (deps.clearToken ?? _api.clearToken)();
+            await (deps.clearCachedMe ?? _api.clearMeCache)();
+            _user = null;
+          } else {
+            // Connectivity failure: never log the user out (safeguard 4).
+            await _restoreCachedUser();
+          }
+        }
       }
-    } on TimeoutException {
-      print("DEBUG: AuthProvider.init() timed out after 10 seconds");
-    } catch (e) {
-      print("DEBUG: AuthProvider.init() error: $e");
-      await api.clearToken();
+    } catch (_) {
+      // Storage-level failure: preserve everything, surface logged-out state
+      // without destroying records (safeguard 3).
     } finally {
       final elapsed = DateTime.now().difference(startedAt);
-      const minimumSplashTime = Duration(seconds: 5);
-      if (elapsed < minimumSplashTime) {
-        await Future.delayed(minimumSplashTime - elapsed);
+      if (elapsed < deps.minimumSplash) {
+        await Future.delayed(deps.minimumSplash - elapsed);
       }
       _loading = false;
-      print("DEBUG: AuthProvider.init() finished, loading=false");
       notifyListeners();
+    }
+  }
+
+  Future<void> _restoreCachedUser() async {
+    final cached = await (deps.readCachedMe ?? _api.readMeCache)();
+    if (cached != null) {
+      try {
+        _user = UserModel.fromJson(cached);
+        _startedOffline = true;
+      } catch (_) {
+        _user = null;
+      }
     }
   }
 
   Future<bool> login(String email, String password) async {
     try {
       _lastError = null;
-      final data = await api.login(email, password);
-      await api.saveToken(data['access_token']);
-      final me = await api.getMe();
+      final doLogin =
+          deps.login ?? ((String e, String p) => _api.login(e, p));
+      final data = await doLogin(email, password);
+      await _api.saveToken(data['access_token']);
+      final fetch = deps.fetchMe ?? (() => _api.getMe());
+      final me = await fetch();
       _user = UserModel.fromJson(me);
+      await (deps.saveCachedMe ?? _api.saveMeCache)(me);
+      _startedOffline = false;
       notifyListeners();
       return true;
     } catch (error) {
@@ -72,8 +144,9 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> refreshUser() async {
-    final me = await api.getMe();
+    final me = await _api.getMe();
     _user = UserModel.fromJson(me);
+    await (deps.saveCachedMe ?? _api.saveMeCache)(me);
     notifyListeners();
   }
 
@@ -85,8 +158,10 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    await api.clearToken();
+    await (deps.clearToken ?? _api.clearToken)();
+    await (deps.clearCachedMe ?? _api.clearMeCache)();
     _user = null;
+    _startedOffline = false;
     notifyListeners();
   }
 }

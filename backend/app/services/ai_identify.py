@@ -14,7 +14,7 @@ import re
 import asyncio
 from pathlib import Path
 from app.core.config import settings
-from app.services.species_db import lookup_species
+from app.services.species_db import lookup_species, _log_verify
 
 try:
     PLANTNET_API_KEY = settings.PLANTNET_API_KEY
@@ -29,7 +29,37 @@ except Exception:
     TREFLE_API_KEY   = os.getenv("TREFLE_API_KEY", "")
 
 PLANTNET_URL = "https://my-api.plantnet.org/v2/identify/all"
-GEMINI_URL   = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent"
+
+# ── Gemini endpoint (Phase 13.1) ──────────────────────────────────────────────
+# The previous model, gemini-2.0-flash-lite, was shut down on 2026-06-01 and
+# answered every request with HTTP 404 (the "AI error: Gemini 404" seen on
+# device). The model is configured once in app.core.config, can be overridden
+# via environment, and a fallback model is tried whenever the primary is
+# rejected as unavailable (400/403/404 — quota and auth errors apply to the
+# whole project and are not retried on another model).
+GEMINI_MODEL         = settings.GEMINI_MODEL or "gemini-3.5-flash-lite"
+GEMINI_FALLBACK_MODEL = settings.GEMINI_FALLBACK_MODEL or "gemini-3.1-flash-lite"
+
+
+def _gemini_endpoint(model: str) -> str:
+    return (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{model}:generateContent"
+    )
+
+
+def _gemini_candidate_models() -> list:
+    # TEMPORARY (Phase 13 final verification): with TREETRACE_GEMINI_NO_FALLBACK=1
+    # only the primary model is ever tried, guaranteeing at most one Gemini
+    # request in the approved session. Inert in normal operation; reverted
+    # right after the verification test.
+    if os.getenv("TREETRACE_GEMINI_NO_FALLBACK") == "1":
+        return [GEMINI_MODEL] if GEMINI_MODEL else []
+    models = [GEMINI_MODEL, GEMINI_FALLBACK_MODEL]
+    return [m for i, m in enumerate(models) if m and m not in models[:i]]
+
+
+GEMINI_URL   = _gemini_endpoint(GEMINI_MODEL)
 PERENUAL_URL = "https://perenual.com/api"
 TREFLE_URL   = "https://trefle.io/api/v1"
 GBIF_MATCH_URL = "https://api.gbif.org/v1/species/match"
@@ -137,6 +167,7 @@ async def _plantnet(image_bytes: bytes, content_type: str) -> dict | None:
         files  = {"images": ("tree.jpg", image_bytes, content_type)}
         params = {"api-key": PLANTNET_API_KEY, "lang": "en", "include-related-images": "true"}
         async with httpx.AsyncClient(timeout=20) as http:
+            _log_verify("plantnet_request")
             resp = await http.post(PLANTNET_URL, files=files, params=params)
         if resp.status_code != 200:
             return None
@@ -194,7 +225,6 @@ async def _gemini(image_b64: str, content_type: str, hint: dict | None) -> dict:
             "Use this as strong prior evidence. Confirm or correct it and fill EVERY field."
         )
     try:
-        url     = f"{GEMINI_URL}?key={GEMINI_API_KEY}"
         payload = {
             "contents": [{
                 "parts": [
@@ -204,10 +234,27 @@ async def _gemini(image_b64: str, content_type: str, hint: dict | None) -> dict:
             }],
             "generationConfig": {"temperature": 0.1, "maxOutputTokens": 1200},
         }
-        async with httpx.AsyncClient(timeout=30) as http:
-            resp = await http.post(url, json=payload)
-        if resp.status_code != 200:
-            raise Exception(f"Gemini {resp.status_code}")
+        # Phase 13.1: try the primary model, then the fallback model when the
+        # primary is rejected as unavailable (retired/renamed model, etc.).
+        models      = _gemini_candidate_models()
+        last_status = None
+        resp        = None
+        for model in models:
+            url = f"{_gemini_endpoint(model)}?key={GEMINI_API_KEY}"
+            async with httpx.AsyncClient(timeout=30) as http:
+                _log_verify(f"gemini_request model={model}")
+                resp = await http.post(url, json=payload)
+            if resp.status_code == 200:
+                break
+            last_status = resp.status_code
+            if resp.status_code not in (400, 403, 404):
+                break  # quota/auth/server errors are project-wide: no retry
+        if resp is None or resp.status_code != 200:
+            # Same "AI error: Gemini <status>" reason shape the app displays,
+            # now naming the models that were tried.
+            raise Exception(
+                f"Gemini {last_status} (models tried: {', '.join(models)})"
+            )
         raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
         raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.MULTILINE)
         raw = re.sub(r"\s*```\s*$",       "", raw, flags=re.MULTILINE)
@@ -792,7 +839,6 @@ async def measure_dbh_from_base64(
         .replace("{known_distance}", known_distance)
     )
     try:
-        url = f"{GEMINI_URL}?key={GEMINI_API_KEY}"
         payload = {
             "contents": [{
                 "parts": [
@@ -802,10 +848,21 @@ async def measure_dbh_from_base64(
             }],
             "generationConfig": {"temperature": 0.1, "maxOutputTokens": 600},
         }
-        async with httpx.AsyncClient(timeout=30) as http:
-            resp = await http.post(url, json=payload)
-        if resp.status_code != 200:
-            raise Exception(f"Gemini {resp.status_code}")
+        # Phase 13.1: same primary→fallback model handling as identify.
+        models      = _gemini_candidate_models()
+        last_status = None
+        resp        = None
+        for model in models:
+            url = f"{_gemini_endpoint(model)}?key={GEMINI_API_KEY}"
+            async with httpx.AsyncClient(timeout=30) as http:
+                resp = await http.post(url, json=payload)
+            if resp.status_code == 200:
+                break
+            last_status = resp.status_code
+            if resp.status_code not in (400, 403, 404):
+                break
+        if resp is None or resp.status_code != 200:
+            raise Exception(f"Gemini {last_status}")
         raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
         raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.MULTILINE)
         raw = re.sub(r"\s*```\s*$", "", raw, flags=re.MULTILINE)

@@ -88,7 +88,11 @@ VALID_INDEXES = [
     _index(
         "ux_tree_submissions_approved",
         ["approved_tree_id"],
-        predicate="(status = 'approved'::text)",
+        # PG 16 renders a varchar partial predicate with explicit casts on
+        # both sides. The verifier must accept this normalized form (and the
+        # earlier PG `(status = 'approved'::text)` form) as equivalent to the
+        # intended `status = 'approved'`.
+        predicate="((status)::text = ('approved'::character varying)::text)",
     ),
 ]
 
@@ -428,6 +432,75 @@ def test_unexpectedly_partial_index_fails_clearly(monkeypatch):
     verify = _run_preflight(monkeypatch, index_rows=rows)
 
     with pytest.raises(RuntimeError, match="ux_tree_submissions_client_uuid is unexpectedly partial"):
+        verify()
+
+
+# ---------------------------------------------------------------------------
+# Partial-predicate normalization (PG renders varchar predicates with casts)
+# ---------------------------------------------------------------------------
+
+def test_pg_normalized_cast_predicate_is_accepted(monkeypatch, capsys):
+    """PG 16 renders `WHERE status = 'approved'` on varchar as
+    `((status)::text = ('approved'::character varying)::text)`. This is
+    semantically identical to the intended predicate and must pass."""
+    rows = VALID_INDEXES[:2] + [
+        _index(
+            "ux_tree_submissions_approved",
+            ["approved_tree_id"],
+            predicate="((status)::text = ('approved'::character varying)::text)",
+        )
+    ]
+    verify = _run_preflight(monkeypatch, index_rows=rows)
+
+    verify()  # must not raise
+    assert "preflight OK: tree_submissions schema verified" in capsys.readouterr().out
+
+
+def test_pg_earlier_cast_predicate_is_accepted(monkeypatch, capsys):
+    """Earlier PG versions render the same predicate as
+    `(status = 'approved'::text)` - also semantically identical, also accepted."""
+    rows = VALID_INDEXES[:2] + [
+        _index(
+            "ux_tree_submissions_approved",
+            ["approved_tree_id"],
+            predicate="(status = 'approved'::text)",
+        )
+    ]
+    verify = _run_preflight(monkeypatch, index_rows=rows)
+
+    verify()  # must not raise
+    assert "preflight OK: tree_submissions schema verified" in capsys.readouterr().out
+
+
+def test_wrong_predicate_still_rejected_despite_casts(monkeypatch):
+    """Normalization must not weaken the check: a wrong literal (linked,
+    not approved) still fails even when PG adds casts/whitespace."""
+    rows = VALID_INDEXES[:2] + [
+        _index(
+            "ux_tree_submissions_approved",
+            ["approved_tree_id"],
+            predicate="( (status)::text = ('linked'::character varying)::text )",
+        )
+    ]
+    verify = _run_preflight(monkeypatch, index_rows=rows)
+
+    with pytest.raises(RuntimeError, match="ux_tree_submissions_approved predicate is"):
+        verify()
+
+
+def test_wrong_column_in_predicate_still_rejected(monkeypatch):
+    """A predicate on a different column (health_status) must still fail,
+    even with casts applied."""
+    rows = VALID_INDEXES[:2] + [
+        _index(
+            "ux_tree_submissions_approved",
+            ["approved_tree_id"],
+            predicate="((health_status)::text = ('approved'::character varying)::text)",
+        )
+    ]
+    verify = _run_preflight(monkeypatch, index_rows=rows)
+
+    with pytest.raises(RuntimeError, match="ux_tree_submissions_approved predicate is"):
         verify()
 
 

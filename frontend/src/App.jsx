@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 
 // Layout
@@ -24,6 +24,7 @@ import AIIdentify        from "@/pages/AIIdentify";
 import CommunityStructure from "@/pages/CommunityStructure";
 import Upgrade           from "@/pages/Upgrade";
 import UnknownSpeciesReview from "@/pages/UnknownSpeciesReview";
+import TreeReviews from "@/pages/TreeReviews";
 import MySubmissions from "@/pages/MySubmissions";
 import ReportsAndTools from "@/pages/ReportsAndTools";
 import ProjectEvaluation from "@/pages/ProjectEvaluation";
@@ -34,9 +35,11 @@ import FieldSync from "@/pages/FieldSync";
 // Public pages (no auth, no sidebar)
 import PublicTreeProfile from "@/pages/PublicTreeProfile";
 import PageNotFound      from "@/lib/PageNotFound";
+import { OfflineSyncProvider } from "@/offline/OfflineSyncProvider";
 
 export default function App() {
   return (
+    <OfflineSyncProvider>
     <BrowserRouter>
       <Toaster richColors position="top-right" />
       <Routes>
@@ -65,6 +68,10 @@ export default function App() {
           <Route path="ai-identify" element={<AIIdentify />} />
           <Route path="community"   element={<CommunityStructure />} />
           <Route path="upgrade"     element={<Upgrade />} />
+          {/* Phase 10C: unified staff review surface. */}
+          <Route path="tree-reviews" element={<TreeReviews />} />
+          {/* Legacy links keep working: Unknown Species is now tab 2 of Tree
+              Reviews. The standalone page stays reachable for deep links. */}
           <Route path="unknown-species" element={<UnknownSpeciesReview />} />
           <Route path="my-submissions" element={<MySubmissions />} />
           <Route path="reports"     element={<ReportsAndTools />} />
@@ -82,5 +89,6 @@ export default function App() {
         <Route path="*" element={<PageNotFound />} />
       </Routes>
     </BrowserRouter>
+    </OfflineSyncProvider>
   );
 }
