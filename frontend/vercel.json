@@ -5,6 +5,10 @@
       "destination": "https://treetrace2backend.vercel.app/api/tree-submissions/"
     },
     {
+      "source": "/api/health-logs/",
+      "destination": "https://treetrace2backend.vercel.app/api/health-logs/"
+    },
+    {
       "source": "/api/trees/",
       "destination": "https://treetrace2backend.vercel.app/api/trees/"
     },
