@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/botanical_overview.dart';
 import '../services/theme.dart';
 import '../widgets/widgets.dart';
 import 'add_tree_screen.dart';
@@ -639,8 +640,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
     final family = _textValue('family', fallback: 'Unknown');
     final habitat =
         _textValue('habitat', fallback: 'Philippines / Southeast Asia');
-    final description = _textValue('description',
-        fallback: 'No description is available yet for this species.');
+    final description = botanicalOverviewDescription(_result?['description']);
     final features = _textValue('distinguishing_features',
         fallback:
             'Leaf form, bark texture, branching pattern, flowers, and fruit are used for identification.');

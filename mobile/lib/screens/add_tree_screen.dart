@@ -12,6 +12,7 @@ import '../services/auth_provider.dart';
 import '../services/gps_capture.dart';
 import '../services/theme.dart';
 import 'dbh_measure_screen.dart';
+import 'height_measure_screen.dart';
 import 'tree_detail_screen.dart';
 
 /// Seam for the platform reverse geocoder (Phase 12B.1A). Production uses
@@ -358,6 +359,15 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
                 '(${result.confidence} confidence)'),
             backgroundColor: kHealthy));
     }
+  }
+
+  Future<void> _openHeightMeasure() async {
+    final result = await Navigator.push<HeightMeasurementResult>(
+      context,
+      MaterialPageRoute(builder: (_) => const HeightMeasureScreen()),
+    );
+    if (result == null || !mounted) return;
+    setState(() => _heightCtrl.text = result.heightMeters.toStringAsFixed(2));
   }
 
   /// Captures a fresh GPS fix and reconciles it with whatever the form
@@ -1728,6 +1738,24 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
                 ],
               )),
             ]),
+            const SizedBox(height: 8),
+
+            // Existing manual height entry remains editable; the optional
+            // clinometer only fills it after the worker accepts a result.
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                key: const Key('measure-tree-height'),
+                onPressed: _openHeightMeasure,
+                icon: const Icon(Icons.height, size: 16),
+                label: const Text('Measure Height with Phone'),
+                style: OutlinedButton.styleFrom(
+                    foregroundColor: kPrimary,
+                    side: const BorderSide(color: kPrimary),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 10, horizontal: 12)),
+              ),
+            ),
             const SizedBox(height: 8),
 
             // Measure with camera button

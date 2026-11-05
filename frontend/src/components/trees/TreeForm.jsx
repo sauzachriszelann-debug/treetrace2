@@ -12,6 +12,7 @@ import { MapPin, Loader2, Upload, X, Sparkles, Ruler } from "lucide-react";
 import { storageApi } from "@/api/storage";
 import { aiApi } from "@/api/ai";
 import { toast } from "sonner";
+import TreeHeightCalculator from "@/components/trees/TreeHeightCalculator";
 
 function calcBiomassCarbon(dbh_cm, height_m) {
   if (!dbh_cm || !height_m) return { biomass: null, carbon: null };
@@ -808,6 +809,9 @@ export default function TreeForm({
               {measurementErrors.height_m}
             </p>
           )}
+          <TreeHeightCalculator
+            onAccept={(height) => set("height_m", height.toFixed(2))}
+          />
         </div>
       </div>
 
