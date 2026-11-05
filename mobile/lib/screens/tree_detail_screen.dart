@@ -27,6 +27,7 @@ class TreeDetailScreen extends StatefulWidget {
 class _TreeDetailScreenState extends State<TreeDetailScreen> {
   TreeModel? _tree;
   List<HealthLogModel> _logs = [];
+  final Set<int> _deletingHealthLogIds = {};
   bool _loading = true;
 
   /// True when the load failed because the backend could not be reached,
@@ -46,6 +47,7 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
       try {
         l = await api.getHealthLogs(treeId: widget.treeId);
       } catch (_) {}
+      if (!mounted) return;
       setState(() {
         _tree = TreeModel.fromJson(t);
         _logs = l.map((j) => HealthLogModel.fromJson(j)).toList();
@@ -53,6 +55,7 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
         _loading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       // An unreachable backend must not be reported as a missing tree: field
       // workers were seeing "Tree not found" every time the connection dropped.
       setState(() {
@@ -90,8 +93,13 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
           expandedHeight: tree.photoUrl != null ? 260 : 120,
           pinned: true,
           backgroundColor: kSidebarBg,
+          leading: IconButton(
+            tooltip: 'Back',
+            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+            onPressed: () => Navigator.maybePop(context),
+          ),
           flexibleSpace: FlexibleSpaceBar(
-            titlePadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+            titlePadding: const EdgeInsets.fromLTRB(72, 0, 16, 14),
             title: Text(tree.commonName,
                 style: const TextStyle(
                     color: Colors.white,
@@ -299,9 +307,18 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
                         if (canManage)
                           IconButton(
                             tooltip: 'Delete log',
-                            icon: const Icon(Icons.delete_outline_rounded,
-                                color: kPoor),
-                            onPressed: () => _deleteHealthLog(log.id),
+                            icon: _deletingHealthLogIds.contains(log.id)
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2, color: kPoor),
+                                  )
+                                : const Icon(Icons.delete_outline_rounded,
+                                    color: kPoor),
+                            onPressed: _deletingHealthLogIds.contains(log.id)
+                                ? null
+                                : () => _deleteHealthLog(log.id),
                           ),
                       ]),
                     )),
@@ -356,194 +373,46 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
   Future<void> _showAddHealthLogSheet() async {
     final tree = _tree;
     if (tree == null) return;
-    final conditionCtrl = ValueNotifier<String>(tree.healthStatus);
-    final dbhCtrl = TextEditingController(text: tree.dbhCm?.toString() ?? '');
-    final heightCtrl =
-        TextEditingController(text: tree.heightM?.toString() ?? '');
-    final notesCtrl = TextEditingController();
-    final measurementErrors = ValueNotifier<Map<String, String?>>({
-      'dbh': null,
-      'height': null,
-    });
-    var queuedOffline = false;
-
-    final saved = await showModalBottomSheet<bool>(
+    final messenger = ScaffoldMessenger.of(context);
+    final queuedOffline = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (sheetContext) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          16,
-          16,
-          16,
-          MediaQuery.of(sheetContext).viewInsets.bottom + 16,
-        ),
-        child: SafeArea(
-          child: ValueListenableBuilder<String>(
-            valueListenable: conditionCtrl,
-            builder: (_, condition, __) => Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text('Add Health Log',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-                const SizedBox(height: 14),
-                DropdownButtonFormField<String>(
-                  value: condition,
-                  decoration: const InputDecoration(
-                    labelText: 'Condition',
-                    prefixIcon: Icon(Icons.favorite_outline_rounded),
-                  ),
-                  items: ['Healthy', 'Fair', 'Poor']
-                      .map((item) =>
-                          DropdownMenuItem(value: item, child: Text(item)))
-                      .toList(),
-                  onChanged: (value) {
-                    if (value != null) conditionCtrl.value = value;
-                  },
-                ),
-                const SizedBox(height: 10),
-                ValueListenableBuilder<Map<String, String?>>(
-                  valueListenable: measurementErrors,
-                  builder: (_, errors, __) => Row(children: [
-                    Expanded(
-                      child: TextField(
-                        controller: dbhCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: 'DBH (cm)',
-                          errorText: errors['dbh'],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: heightCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: 'Height (m)',
-                          errorText: errors['height'],
-                        ),
-                      ),
-                    ),
-                  ]),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: notesCtrl,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Notes',
-                    alignLabelWithHint: true,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton.icon(
-                  onPressed: () async {
-                    final dbhText = dbhCtrl.text.trim();
-                    final heightText = heightCtrl.text.trim();
-                    final dbhCm = double.tryParse(dbhText);
-                    final heightM = double.tryParse(heightText);
-                    final dbhError = dbhText.isEmpty
-                        ? null
-                        : dbhCm == null || !dbhCm.isFinite || dbhCm <= 0
-                            ? 'Enter a positive number.'
-                            : null;
-                    final heightError = heightText.isEmpty
-                        ? null
-                        : heightM == null || !heightM.isFinite || heightM <= 0
-                            ? 'Enter a positive number.'
-                            : null;
-                    measurementErrors.value = {
-                      'dbh': dbhError,
-                      'height': heightError,
-                    };
-                    if (dbhError != null || heightError != null) return;
-
-                    final now = DateTime.now();
-                    final date =
-                        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-                    final payload = <String, dynamic>{
-                      'tree_id': tree.id,
-                      'condition': conditionCtrl.value,
-                      'assessed_date': date,
-                      'dbh_cm': dbhCm,
-                      'height_m': heightM,
-                      'notes': notesCtrl.text.trim().isEmpty
-                          ? null
-                          : notesCtrl.text.trim(),
-                    };
-                    try {
-                      if (await api.isOnline()) {
-                        await api.createHealthLog(payload);
-                      } else {
-                        await api.queueOfflineAction(
-                          'CREATE_HEALTH_LOG',
-                          payload,
-                        );
-                        queuedOffline = true;
-                      }
-                      if (sheetContext.mounted) {
-                        Navigator.pop(sheetContext, true);
-                      }
-                    } catch (e) {
-                      final errorText = e.toString().toLowerCase();
-                      final shouldQueue = errorText.contains('connection') ||
-                          errorText.contains('failed host lookup') ||
-                          errorText.contains('socketexception');
-                      if (shouldQueue) {
-                        // G6 (D3): this request FAILED MID-FLIGHT, so it may
-                        // already have committed server-side. Keep it, mark
-                        // it for review, and never auto-retry it - health
-                        // logs have no idempotency key and a blind retry
-                        // could create a duplicate.
-                        await api.queueOfflineAction(
-                          'CREATE_HEALTH_LOG',
-                          payload,
-                          requiresReview: true,
-                          reviewReason:
-                              'This save failed after the request may have reached the server. It is kept for review and will not be retried automatically, because a blind retry could create a duplicate health log.',
-                        );
-                        queuedOffline = true;
-                        if (sheetContext.mounted) {
-                          Navigator.pop(sheetContext, true);
-                        }
-                        return;
-                      }
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text('Could not save health log: $e'),
-                          backgroundColor: kPoor,
-                        ));
-                      }
-                    }
-                  },
-                  icon: const Icon(Icons.save_outlined),
-                  label: const Text('Save Health Log'),
-                ),
-              ],
-            ),
-          ),
-        ),
+      builder: (_) => HealthLogEntrySheet(
+        tree: tree,
+        onSave: (payload) async {
+          if (!await api.isOnline()) {
+            await api.queueOfflineAction('CREATE_HEALTH_LOG', payload);
+            return true;
+          }
+          try {
+            await api.createHealthLog(payload);
+            return false;
+          } catch (error) {
+            if (!isConnectionFailure(error)) rethrow;
+            // The request may have reached the server before the connection
+            // failed. Preserve it for manual review; never blindly retry it.
+            await api.queueOfflineAction(
+              'CREATE_HEALTH_LOG',
+              payload,
+              requiresReview: true,
+              reviewReason:
+                  'This save failed after the request may have reached the server. It is kept for review and will not be retried automatically, because a blind retry could create a duplicate health log.',
+            );
+            return true;
+          }
+        },
       ),
     );
 
-    conditionCtrl.dispose();
-    dbhCtrl.dispose();
-    heightCtrl.dispose();
-    notesCtrl.dispose();
-    measurementErrors.dispose();
-
-    if (saved == true) {
+    if (queuedOffline != null) {
       if (!queuedOffline) {
         await _load();
       }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      if (mounted && messenger.mounted) {
+        messenger.showSnackBar(SnackBar(
           content: Text(queuedOffline
               ? 'Health log saved offline. Review it in Field Sync before uploading.'
               : 'Health log saved.'),
@@ -818,40 +687,59 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
   }
 
   Future<void> _deleteHealthLog(int id) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete Health Log?'),
-        content: const Text('This health assessment will be removed.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: kPoor),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-    if (confirm != true) return;
+    if (!_deletingHealthLogIds.add(id)) return;
+    setState(() {});
+    final messenger = ScaffoldMessenger.of(context);
     try {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Delete Health Log?'),
+          content: const Text('This health assessment will be removed.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: kPoor),
+              onPressed: () => Navigator.pop(context, true),
+              child:
+                  const Text('Delete', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true || !mounted) return;
       await api.deleteHealthLog(id);
       await _load();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      if (mounted && messenger.mounted) {
+        messenger.showSnackBar(const SnackBar(
           content: Text('Health log deleted.'),
           backgroundColor: kHealthy,
         ));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Could not delete health log: $e'),
+      if (isNotFoundFailure(e)) {
+        await _load();
+        if (mounted && messenger.mounted) {
+          messenger.showSnackBar(const SnackBar(
+            content:
+                Text('Health log was already removed. The list is updated.'),
+            backgroundColor: kFair,
+          ));
+        }
+      } else if (mounted && messenger.mounted) {
+        messenger.showSnackBar(SnackBar(
+          content: Text(isConnectionFailure(e)
+              ? 'Could not reach the server to delete this health log. Check your connection and retry.'
+              : 'Could not delete health log. Please retry.'),
           backgroundColor: kPoor,
         ));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _deletingHealthLogIds.remove(id));
       }
     }
   }
@@ -993,5 +881,189 @@ class _ActionDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(width: 1, height: 34, color: kBorder);
+  }
+}
+
+/// The modal owns its form state and controllers so they live exactly as long
+/// as the sheet route. [onSave] returns true when the record was queued offline.
+class HealthLogEntrySheet extends StatefulWidget {
+  final TreeModel tree;
+  final Future<bool> Function(Map<String, dynamic> payload) onSave;
+
+  const HealthLogEntrySheet({
+    super.key,
+    required this.tree,
+    required this.onSave,
+  });
+
+  @override
+  State<HealthLogEntrySheet> createState() => _HealthLogEntrySheetState();
+}
+
+class _HealthLogEntrySheetState extends State<HealthLogEntrySheet> {
+  late String _condition;
+  late final TextEditingController _dbhCtrl;
+  late final TextEditingController _heightCtrl;
+  late final TextEditingController _notesCtrl;
+  Map<String, String?> _errors = const {'dbh': null, 'height': null};
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _condition = widget.tree.healthStatus;
+    _dbhCtrl = TextEditingController(text: widget.tree.dbhCm?.toString() ?? '');
+    _heightCtrl =
+        TextEditingController(text: widget.tree.heightM?.toString() ?? '');
+    _notesCtrl = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _dbhCtrl.dispose();
+    _heightCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    final dbhText = _dbhCtrl.text.trim();
+    final heightText = _heightCtrl.text.trim();
+    final dbhCm = double.tryParse(dbhText);
+    final heightM = double.tryParse(heightText);
+    final dbhError = dbhText.isEmpty
+        ? null
+        : dbhCm == null || !dbhCm.isFinite || dbhCm <= 0
+            ? 'Enter a positive number.'
+            : null;
+    final heightError = heightText.isEmpty
+        ? null
+        : heightM == null || !heightM.isFinite || heightM <= 0
+            ? 'Enter a positive number.'
+            : null;
+    setState(() => _errors = {'dbh': dbhError, 'height': heightError});
+    if (dbhError != null || heightError != null) return;
+
+    final now = DateTime.now();
+    final payload = <String, dynamic>{
+      'tree_id': widget.tree.id,
+      'condition': _condition,
+      'assessed_date':
+          '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}',
+      'dbh_cm': dbhCm,
+      'height_m': heightM,
+      'notes': _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+    };
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _saving = true);
+    try {
+      final queuedOffline = await widget.onSave(payload);
+      if (!mounted) return;
+      setState(() => _saving = false);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.of(context).pop(queuedOffline);
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      messenger.showSnackBar(SnackBar(
+        content: Text(isConnectionFailure(error)
+            ? 'Connection failed. Your entries are still here; check your connection and retry.'
+            : 'Could not save health log. Your entries are still here; please retry.'),
+        backgroundColor: kPoor,
+      ));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: !_saving,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          MediaQuery.of(context).viewInsets.bottom + 16,
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('Add Health Log',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 14),
+              DropdownButtonFormField<String>(
+                initialValue: _condition,
+                decoration: const InputDecoration(
+                  labelText: 'Condition',
+                  prefixIcon: Icon(Icons.favorite_outline_rounded),
+                ),
+                items: ['Healthy', 'Fair', 'Poor']
+                    .map((item) =>
+                        DropdownMenuItem(value: item, child: Text(item)))
+                    .toList(),
+                onChanged: _saving
+                    ? null
+                    : (value) {
+                        if (value != null) setState(() => _condition = value);
+                      },
+              ),
+              const SizedBox(height: 10),
+              Row(children: [
+                Expanded(
+                  child: TextField(
+                    controller: _dbhCtrl,
+                    enabled: !_saving,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'DBH (cm)',
+                      errorText: _errors['dbh'],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _heightCtrl,
+                    enabled: !_saving,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Height (m)',
+                      errorText: _errors['height'],
+                    ),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _notesCtrl,
+                enabled: !_saving,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Notes',
+                  alignLabelWithHint: true,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: _saving ? null : _save,
+                icon: _saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.save_outlined),
+                label: Text(_saving ? 'Saving…' : 'Save Health Log'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

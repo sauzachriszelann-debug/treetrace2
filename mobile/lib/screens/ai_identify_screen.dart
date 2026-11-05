@@ -149,9 +149,9 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
       final fallbackReason = errorType == DioExceptionType.connectionTimeout ||
               errorType == DioExceptionType.receiveTimeout ||
               errorType == DioExceptionType.sendTimeout
-          ? 'AI identification is taking too long. Render or the AI service may still be waking up. Please try again in a moment.'
+          ? 'AI identification is taking too long. The backend or AI service may be temporarily unavailable. Please try again in a moment.'
           : errorType == DioExceptionType.connectionError
-              ? 'AI identification could not connect to the backend. Check internet connection or wake Render.'
+              ? 'AI identification could not connect to the backend. Check your connection and try again.'
               : 'AI identification could not connect. Please check internet connection, or submit this photo for expert review.';
       setState(() => _result = {
             'not_identified': true,
@@ -184,11 +184,10 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
       };
 
       if (await api.isOnline()) {
-        payload['photo_url'] = await api.uploadPhoto(
-              _photo!,
-              purpose: 'unknown_species',
-            ) ??
-            '';
+        payload['photo_url'] = await api.uploadPhotoRequired(
+          _photo!,
+          purpose: 'unknown_species',
+        );
         await api.submitUnknownSpecies(payload);
         _incrementUsage('unknown');
         submitted = true;
@@ -225,7 +224,9 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
             content: Text(isLimit
                 ? (detail?.toString() ??
                     'Unknown species submission limit reached.')
-                : 'Submission failed: $e'),
+                : e is PhotoUploadException
+                    ? '${e.message} Your photo and scan result are still here; tap Submit for Expert Review to retry.'
+                    : 'Submission failed: $e'),
             backgroundColor: kPoor));
       }
     } finally {
@@ -310,9 +311,78 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
             else if (!_identifying)
               _buildWelcomeState(),
 
+            if (false && _result?['roboflow_candidate'] is Map) ...[
+              const SizedBox(height: 14),
+              _buildRoboflowSuggestion(),
+            ],
+
             const SizedBox(height: 30),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildRoboflowSuggestion() {
+    final raw = _result?['roboflow_candidate'];
+    if (raw is! Map) return const SizedBox.shrink();
+
+    final candidate = Map<String, dynamic>.from(raw);
+    if (candidate['source'] != 'roboflow_efficientnet') {
+      return const SizedBox.shrink();
+    }
+
+    final name = candidate['common_name']?.toString() ?? 'Unknown';
+    final score = candidate['confidence_percent'];
+    final scoreNumber = score is num
+        ? score.toDouble()
+        : double.tryParse(score?.toString() ?? '');
+    final classes = candidate['supported_classes'] ?? 10;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F9FF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFBAE6FD)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Preliminary AI suggestion',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+              color: Color(0xFF075985),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            name,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (scoreNumber != null && scoreNumber.isFinite)
+            Text(
+              '${scoreNumber.toStringAsFixed(2)}% score',
+              style: const TextStyle(color: Color(0xFF075985)),
+            ),
+          const SizedBox(height: 6),
+          Text(
+            'EfficientNet-B0 - $classes supported classes',
+            style: const TextStyle(fontSize: 12, color: Colors.black54),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Unverified AI prediction. This score is not a calibrated '
+            'probability of correctness. Confirm the species independently '
+            'before saving an official tree record.',
+            style: TextStyle(fontSize: 12, color: Color(0xFF075985)),
+          ),
+        ],
       ),
     );
   }

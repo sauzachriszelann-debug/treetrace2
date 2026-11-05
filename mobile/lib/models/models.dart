@@ -190,23 +190,35 @@ class UnknownSpeciesModel {
   final int id;
   final String? photoUrl;
   final String? barangay;
+  final String? locationDescription;
   final String? possibleName;
   final String? identifiedAs;
   final String? reviewNotes;
   final String? submitterNotes;
+  final String? submittedByName;
+  final String? submittedByEmail;
+  final String reviewStatus;
+  final List<dynamic> aiCandidates;
   final bool reviewed;
   final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   UnknownSpeciesModel({
     required this.id,
     this.photoUrl,
     this.barangay,
+    this.locationDescription,
     this.possibleName,
     this.identifiedAs,
     this.reviewNotes,
     this.submitterNotes,
+    this.submittedByName,
+    this.submittedByEmail,
+    this.reviewStatus = 'pending',
+    this.aiCandidates = const [],
     required this.reviewed,
     this.createdAt,
+    this.updatedAt,
   });
 
   factory UnknownSpeciesModel.fromJson(Map<String, dynamic> j) =>
@@ -214,14 +226,126 @@ class UnknownSpeciesModel {
         id: j['id'],
         photoUrl: j['photo_url'],
         barangay: j['barangay'],
+        locationDescription: j['location_description'],
         possibleName: j['possible_name'],
         identifiedAs: j['identified_as'],
         reviewNotes: j['review_notes'],
         submitterNotes: j['submitter_notes'],
+        submittedByName: j['submitted_by_name'],
+        submittedByEmail: j['submitted_by_email'],
+        reviewStatus: j['review_status'] ??
+            (j['reviewed'] == true
+                ? (j['identified_as'] == null || j['identified_as'] == ''
+                    ? 'closed'
+                    : 'identified')
+                : 'pending'),
+        aiCandidates: j['ai_candidates'] is List
+            ? List<dynamic>.from(j['ai_candidates'] as List)
+            : const [],
         reviewed: j['reviewed'] == true,
         createdAt:
             j['created_at'] != null ? DateTime.tryParse(j['created_at']) : null,
+        updatedAt:
+            j['updated_at'] != null ? DateTime.tryParse(j['updated_at']) : null,
       );
+}
+
+class TreeSubmissionModel {
+  final int id;
+  final String status;
+  final String? source;
+  final String? commonName;
+  final String? scientificName;
+  final double? dbhCm;
+  final double? heightM;
+  final String? healthStatus;
+  final String? barangay;
+  final String? city;
+  final String? province;
+  final double? lat;
+  final double? lng;
+  final String? photoUrl;
+  final String? dateRecorded;
+  final String? notes;
+  final List<dynamic> aiCandidates;
+  final Map<String, dynamic>? reviewOverrides;
+  final String? reviewedByName;
+  final String? reviewReason;
+  final DateTime? reviewedAt;
+  final int? approvedTreeId;
+  final int? sourceUnknownSpeciesId;
+  final String? submittedByName;
+  final String? submittedByEmail;
+  final DateTime? createdAt;
+
+  const TreeSubmissionModel({
+    required this.id,
+    required this.status,
+    this.source,
+    this.commonName,
+    this.scientificName,
+    this.dbhCm,
+    this.heightM,
+    this.healthStatus,
+    this.barangay,
+    this.city,
+    this.province,
+    this.lat,
+    this.lng,
+    this.photoUrl,
+    this.dateRecorded,
+    this.notes,
+    this.aiCandidates = const [],
+    this.reviewOverrides,
+    this.reviewedByName,
+    this.reviewReason,
+    this.reviewedAt,
+    this.approvedTreeId,
+    this.sourceUnknownSpeciesId,
+    this.submittedByName,
+    this.submittedByEmail,
+    this.createdAt,
+  });
+
+  factory TreeSubmissionModel.fromJson(Map<String, dynamic> json) {
+    final rawOverrides = json['review_overrides'];
+    return TreeSubmissionModel(
+      id: (json['id'] as num).toInt(),
+      status: '${json['status'] ?? json['review_status'] ?? 'pending'}',
+      source: json['source']?.toString(),
+      commonName: json['common_name']?.toString(),
+      scientificName: json['scientific_name']?.toString(),
+      dbhCm: (json['dbh_cm'] as num?)?.toDouble(),
+      heightM: (json['height_m'] as num?)?.toDouble(),
+      healthStatus: json['health_status']?.toString(),
+      barangay: json['barangay']?.toString(),
+      city: json['city']?.toString(),
+      province: json['province']?.toString(),
+      lat: (json['lat'] as num?)?.toDouble(),
+      lng: (json['lng'] as num?)?.toDouble(),
+      photoUrl: json['photo_url']?.toString(),
+      dateRecorded: json['date_recorded']?.toString(),
+      notes: json['notes']?.toString(),
+      aiCandidates: json['ai_candidates'] is List
+          ? List<dynamic>.from(json['ai_candidates'] as List)
+          : const [],
+      reviewOverrides:
+          rawOverrides is Map ? Map<String, dynamic>.from(rawOverrides) : null,
+      reviewedByName: json['reviewed_by_name']?.toString(),
+      reviewReason: json['review_reason']?.toString(),
+      reviewedAt: json['reviewed_at'] is String
+          ? DateTime.tryParse(json['reviewed_at'] as String)
+          : null,
+      approvedTreeId: (json['approved_tree_id'] as num?)?.toInt(),
+      sourceUnknownSpeciesId:
+          (json['source_unknown_species_id'] as num?)?.toInt(),
+      submittedByName: json['submitted_by_name']?.toString(),
+      submittedByEmail: json['submitted_by_email']?.toString(),
+      createdAt: json['created_at'] is String
+          ? DateTime.tryParse(json['created_at'] as String)
+          : null,
+    );
+  }
 }
 
 class PlantingRecommendationModel {

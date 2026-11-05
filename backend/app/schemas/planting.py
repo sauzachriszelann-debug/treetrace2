@@ -38,3 +38,9 @@ class PlantingRecommendationOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class SpeciesPhotoUpsert(BaseModel):
+    species_name: str
+    scientific_name: str
+    photo_url: str

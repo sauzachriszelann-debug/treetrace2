@@ -20,7 +20,7 @@ import 'tree_detail_screen.dart';
 import 'scan_qr_screen.dart';
 import 'community_structure_screen.dart';
 import 'endangered_trees_screen.dart';
-import 'unknown_review_screen.dart';
+import 'tree_reviews_screen.dart';
 import 'health_logs_screen.dart';
 import 'tree_list_screen.dart';
 import 'profile_screen.dart';
@@ -216,7 +216,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         onUnknown: () => Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const UnknownReviewScreen(),
+                            builder: (_) => TreeReviewsScreen(
+                              role: context.read<AuthProvider>().user?.role,
+                              initialTabIndex: 1,
+                            ),
                           ),
                         ),
                         onPlanting: () => Navigator.push(

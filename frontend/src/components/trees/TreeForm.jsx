@@ -116,6 +116,7 @@ export default function TreeForm({
   const [photoLoading, setPhotoLoading] = useState(false);
   const [aiStatus, setAiStatus] = useState(null); // null | "identifying" | "done" | "error" | "estimating"
   const [aiError, setAiError] = useState(null);
+  const [roboflowCandidate, setRoboflowCandidate] = useState(null);
   const [computed, setComputed] = useState({ biomass: null, carbon: null });
   const [dbhReference, setDbhReference] = useState("none");
   const [dbhDistance, setDbhDistance] = useState("");
@@ -232,6 +233,7 @@ export default function TreeForm({
     setPhotoFile(file);
     setPhotoPreview(URL.createObjectURL(file));
     set("photo_url", "");
+    setRoboflowCandidate(null);
     setAiStatus(null);
     setAiError(null);
     setDbhResult(null);
@@ -246,6 +248,7 @@ export default function TreeForm({
     set("photo_url", "");
     setAiStatus(null);
     setAiError(null);
+    setRoboflowCandidate(null);
     setDbhResult(null);
     setAiConservation(null);
   };
@@ -258,9 +261,15 @@ export default function TreeForm({
       return;
     }
     setAiStatus("identifying");
+    setRoboflowCandidate(null);
     setAiError(null);
     try {
       const result = await aiApi.identifyFromFile(target);
+      setRoboflowCandidate(
+        result.roboflow_candidate?.source === "roboflow_efficientnet"
+          ? result.roboflow_candidate
+          : null
+      );
       const conservation = result.protected || ["CR", "EN", "VU"].includes(result.status_code)
         ? {
             status: result.endangered_status || "Protected",
@@ -545,6 +554,33 @@ export default function TreeForm({
             </label>
           </div>
         </div>
+
+        {/* Preliminary AI suggestion (EfficientNet-B0) */}
+        {false && roboflowCandidate && (
+          <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-4 space-y-2">
+            <p className="text-sm font-semibold text-sky-900">
+              Preliminary AI suggestion
+            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="font-medium text-foreground">
+                {roboflowCandidate.common_name || "Unknown"}
+              </p>
+              {Number.isFinite(Number(roboflowCandidate.confidence_percent)) && (
+                <span className="text-sm font-medium text-sky-900">
+                  {Number(roboflowCandidate.confidence_percent).toFixed(2)}% score
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              EfficientNet-B0 ? {roboflowCandidate.supported_classes || 10} supported classes
+            </p>
+            <p className="text-xs text-sky-900">
+              This is an unverified AI prediction. Its score is not a calibrated
+              probability of correctness. Verify the species independently before
+              entering it into an official tree record.
+            </p>
+          </div>
+        )}
 
         {/* AI Status Messages */}
         {aiStatus === "identifying" && (

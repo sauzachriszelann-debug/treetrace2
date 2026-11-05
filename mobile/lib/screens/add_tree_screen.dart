@@ -78,6 +78,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
   String? _dbhConfidence; // Low / Medium / High
   String? _dbhMethod;
   Map<String, dynamic>? _aiPrediction;
+  Map<String, dynamic>? _roboflowCandidate;
   double? _predictedDbhCm;
   String? _pendingKey;
   Map<String, dynamic>? _restoredSnapshot;
@@ -89,6 +90,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     if (widget.aiResult != null) {
       final r = widget.aiResult!;
       _aiPrediction = r;
+      _roboflowCandidate = _extractRoboflowCandidate(r);
       _nameCtrl.text = r['common_name'] ?? '';
       _sciCtrl.text = r['scientific_name'] ?? '';
       _dbhCtrl.text = r['estimated_dbh_cm']?.toString() ?? '';
@@ -299,6 +301,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     final f = File(x.path);
     setState(() {
       _photo = f;
+      _roboflowCandidate = null;
     });
     if (widget.aiResult == null) await _autoIdentify(f);
   }
@@ -307,6 +310,10 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     setState(() => _identifying = true);
     try {
       final r = await api.identifyTree(f);
+      if (!mounted) return;
+      setState(() {
+        _roboflowCandidate = _extractRoboflowCandidate(r);
+      });
       if (r['not_identified'] != true) {
         setState(() {
           _aiPrediction = r;
@@ -980,9 +987,23 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
       payload['client_uuid'] = key;
 
       if (await api.isOnline()) {
-        if (_photo != null)
-          payload['photo_url'] = await api.uploadPhoto(_photo!,
-              purpose: isCitizen ? 'unknown_species' : 'tree_photo');
+        if (_photo != null) {
+          try {
+            payload['photo_url'] = await api.uploadPhotoRequired(
+              _photo!,
+              purpose: isCitizen ? 'unknown_species' : 'tree_photo',
+            );
+          } on PhotoUploadException catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(
+                    '${e.message} Your tree details and photo are still here; tap Save to retry.'),
+                backgroundColor: kPoor,
+              ));
+            }
+            return;
+          }
+        }
         // Persist key + an immutable copy of the exact payload BEFORE the
         // request: if it reaches the server and the response is lost, the
         // retry carries the same key and payload. submitted_payload is
@@ -1457,6 +1478,81 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     return found?['status']?.toString() ?? 'Not Listed';
   }
 
+
+  Map<String, dynamic>? _extractRoboflowCandidate(
+      Map<String, dynamic> result) {
+    final raw = result['roboflow_candidate'];
+    if (raw is! Map) return null;
+    final candidate = Map<String, dynamic>.from(raw);
+    return candidate['source'] == 'roboflow_efficientnet'
+        ? candidate
+        : null;
+  }
+
+  Widget _buildRoboflowCandidateCard() {
+    final candidate = _roboflowCandidate;
+    if (candidate == null) return const SizedBox.shrink();
+
+    final name = candidate['common_name']?.toString() ?? 'Unknown';
+    final rawScore = candidate['confidence_percent'];
+    final score = rawScore is num
+        ? rawScore.toDouble()
+        : double.tryParse(rawScore?.toString() ?? '');
+    final classes = candidate['supported_classes'] ?? 10;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F9FF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFBAE6FD)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Preliminary AI suggestion',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF075985),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            name,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (score != null && score.isFinite)
+            Text(
+              '${score.toStringAsFixed(2)}% score',
+              style: const TextStyle(color: Color(0xFF075985)),
+            ),
+          const SizedBox(height: 6),
+          Text(
+            'EfficientNet-B0 - $classes supported classes',
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.black54,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'This is an unverified AI prediction. The score is not a '
+            'calibrated probability of correctness. Verify the species '
+            'independently before saving an official tree record.',
+            style: TextStyle(
+              fontSize: 12,
+              color: Color(0xFF075985),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1517,6 +1613,11 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
 
             if (_aiPrediction != null) ...[
               _buildAiProfilePreview(),
+              const SizedBox(height: 16),
+            ],
+
+            if (false && _roboflowCandidate != null) ...[
+              _buildRoboflowCandidateCard(),
               const SizedBox(height: 16),
             ],
 

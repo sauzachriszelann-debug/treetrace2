@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 import HealthBadge from "@/components/trees/HealthBadge";
 import { MapPin } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
-import PublicPortal from "@/pages/PublicPortal";
+import PublicPortal, { healthIcon } from "@/pages/PublicPortal";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
@@ -75,7 +75,11 @@ function InternalTreeMap() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           {geoTrees.map((tree) => (
-            <Marker key={tree.id} position={[tree.lat, tree.lng]}>
+            <Marker
+              key={tree.id}
+              position={[tree.lat, tree.lng]}
+              icon={healthIcon(tree.health_status)}
+            >
               <Popup>
                 <div className="min-w-[180px]">
                   {tree.photo_url && (

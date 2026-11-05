@@ -37,14 +37,14 @@ class FlutterSecureStore implements SecureStore {
 // For real device on same WiFi: 'http://192.168.x.x:8000/api'
 //
 // Phase 11B: the base URL is now selected at BUILD time, never at runtime,
-// so a value can never be overwritten on a device and the production default
-// is preserved exactly. Local USB testing injects the loopback address:
+// so a value can never be overwritten on a device and the Vercel production
+// default is preserved exactly. Local USB testing injects the loopback address:
 //   flutter run --dart-define=TREETRACE_API_BASE_URL=http://127.0.0.1:8000/api
 // which pairs with `adb reverse tcp:8000 tcp:8000`. A build without the
-// define behaves exactly as before (the deployed Render backend).
+// define uses the deployed Vercel backend.
 const String kBaseUrl = String.fromEnvironment(
   'TREETRACE_API_BASE_URL',
-  defaultValue: 'https://treetrace2.onrender.com/api',
+  defaultValue: 'https://treetrace2backend.vercel.app/api',
 );
 
 @visibleForTesting
@@ -115,8 +115,10 @@ class ApiService {
   ApiService.forTest({
     required SecureStore storage,
     Future<bool> Function()? onlineCheck,
+    Dio? dio,
   })  : _storage = storage,
-        _testOnline = onlineCheck;
+        _testOnline = onlineCheck,
+        _dio = dio ?? Dio();
 
   final SecureStore _storage;
   final _connectivity = Connectivity();
@@ -139,8 +141,16 @@ class ApiService {
       receiveTimeout: const Duration(seconds: 30),
     ));
 
+    if (kDebugMode) {
+      debugPrint('TreeTrace API base URL: ${_dio.options.baseUrl}');
+    }
+
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
+        if (kDebugMode) {
+          // Request URLs are safe to log; never log headers or request data.
+          debugPrint('TreeTrace API request: ${options.method} ${options.uri}');
+        }
         final token = _cachedToken ?? await getToken();
         if (token != null) {
           options.headers['Authorization'] = 'Bearer $token';
@@ -148,6 +158,18 @@ class ApiService {
         return handler.next(options);
       },
       onError: (error, handler) {
+        if (kDebugMode) {
+          final socketError = error.error;
+          final socketTarget = socketError is SocketException
+              ? ' target=${socketError.address}:${socketError.port}'
+              : '';
+          debugPrint(
+            'TreeTrace API failure: ${error.requestOptions.method} '
+            '${error.requestOptions.uri}; type=${error.type}; '
+            'httpStatus=${error.response?.statusCode}; '
+            'cause=${socketError.runtimeType}$socketTarget',
+          );
+        }
         if (error.response?.statusCode == 401) {
           // Scoped: token only. Queue, drafts, and caches are preserved.
           clearToken();
@@ -453,6 +475,12 @@ class ApiService {
     return Map<String, dynamic>.from(res.data);
   }
 
+  Future<Map<String, dynamic>> convertUnknownSpeciesToTreeSubmission(
+      int id) async {
+    final res = await _dio.post('/ai/unknown-species/$id/convert');
+    return Map<String, dynamic>.from(res.data);
+  }
+
   // ── Trees ─────────────────────────────────────────────────────────────────
   Future<List<dynamic>> getTrees({int limit = 200}) async {
     final res = await _dio.get('/trees/', queryParameters: {'limit': limit});
@@ -526,6 +554,54 @@ class ApiService {
   Future<List<dynamic>> getMyTreeSubmissions() async {
     final res = await _dio.get('/tree-submissions/my');
     return res.data;
+  }
+
+  /// Staff review queue. The backend returns all matching rows newest first;
+  /// status is one of pending, approved, rejected, linked, or omitted for all.
+  Future<List<dynamic>> getTreeSubmissions({String? status}) async {
+    final res = await _dio.get(
+      '/tree-submissions/',
+      queryParameters: {
+        if (status != null && status != 'all') 'status': status,
+      },
+    );
+    return List<dynamic>.from(res.data as List);
+  }
+
+  Future<Map<String, dynamic>> approveTreeSubmission(
+    int id, {
+    Map<String, dynamic> overrides = const {},
+  }) async {
+    final res =
+        await _dio.post('/tree-submissions/$id/approve', data: overrides);
+    return Map<String, dynamic>.from(res.data);
+  }
+
+  Future<Map<String, dynamic>> rejectTreeSubmission(
+    int id, {
+    required String reason,
+  }) async {
+    final res = await _dio.post(
+      '/tree-submissions/$id/reject',
+      data: {'reason': reason},
+    );
+    return Map<String, dynamic>.from(res.data);
+  }
+
+  Future<Map<String, dynamic>> linkTreeSubmission(
+    int id, {
+    required int treeId,
+  }) async {
+    final res = await _dio.post(
+      '/tree-submissions/$id/link',
+      data: {'tree_id': treeId},
+    );
+    return Map<String, dynamic>.from(res.data);
+  }
+
+  Future<Map<String, dynamic>> reopenTreeSubmission(int id) async {
+    final res = await _dio.post('/tree-submissions/$id/reopen');
+    return Map<String, dynamic>.from(res.data);
   }
 
   /// G3 advisory duplicate-prevention lookup: existing trees near a
@@ -698,6 +774,24 @@ class ApiService {
     }
   }
 
+  /// Uploads a photo required by the calling workflow.
+  ///
+  /// Unlike [uploadPhoto], this does not turn a failed upload into `null`.
+  /// Tree registration and unknown-species submissions must stop before
+  /// sending their record if the selected evidence photo was not stored.
+  Future<String> uploadPhotoRequired(
+    File file, {
+    required String purpose,
+  }) async {
+    try {
+      final url = await uploadPhotoStrict(file, purpose: purpose);
+      if (url != null && url.trim().isNotEmpty) return url;
+    } catch (_) {
+      // Present one actionable, non-sensitive message to required-photo flows.
+    }
+    throw const PhotoUploadException();
+  }
+
   // ── Community structure ───────────────────────────────────────────────────
   Future<Map<String, dynamic>> getCommunityStructure() async {
     final res = await _dio.get('/ai/community-structure');
@@ -713,6 +807,17 @@ class ApiService {
           'barangay': barangay.trim(),
       },
     );
+    return Map<String, dynamic>.from(res.data);
+  }
+
+  Future<List<dynamic>> getSpeciesPhotos() async {
+    final res = await _dio.get('/planting/species-photos');
+    return res.data;
+  }
+
+  Future<Map<String, dynamic>> saveSpeciesPhoto(
+      Map<String, dynamic> payload) async {
+    final res = await _dio.put('/planting/species-photos', data: payload);
     return Map<String, dynamic>.from(res.data);
   }
 
@@ -756,3 +861,13 @@ class ApiService {
 }
 
 final api = ApiService();
+
+class PhotoUploadException implements Exception {
+  const PhotoUploadException();
+
+  String get message =>
+      'The photo could not be uploaded. Check your connection or account access and try again.';
+
+  @override
+  String toString() => message;
+}

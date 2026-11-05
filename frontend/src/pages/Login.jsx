@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Leaf, Loader2, ArrowRight } from "lucide-react";
+import { Leaf, Loader2, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Login() {
@@ -12,6 +12,7 @@ export default function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -44,9 +45,11 @@ export default function Login() {
       <div className="w-full max-w-md relative z-10">
         {/* Logo */}
         <div className="flex items-center gap-3 mb-8 justify-center">
-          <div className="w-11 h-11 bg-primary rounded-xl flex items-center justify-center shadow-lg shadow-primary/20 border border-primary/20">
-            <Leaf className="w-6 h-6 text-primary-foreground animate-pulse" />
-          </div>
+          <img
+            src="/landing/logo.png"
+            alt="TreeTrace logo"
+            className="w-12 h-12 rounded-xl object-cover shadow-lg shadow-primary/20"
+          />
           <div>
             <h1 className="font-fraunces text-3xl font-semibold text-emerald-400 leading-none">
               TreeTrace
@@ -80,16 +83,27 @@ export default function Login() {
               <div className="flex justify-between items-center">
                 <Label htmlFor="password" className="text-gray-300 text-xs font-semibold uppercase tracking-wider">Password</Label>
               </div>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                autoComplete="current-password"
-                className="bg-black/30 border-white/10 text-white placeholder:text-muted-foreground/40 focus:border-primary/50 focus-visible:ring-primary/20 h-10 px-3"
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  autoComplete="current-password"
+                  className="bg-black/30 border-white/10 text-white placeholder:text-muted-foreground/40 focus:border-primary/50 focus-visible:ring-primary/20 h-10 px-3 pr-11"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                  className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 rounded-r-md"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
 
             <Button type="submit" className="w-full flex items-center justify-center gap-2 h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl shadow-lg shadow-primary/20 mt-6" disabled={loading}>

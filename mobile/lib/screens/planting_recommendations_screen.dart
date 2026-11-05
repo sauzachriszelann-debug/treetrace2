@@ -23,7 +23,11 @@ class _PlantingRecommendationsScreenState
     extends State<PlantingRecommendationsScreen> {
   final _barangayCtrl = TextEditingController();
   List<Map<String, dynamic>> _suggestions = [];
+  Map<String, dynamic>? _weatherContext;
+  List<Map<String, dynamic>> _speciesPhotos = [];
+  List<Map<String, dynamic>> _barangayNeeds = [];
   List<PlantingRecommendationModel> _records = [];
+  bool? _barangayHasInventory;
   bool _loading = true;
 
   @override
@@ -45,8 +49,13 @@ class _PlantingRecommendationsScreenState
           await api.getPlantingSuggestions(barangay: _barangayCtrl.text.trim());
       final records =
           await api.getPlantingRecommendations(barangay: _barangayCtrl.text);
+      final speciesPhotos = await api.getSpeciesPhotos();
       if (!mounted) return;
       setState(() {
+        final weather = suggestions['weather_context'];
+        _weatherContext = weather is Map
+            ? Map<String, dynamic>.from(weather)
+            : null;
         _suggestions = (suggestions['suggestions'] as List? ?? [])
             .whereType<Map>()
             .map((e) => Map<String, dynamic>.from(e))
@@ -55,6 +64,15 @@ class _PlantingRecommendationsScreenState
             .map((e) => PlantingRecommendationModel.fromJson(
                 Map<String, dynamic>.from(e)))
             .toList();
+        _speciesPhotos = speciesPhotos
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+        _barangayNeeds = (suggestions['barangay_needs'] as List? ?? [])
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+        _barangayHasInventory = suggestions['barangay_has_inventory'] as bool?;
         _loading = false;
       });
     } catch (_) {
@@ -65,6 +83,16 @@ class _PlantingRecommendationsScreenState
         backgroundColor: kPoor,
       ));
     }
+  }
+
+  Future<void> _manageSpeciesPhoto() async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _SpeciesPhotoSheet(),
+    );
+    if (saved == true) _load();
   }
 
   Future<void> _openCreateSheet({Map<String, dynamic>? suggestion}) async {
@@ -186,14 +214,57 @@ class _PlantingRecommendationsScreenState
                         labelText: 'Focus barangay',
                         hintText: 'Optional, e.g. Brgy. San Francisco',
                         prefixIcon: const Icon(Icons.location_on_outlined),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.search_rounded),
-                          onPressed: _load,
-                        ),
+                        suffixIcon: _barangayCtrl.text.trim().isNotEmpty
+                            ? IconButton(
+                                tooltip: 'Back to barangay gaps',
+                                icon: const Icon(Icons.arrow_back_rounded),
+                                onPressed: () {
+                                  _barangayCtrl.clear();
+                                  setState(() => _barangayHasInventory = null);
+                                  _load();
+                                },
+                              )
+                            : IconButton(
+                                tooltip: 'Search barangay',
+                                icon: const Icon(Icons.search_rounded),
+                                onPressed: _load,
+                              ),
                       ),
+                      onChanged: (_) => setState(() {}),
                       onSubmitted: (_) => _load(),
                     ),
                     const SizedBox(height: 16),
+                    if (_barangayCtrl.text.trim().isEmpty &&
+                        _barangayNeeds.isNotEmpty) ...[
+                      const Text(
+                        'Barangays with the largest recorded species gaps',
+                        style: TextStyle(
+                            color: kForeground,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Counts priority species with zero or one record. This is an inventory gap, not proof a planting site is needed. Barangays without tree records cannot be ranked yet.',
+                        style: TextStyle(color: kMuted, fontSize: 11),
+                      ),
+                      const SizedBox(height: 8),
+                      ..._barangayNeeds.take(5).map((area) => _BarangayNeedCard(
+                            item: area,
+                            onTap: () {
+                              setState(() {
+                                _barangayCtrl.text = area['barangay'].toString();
+                              });
+                              _load();
+                            },
+                          )),
+                      const SizedBox(height: 8),
+                    ],
+                    if (_barangayCtrl.text.trim().isNotEmpty &&
+                        _barangayHasInventory == false) ...[
+                      _NoInventoryNotice(barangay: _barangayCtrl.text.trim()),
+                      const SizedBox(height: 10),
+                    ],
                     _AddPlantPrompt(
                       isManager: isManager,
                       onTap: () => _openCreateSheet(),
@@ -201,9 +272,32 @@ class _PlantingRecommendationsScreenState
                     const SizedBox(height: 16),
                     const _SectionTitle('Suggested Trees to Plant'),
                     const SizedBox(height: 10),
+                    if (user?.role == 'admin') ...[
+                      _SpeciesPhotoLibraryCard(
+                        speciesPhotos: _speciesPhotos,
+                        onManage: _manageSpeciesPhoto,
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                    if (_weatherContext != null) ...[
+                      _WeatherContextCard(weather: _weatherContext!),
+                      const SizedBox(height: 10),
+                    ] else if (_barangayCtrl.text.trim().isNotEmpty &&
+                        _barangayHasInventory != false) ...[
+                      const Text(
+                        'Weather context is unavailable for this barangay. It needs geolocated tree records and a reachable weather service.',
+                        style: TextStyle(color: kMuted, fontSize: 12),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
                     if (_suggestions.isEmpty)
-                      const EmptyState(
-                        message: 'No planting suggestions yet.',
+                      EmptyState(
+                        message: _barangayCtrl.text.trim().isNotEmpty &&
+                                _barangayHasInventory == false
+                            ? 'No inventory-based suggestions are available for this barangay.'
+                            : _barangayCtrl.text.trim().isNotEmpty
+                                ? 'No priority species gaps found for this barangay.'
+                                : 'No planting suggestions yet.',
                         icon: Icons.eco_outlined,
                       )
                     else
@@ -254,6 +348,162 @@ class _PlantingRecommendationsScreenState
                 ],
               ),
             ),
+    );
+  }
+}
+
+class _SpeciesPhotoLibraryCard extends StatelessWidget {
+  final List<Map<String, dynamic>> speciesPhotos;
+  final VoidCallback onManage;
+
+  const _SpeciesPhotoLibraryCard({
+    required this.speciesPhotos,
+    required this.onManage,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Verified species photos',
+              style: TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          Text(
+            speciesPhotos.isEmpty
+                ? 'No verified photos saved yet.'
+                : speciesPhotos
+                    .map((item) => item['species_name'].toString())
+                    .join(', '),
+            style: const TextStyle(color: kMuted, fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: onManage,
+            icon: const Icon(Icons.add_a_photo_outlined),
+            label: const Text('Add or replace species photo'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SpeciesPhotoSheet extends StatefulWidget {
+  const _SpeciesPhotoSheet();
+
+  @override
+  State<_SpeciesPhotoSheet> createState() => _SpeciesPhotoSheetState();
+}
+
+class _SpeciesPhotoSheetState extends State<_SpeciesPhotoSheet> {
+  final _nameCtrl = TextEditingController();
+  final _scientificCtrl = TextEditingController();
+  File? _photo;
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _scientificCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickPhoto() async {
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+      maxWidth: 1600,
+    );
+    if (picked != null) setState(() => _photo = File(picked.path));
+  }
+
+  Future<void> _save() async {
+    if (_nameCtrl.text.trim().isEmpty ||
+        _scientificCtrl.text.trim().isEmpty ||
+        _photo == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Enter both tree names and select a verified photo.'),
+      ));
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      final photoUrl = await api.uploadPhotoRequired(
+        _photo!,
+        purpose: 'planting_submission',
+      );
+      await api.saveSpeciesPhoto({
+        'species_name': _nameCtrl.text.trim(),
+        'scientific_name': _scientificCtrl.text.trim(),
+        'photo_url': photoUrl,
+      });
+      if (mounted) Navigator.pop(context, true);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Could not save species photo: $error'),
+          backgroundColor: kPoor,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: const BoxDecoration(
+          color: kBackground,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('Save verified species photo',
+                  style: TextStyle(
+                      color: kForeground,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900)),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _nameCtrl,
+                decoration: const InputDecoration(labelText: 'Common name'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _scientificCtrl,
+                decoration: const InputDecoration(labelText: 'Scientific name'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _saving ? null : _pickPhoto,
+                icon: const Icon(Icons.photo_library_outlined),
+                label: Text(_photo == null ? 'Choose photo' : 'Photo selected'),
+              ),
+              const SizedBox(height: 10),
+              ElevatedButton(
+                onPressed: _saving ? null : _save,
+                child: Text(_saving ? 'Saving…' : 'Save verified photo'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -551,6 +801,106 @@ class _AddPlantPrompt extends StatelessWidget {
   }
 }
 
+class _BarangayNeedCard extends StatelessWidget {
+  final Map<String, dynamic> item;
+  final VoidCallback onTap;
+
+  const _BarangayNeedCard({required this.item, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final gaps = (item['underrepresented_native_priority_species'] as List? ?? [])
+        .whereType<Map>()
+        .map((species) =>
+            '${species['species_name']} (${species['recorded_count']})')
+        .toList();
+    final photoMissing = item['missing_verified_photo_count'] ?? 0;
+    return Card(
+      color: kCard,
+      margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: kBorder),
+      ),
+      child: ListTile(
+        title: Text(item['barangay'].toString(),
+            style: const TextStyle(fontWeight: FontWeight.w800)),
+        subtitle: Text(
+          '${item['recorded_tree_count']} trees · '
+          '${item['recorded_species_count']} species recorded\n'
+          '0–1 recorded: ${gaps.isEmpty ? 'none from priority list' : gaps.join(', ')}'
+          '${photoMissing > 0 ? '\n$photoMissing verified photos needed' : ''}',
+          style: const TextStyle(color: kMuted, fontSize: 11),
+        ),
+        isThreeLine: true,
+        trailing: const Icon(Icons.chevron_right_rounded, color: kPrimary),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+class _NoInventoryNotice extends StatelessWidget {
+  final String barangay;
+  const _NoInventoryNotice({required this.barangay});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: kBorder),
+      ),
+      child: Text(
+        'No tree inventory records match "$barangay". Check the barangay name or add tree records before using inventory-based suggestions.',
+        style: const TextStyle(color: kMuted, fontSize: 12),
+      ),
+    );
+  }
+}
+
+class _WeatherContextCard extends StatelessWidget {
+  final Map<String, dynamic> weather;
+  const _WeatherContextCard({required this.weather});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Estimated local weather context',
+            style: TextStyle(color: kForeground, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            '${weather['mean_temperature_c']}°C average temperature · '
+            '${weather['mean_annual_rainfall_mm']} mm average annual rainfall '
+            '(${weather['period']})',
+            style: const TextStyle(color: kForeground, fontSize: 13),
+          ),
+          const SizedBox(height: 5),
+          const Text(
+            'Estimated by Open-Meteo from the center of available tree GPS records. '
+            'Suggestions still use inventory balance; species-specific climate '
+            'thresholds have not been added.',
+            style: TextStyle(color: kMuted, fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SuggestionCard extends StatelessWidget {
   final Map<String, dynamic> item;
   final bool canAdd;
@@ -586,15 +936,46 @@ class _SuggestionCard extends StatelessWidget {
                       fontSize: 16, fontWeight: FontWeight.w900),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(priority,
-                    style:
-                        TextStyle(color: color, fontWeight: FontWeight.w900)),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (item['photo_verified'] == true)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        'VERIFIED PHOTO',
+                        style: TextStyle(
+                          color: kHealthy,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  if (item['conservation_status'] != null &&
+                      item['conservation_status'] != 'Not Listed')
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        item['conservation_status'].toString().toUpperCase(),
+                        style: const TextStyle(
+                          color: kPoor,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(priority,
+                        style: TextStyle(
+                            color: color, fontWeight: FontWeight.w900)),
+                  ),
+                ],
               ),
             ],
           ),
@@ -617,6 +998,19 @@ class _SuggestionCard extends StatelessWidget {
               description: item['area_reason']?.toString() ??
                   item['reason']?.toString() ??
                   'Recommended planting suggestion.',
+            ),
+          ] else ...[
+            const SizedBox(height: 8),
+            const Text('No photo available.',
+                style: TextStyle(color: kMuted, fontSize: 11)),
+          ],
+          if (item['photo_missing'] == true) ...[
+            const SizedBox(height: 4),
+            Text(
+              images.isEmpty
+                  ? 'Verified species photo needed.'
+                  : 'This photo is not verified for the species.',
+              style: const TextStyle(color: kFair, fontSize: 11),
             ),
           ],
           const SizedBox(height: 8),
@@ -763,7 +1157,7 @@ List<String> _imageUrlsFor(Map<String, dynamic> item) {
       if (photoUrl.isNotEmpty && photoUrl != 'null') photoUrl,
       ...provided.map((e) => e.toString()),
     ].where((e) => e.trim().isNotEmpty).where((e) => e != 'null').toList();
-    if (urls.isNotEmpty) return urls;
+    return urls;
   }
   final name = (item['species_name'] ?? item['common_name'] ?? 'tree seedling')
       .toString()

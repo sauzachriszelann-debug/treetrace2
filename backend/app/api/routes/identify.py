@@ -216,22 +216,32 @@ async def identify_tree(
             # Keep the existing online AI pipeline available if local inference fails.
             # pass
 
+    # Preliminary EfficientNet-B0 inference is disabled until final evaluation.
+    # Keep the response field for compatibility with existing clients.
+    roboflow_candidate = None
+
     classify_species, get_local_status = _get_local_species_classifier()
     local_model = get_local_status() if get_local_status else {"ready": False}
 
     if local_model.get("ready") and classify_species:
         try:
-            return classify_species(image_bytes)
+            local_result = classify_species(image_bytes)
+            if isinstance(local_result, dict):
+                local_result["roboflow_candidate"] = roboflow_candidate
+            return local_result
         except Exception:
           # Keep the existing online AI pipeline available if local inference fails.
             pass
 
     try:
         result = await _pipeline_with_status(image_bytes, image_data, file.content_type)
+        if isinstance(result, dict):
+            result["roboflow_candidate"] = roboflow_candidate
         return result
     except Exception as exc:
         return {
             "not_identified": True,
+            "roboflow_candidate": roboflow_candidate,
             "common_name": "Unknown species",
             "scientific_name": "",
             "confidence": "Low",

@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, TreePine, Map, Plus, QrCode,
-  Users, BarChart3, LogOut, Leaf, ScanLine, Globe,
+  Users, BarChart3, LogOut, ScanLine, Globe,
   Network, WifiOff,
   FileText, ClipboardCheck, X, Sprout, CloudUpload, ClipboardList,
 } from "lucide-react";
@@ -71,9 +71,11 @@ export default function Sidebar({ user, mobileOpen = false, onMobileClose }) {
       >
         <div className="border-b border-sidebar-border px-6 py-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-primary">
-              <Leaf className="h-5 w-5 text-sidebar-primary-foreground" />
-            </div>
+            <img
+              src="/landing/logo.png"
+              alt="TreeTrace logo"
+              className="h-9 w-9 rounded-lg object-cover"
+            />
             <div className="min-w-0">
               <h1 className="font-fraunces text-xl font-semibold leading-none text-sidebar-primary">
                 TreeTrace

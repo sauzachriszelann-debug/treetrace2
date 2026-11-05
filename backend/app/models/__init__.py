@@ -3,6 +3,7 @@ from app.models.tree import Tree
 from app.models.health_log import HealthLog
 from app.models.evaluation_result import EvaluationTestResult
 from app.models.planting_recommendation import PlantingRecommendation
+from app.models.species_photo import SpeciesPhoto
 
 __all__ = [
     "User",
@@ -10,4 +11,5 @@ __all__ = [
     "HealthLog",
     "EvaluationTestResult",
     "PlantingRecommendation",
+    "SpeciesPhoto",
 ]

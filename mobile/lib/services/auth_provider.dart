@@ -134,11 +134,21 @@ class AuthProvider extends ChangeNotifier {
         _lastError = detail ??
             (error.response?.statusCode != null
                 ? 'Login failed with status ${error.response?.statusCode}.'
-                : 'Cannot reach the backend. Check internet or wake Render.');
+                : 'Cannot reach the backend. Check your connection and try again.');
       } else {
         _lastError = 'Login failed. Please try again.';
       }
-      debugPrint('DEBUG: login failed: $error');
+      // Keep credentials and request bodies out of logs. ApiService logs the
+      // resolved URI and transport failure details in debug builds.
+      if (error is DioException) {
+        debugPrint(
+          'Login failed: Dio ${error.type}; '
+          'httpStatus=${error.response?.statusCode}; '
+          'cause=${error.error.runtimeType}',
+        );
+      } else {
+        debugPrint('Login failed: ${error.runtimeType}');
+      }
       return false;
     }
   }

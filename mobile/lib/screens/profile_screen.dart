@@ -8,7 +8,7 @@ import '../models/models.dart';
 import 'upgrade_screen.dart';
 import 'project_evaluation_screen.dart';
 import 'my_submissions_screen.dart';
-import 'unknown_review_screen.dart';
+import 'tree_reviews_screen.dart';
 import 'users_screen.dart';
 import 'qr_labels_screen.dart';
 import 'reports_tools_screen.dart';
@@ -615,9 +615,8 @@ class _MoreAction {
 /// Phase 11F — the More-menu tile labels visible to [role], in display order.
 ///
 /// The backend is the authority and this list mirrors it exactly:
-/// - 'Unknown' opens UnknownReviewScreen -> GET /api/ai/unknown-species,
-///   require_admin (app/api/routes/identify.py). There is no staff-scoped
-///   equivalent, so it is admin-only.
+/// - 'Reviews' opens the staff Tree Reviews screen. Its Unknown Species
+///   tab is restricted to admins because the endpoint requires_admin.
 /// - 'Users' opens UsersScreen -> GET /api/users, require_admin
 ///   (app/api/routes/users.py). Admin-only.
 /// - QR Labels, Reports, Evaluation and Field Sync only touch endpoints any
@@ -639,7 +638,8 @@ List<String> moreMenuLabelsForRole(String? role) {
     ];
   }
   return [
-    if (role == 'admin') ...const ['Unknown', 'Users'],
+    if (role == 'admin') ...const ['Reviews', 'Users'],
+    if (role == 'field_worker') 'Reviews',
     ...const ['QR Labels', 'Reports', 'Evaluation', 'Field Sync'],
   ];
 }
@@ -657,12 +657,14 @@ class MoreActionsGrid extends StatelessWidget {
     required this.onOpenFieldSync,
     required this.onShowHistory,
     required this.onShowExpertReviews,
+    this.apiOverride,
   });
 
   final String? role;
   final VoidCallback onOpenFieldSync;
   final VoidCallback onShowHistory;
   final VoidCallback onShowExpertReviews;
+  final ApiService? apiOverride;
 
   @override
   Widget build(BuildContext context) {
@@ -687,13 +689,18 @@ class MoreActionsGrid extends StatelessWidget {
 
   _MoreAction _moreActionFor(BuildContext context, String label) {
     switch (label) {
-      case 'Unknown':
+      case 'Reviews':
         return _MoreAction(
           label,
-          Icons.help_outline_rounded,
+          Icons.fact_check_outlined,
           () => Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const UnknownReviewScreen()),
+            MaterialPageRoute(
+              builder: (_) => TreeReviewsScreen(
+                role: role,
+                apiOverride: apiOverride,
+              ),
+            ),
           ),
         );
       case 'Users':

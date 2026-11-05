@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { publicApiService } from "@/api/publicApi";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, LayersControl, LayerGroup } from "react-leaflet";
 import { Link, useNavigate } from "react-router-dom";
 import HealthBadge from "@/components/trees/HealthBadge";
 import { Leaf, TreePine, MapPin, Search, ScanLine, Map, List, ChevronRight } from "lucide-react";
@@ -23,7 +23,7 @@ L.Icon.Default.mergeOptions({
 const DEFAULT_CENTER = [7.3047, 125.6856];
 const STATUS_COLORS = { Healthy: "#10b981", Fair: "#f59e0b", Poor: "#ef4444" };
 
-function healthIcon(status) {
+export function healthIcon(status) {
   const color = STATUS_COLORS[status] || "#10b981";
   return L.divIcon({
     className: "custom-leaflet-marker",
@@ -82,9 +82,9 @@ export default function PublicPortal() {
   const poor    = allTrees.filter((t) => t.health_status === "Poor").length;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen max-w-full overflow-x-hidden bg-background">
       {/* Hero header */}
-      <header className="bg-[#2d5a27] text-white px-8 pt-8 pb-10">
+      <header className="bg-[#2d5a27] text-white px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-8 sm:pb-10">
         <div className="max-w-5xl mx-auto">
           <div className="inline-flex items-center gap-2 bg-white/15 rounded-lg px-3 py-1.5 mb-5">
             <div className="w-6 h-6 bg-white/20 rounded-md flex items-center justify-center">
@@ -92,7 +92,7 @@ export default function PublicPortal() {
             </div>
             <span className="text-white/90 text-sm font-medium">TreeTrace · Public Portal</span>
           </div>
-          <h1 className="font-fraunces text-4xl md:text-5xl font-bold leading-tight mb-3">
+          <h1 className="font-fraunces text-3xl sm:text-4xl md:text-5xl font-bold leading-tight mb-3">
             Panabo City<br />Tree Inventory
           </h1>
           <p className="text-white/75 text-base max-w-lg mb-6">
@@ -110,10 +110,10 @@ export default function PublicPortal() {
       </header>
 
       {/* Controls bar */}
-      <div className="bg-[#f5f5f0] border-b border-border px-8 py-4">
+      <div className="bg-[#f5f5f0] border-b border-border px-4 sm:px-6 lg:px-8 py-4">
         <div className="max-w-5xl mx-auto space-y-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative flex-1 min-w-[220px]">
+          <div className="grid grid-cols-2 sm:grid-cols-[minmax(220px,1fr)_10rem_auto] gap-3">
+            <div className="relative col-span-2 sm:col-span-1 min-w-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 className="pl-9 bg-white"
@@ -123,7 +123,7 @@ export default function PublicPortal() {
               />
             </div>
             <Select value={statusFilter} onValueChange={setStatus}>
-              <SelectTrigger className="w-40 bg-white">
+              <SelectTrigger className="w-full sm:w-40 bg-white">
                 <SelectValue placeholder="All Status" />
               </SelectTrigger>
               <SelectContent>
@@ -134,7 +134,7 @@ export default function PublicPortal() {
               </SelectContent>
             </Select>
             <Button
-              className="bg-[#2d5a27] hover:bg-[#234820] text-white flex items-center gap-2"
+              className="w-full sm:w-auto bg-[#2d5a27] hover:bg-[#234820] text-white flex items-center justify-center gap-2 whitespace-nowrap"
               onClick={() => navigate("/scan")}
             >
               <ScanLine className="w-4 h-4" />
@@ -142,11 +142,11 @@ export default function PublicPortal() {
             </Button>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1 bg-white rounded-lg border border-border p-1">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex w-fit items-center gap-1 bg-white rounded-lg border border-border p-1">
               <button
                 onClick={() => setView("map")}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
                   view === "map" ? "bg-white shadow-sm text-foreground border border-border" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -154,24 +154,24 @@ export default function PublicPortal() {
               </button>
               <button
                 onClick={() => setView("list")}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
                   view === "list" ? "bg-white shadow-sm text-foreground border border-border" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <List className="w-4 h-4" /> List View
               </button>
             </div>
-            <div className="flex items-center gap-4 text-sm">
-              <span className="flex items-center gap-1.5 text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs sm:text-sm">
+              <span className="flex items-center gap-1.5 whitespace-nowrap text-muted-foreground">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> Healthy
               </span>
-              <span className="flex items-center gap-1.5 text-muted-foreground">
+              <span className="flex items-center gap-1.5 whitespace-nowrap text-muted-foreground">
                 <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> Fair
               </span>
-              <span className="flex items-center gap-1.5 text-muted-foreground">
+              <span className="flex items-center gap-1.5 whitespace-nowrap text-muted-foreground">
                 <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" /> Poor
               </span>
-              <span className="text-muted-foreground text-xs">
+              <span className="whitespace-nowrap text-muted-foreground text-xs">
                 {view === "map" ? geoTrees.length : filtered.length} trees {view === "map" ? "mapped" : "found"}
               </span>
             </div>
@@ -180,7 +180,7 @@ export default function PublicPortal() {
       </div>
 
       {/* Content */}
-      <div className="max-w-5xl mx-auto px-8 py-6">
+      <div className="max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
         {isLoading ? (
           <div className="flex items-center justify-center h-64 text-muted-foreground">
             <div className="text-center">
@@ -198,11 +198,38 @@ export default function PublicPortal() {
                 </div>
               </div>
             ) : (
-              <MapContainer center={DEFAULT_CENTER} zoom={13} style={{ height: "100%", width: "100%" }}>
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-                  url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-                />
+              <MapContainer
+                center={DEFAULT_CENTER}
+                zoom={13}
+                minZoom={3}
+                maxZoom={20}
+                style={{ height: "100%", width: "100%" }}
+              >
+                <LayersControl position="topright">
+                  <LayersControl.BaseLayer checked name="Street map">
+                    <TileLayer
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      maxZoom={20}
+                    />
+                  </LayersControl.BaseLayer>
+                  <LayersControl.BaseLayer name="Satellite">
+                    <LayerGroup>
+                      <TileLayer
+                        attribution='Imagery &copy; <a href="https://www.esri.com/">Esri</a>, Maxar, Earthstar Geographics, and the GIS User Community'
+                        url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                        maxNativeZoom={19}
+                        maxZoom={20}
+                      />
+                      <TileLayer
+                        attribution='Labels &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+                        url={`https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png?key=${import.meta.env.VITE_CARTO_API_KEY || ""}`}
+                        maxZoom={20}
+                        zIndex={2}
+                      />
+                    </LayerGroup>
+                  </LayersControl.BaseLayer>
+                </LayersControl>
                 {geoTrees.map((tree) => (
                   <Marker key={tree.id} position={[tree.lat, tree.lng]} icon={healthIcon(tree.health_status)}>
                     <Popup>

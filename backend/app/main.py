@@ -8,7 +8,7 @@ from app.core.config import settings
 from app.api.routes import auth, trees, health_logs, users, storage, public, identify, evaluation, planting, tree_submissions
 
 # Import all models
-from app.models import user, tree, health_log, evaluation_result, planting_recommendation, tree_submission
+from app.models import user, tree, health_log, evaluation_result, planting_recommendation, tree_submission, species_photo
 from app.models.unknown_species import UnknownSpecies
 
 # --- REMOVED THE BLOCKING LINE FROM HERE ---
