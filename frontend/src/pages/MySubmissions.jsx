@@ -44,7 +44,7 @@ export default function MySubmissions() {
           scientific_name: submission.scientific_name || "",
           dbh_cm: submission.dbh_cm ?? "",
           height_m: submission.height_m ?? "",
-          health_status: submission.health_status || "Healthy",
+          health_status: submission.health_status || "Not assessed",
           barangay: submission.barangay || "",
           lat: submission.lat ?? "",
           lng: submission.lng ?? "",

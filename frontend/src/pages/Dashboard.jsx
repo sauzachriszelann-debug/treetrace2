@@ -42,6 +42,7 @@ export default function Dashboard() {
     healthy: trees.filter((t) => t.health_status === "Healthy").length,
     fair: trees.filter((t) => t.health_status === "Fair").length,
     poor: trees.filter((t) => t.health_status === "Poor").length,
+    notAssessed: trees.filter((t) => !["Healthy", "Fair", "Poor"].includes(t.health_status)).length,
     totalCarbon: trees.reduce((s, t) => s + (t.carbon_kg || 0), 0),
     gpsTagged: trees.filter((t) => t.lat && t.lng).length,
   };
@@ -50,6 +51,7 @@ export default function Dashboard() {
     { name: "Healthy", count: stats.healthy, color: "#10b981" },
     { name: "Fair", count: stats.fair, color: "#f59e0b" },
     { name: "Poor", count: stats.poor, color: "#ef4444" },
+    { name: "Not assessed", count: stats.notAssessed, color: "#94a3b8" },
   ];
 
   const recentTrees = trees.slice(0, 5);

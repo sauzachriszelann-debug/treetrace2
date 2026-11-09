@@ -13,7 +13,7 @@ from pydantic import BaseModel, field_validator
 
 from app.schemas.tree import TreeMeasurementInput
 
-_HEALTH_STATUSES = {"Healthy", "Fair", "Poor"}
+_HEALTH_STATUSES = {"Healthy", "Fair", "Poor", "Not assessed"}
 _SOURCES = {"web_form", "mobile", "ai_identify"}
 
 
@@ -25,7 +25,7 @@ class _SubmissionFields(TreeMeasurementInput):
     scientific_name: Optional[str] = None
     dbh_cm: Optional[float] = None
     height_m: Optional[float] = None
-    health_status: Optional[str] = "Healthy"
+    health_status: Optional[str] = "Not assessed"
     barangay: Optional[str] = None
     city: Optional[str] = "Panabo City"
     province: Optional[str] = "Davao del Norte"

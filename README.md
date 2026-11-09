@@ -841,3 +841,12 @@ Gallery prediction: YOLO runs first. If it returns no mask, AI can assess one cl
 Gallery trunk detection retries once on the lower two-thirds of the photo only when the full-image pass finds no mask. It keeps the model at 640 px and confidence 0.4, restores crop masks to original coordinates, and labels the detected portion. This retry is display-only and does not change Take Photo measurement geometry.
 
 Gallery resilience: partial trunk masks remain visible even when diagnostic width is unavailable; AI evaluates DBH and height independently. Unreadable local capture history falls back to the gallery prediction path. Upload size, request quota, access, timeout and server failures have distinct mobile messages. These changes do not bypass measured-photo validation.
+
+
+### Reviewed tree health
+
+New trees and submissions default to **Not assessed**. Healthy/Fair/Poor remain explicit staff assessments; existing recorded statuses are not backfilled. Missing mobile values are displayed neutrally. Generic disease/treatment cards have been removed from scan and public profiles; the legacy `common_problems` response remains an empty list. This phase does not introduce a bark or symptom classifier.
+
+Before deploying this feature against an existing PostgreSQL database, run `backend/migrations/0004_add_not_assessed_health.sql` and commit it. SQLAlchemy stores the enum member name `NotAssessed`; clients use `Not assessed`. The migration adds support without updating existing rows. Startup performs a read-only check and refuses an incompatible health schema rather than letting inventory writes fail later. Deploy the backend after the migration, then the clients. The migration has not been applied to the live database by this code change.
+
+Verification: backend `python -m pytest tests/test_health_assessment_defaults.py tests/test_gallery_size_prediction.py tests/test_dbh_photo.py tests/test_height_tilt.py -q`; frontend `npm test -- src/components/trees/HealthAssessment.test.jsx src/pages/__tests__/treeReviews.test.jsx` and `npm run build`; mobile `flutter test --no-pub test/health_assessment_test.dart test/tree_reviews_test.dart test/tree_detail_offline_test.dart`.

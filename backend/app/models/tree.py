@@ -12,6 +12,7 @@ class HealthStatus(str, enum.Enum):
     Healthy = "Healthy"
     Fair = "Fair"
     Poor = "Poor"
+    NotAssessed = "Not assessed"
 
 
 class Tree(Base):
@@ -40,7 +41,7 @@ class Tree(Base):
     carbon_kg = Column(Float, nullable=True)
 
     # Health
-    health_status = Column(Enum(HealthStatus), nullable=False, default=HealthStatus.Healthy)
+    health_status = Column(Enum(HealthStatus), nullable=False, default=HealthStatus.NotAssessed)
 
     # Location
     barangay = Column(String(120), nullable=True)

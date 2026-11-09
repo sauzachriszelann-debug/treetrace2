@@ -5,9 +5,12 @@ from datetime import date, datetime
 from pydantic import BaseModel, field_validator
 
 
+from app.schemas.tree import HealthStatusValue
+
+
 class HealthLogCreate(BaseModel):
     tree_id: int
-    condition: str
+    condition: HealthStatusValue
     notes: Optional[str] = None
     assessed_date: date
     dbh_cm: Optional[float] = None

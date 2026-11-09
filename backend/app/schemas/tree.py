@@ -1,9 +1,12 @@
 import math
 from datetime import date, datetime
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ValidationInfo, field_validator, model_validator
+
+
+HealthStatusValue = Literal["Healthy", "Fair", "Poor", "Not assessed"]
 
 
 class TreeMeasurementInput(BaseModel):
@@ -55,7 +58,7 @@ class TreeCreate(TreeMeasurementInput):
     scientific_name: Optional[str] = None
     dbh_cm: Optional[float] = None
     height_m: Optional[float] = None
-    health_status: str = "Healthy"
+    health_status: HealthStatusValue = "Not assessed"
     barangay: Optional[str] = None
     city: Optional[str] = "Panabo City"
     province: Optional[str] = "Davao del Norte"
@@ -72,7 +75,7 @@ class TreeUpdate(TreeMeasurementInput):
     scientific_name: Optional[str] = None
     dbh_cm: Optional[float] = None
     height_m: Optional[float] = None
-    health_status: Optional[str] = None
+    health_status: Optional[HealthStatusValue] = None
     barangay: Optional[str] = None
     city: Optional[str] = None
     province: Optional[str] = None
@@ -85,7 +88,7 @@ class TreeUpdate(TreeMeasurementInput):
 
     @model_validator(mode="after")
     def reject_explicit_null_measurements(self) -> "TreeUpdate":
-        for field_name in ("dbh_cm", "height_m"):
+        for field_name in ("dbh_cm", "height_m", "health_status"):
             if field_name in self.model_fields_set and getattr(self, field_name) is None:
                 raise ValueError(f"{field_name} cannot be null in a tree update.")
         return self

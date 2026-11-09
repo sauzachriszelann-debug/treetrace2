@@ -151,6 +151,7 @@ class _TreeListScreenState extends State<TreeListScreen> {
                         children: [
                           for (final s in [
                             'all',
+                            'Not assessed',
                             'Healthy',
                             'Fair',
                             'Poor',

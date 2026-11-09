@@ -488,6 +488,8 @@ def verify_submission_schema() -> None:
 # Move database creation to a startup event so it doesn't freeze the server
 @app.on_event("startup")
 def startup_event():
+    from app.db.health_schema import verify_health_status_schema
+    verify_health_status_schema(engine)
     verify_idempotency_schema()
     # G4: runs BEFORE create_all, so an unmigrated PostgreSQL database fails
     # boot instead of letting create_all build an unconstrained substitute.

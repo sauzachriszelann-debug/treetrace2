@@ -51,7 +51,7 @@ class TreeModel {
         dbhCm: (j['dbh_cm'] as num?)?.toDouble(),
         heightM: (j['height_m'] as num?)?.toDouble(),
         carbonKg: (j['carbon_kg'] as num?)?.toDouble(),
-        healthStatus: j['health_status'] ?? 'Healthy',
+        healthStatus: j['health_status'] ?? 'Not assessed',
         barangay: j['barangay'],
         city: j['city'],
         province: j['province'],
@@ -113,7 +113,7 @@ class HealthLogModel {
   factory HealthLogModel.fromJson(Map<String, dynamic> j) => HealthLogModel(
         id: j['id'],
         treeId: j['tree_id'],
-        condition: j['condition'] ?? 'Healthy',
+        condition: j['condition'] ?? 'Not assessed',
         notes: j['notes'],
         assessedDate: j['assessed_date'] ?? '',
         dbhCm: (j['dbh_cm'] as num?)?.toDouble(),

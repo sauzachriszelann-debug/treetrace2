@@ -550,7 +550,7 @@ class _RoutePlannerCard extends StatelessWidget {
       children: [
         TextField(controller: barangayCtrl, decoration: const InputDecoration(labelText: 'Barangay', prefixIcon: Icon(Icons.location_city_rounded))),
         const SizedBox(height: 9),
-        TextField(controller: healthCtrl, decoration: const InputDecoration(labelText: 'Health status', hintText: 'Healthy, Fair, Poor', prefixIcon: Icon(Icons.health_and_safety_rounded))),
+        TextField(controller: healthCtrl, decoration: const InputDecoration(labelText: 'Health status', hintText: 'Not assessed, Healthy, Fair, Poor', prefixIcon: Icon(Icons.health_and_safety_rounded))),
         const SizedBox(height: 9),
         TextField(controller: limitCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Limit', prefixIcon: Icon(Icons.pin_rounded))),
         const SizedBox(height: 12),

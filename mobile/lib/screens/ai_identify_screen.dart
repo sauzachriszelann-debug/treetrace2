@@ -1078,11 +1078,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        _buildEncyclopediaSection(
-          title: 'Common Problems',
-          icon: Icons.bug_report_outlined,
-          child: _buildProblemGallery(),
-        ),
+        const Text('Tree health is not assessed from species identification. A field worker must review its condition.'),
       ],
     );
   }
@@ -1122,69 +1118,6 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
         ),
       ),
     );
-  }
-
-  Widget _buildProblemGallery() {
-    final raw = _result?['common_problems'];
-    final problems = raw is List
-        ? raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
-        : <Map<String, dynamic>>[];
-    final items = problems.isNotEmpty
-        ? problems
-        : [
-            {
-              'name': 'Leaf spots',
-              'description':
-                  'Often linked to wet conditions or fungal infection. Remove badly affected leaves.',
-              'severity': 'Medium',
-              'image_url':
-                  'https://commons.wikimedia.org/wiki/Special:FilePath/Cherry%20Leaf%20Spot%202.jpg',
-            },
-            {
-              'name': 'Root stress',
-              'description':
-                  'Can happen from poor drainage, flooding, or compacted soil.',
-              'severity': 'High',
-              'image_url':
-                  'https://commons.wikimedia.org/wiki/Special:FilePath/2011.%20Laminated%20root%20rot%20in%20western%20red%20cedar.%20Zigzag%20Ranger%20District%2C%20Mt.%20Hood%20National%20Forest%2C%20Oregon.%20%2838723503075%29.jpg',
-            },
-            {
-              'name': 'Scale insects',
-              'description':
-                  'Watch for small bumps on stems or leaves and treat early.',
-              'severity': 'Low',
-              'image_url':
-                  'https://commons.wikimedia.org/wiki/Special:FilePath/Icerya%20purchasi%20407551030.jpg',
-            },
-          ];
-
-    return SizedBox(
-      height: 230,
-      child: PageView.builder(
-        controller: PageController(viewportFraction: 0.9),
-        itemCount: items.length,
-        itemBuilder: (_, index) {
-          final item = items[index];
-          return _ProblemPhotoCard(
-            title: (item['name'] ?? 'Common problem').toString(),
-            description: (item['description'] ?? '').toString(),
-            severity: (item['severity'] ?? 'Watch').toString(),
-            imageUrl: _problemImageUrl(item['image_url']?.toString(), index),
-          );
-        },
-      ),
-    );
-  }
-
-  String _problemImageUrl(String? value, int index) {
-    final cleaned = value?.trim();
-    if (cleaned != null && cleaned.startsWith('http')) return cleaned;
-    const onlineFallbacks = [
-      'https://commons.wikimedia.org/wiki/Special:FilePath/Cherry%20Leaf%20Spot%202.jpg',
-      'https://commons.wikimedia.org/wiki/Special:FilePath/2011.%20Laminated%20root%20rot%20in%20western%20red%20cedar.%20Zigzag%20Ranger%20District%2C%20Mt.%20Hood%20National%20Forest%2C%20Oregon.%20%2838723503075%29.jpg',
-      'https://commons.wikimedia.org/wiki/Special:FilePath/Icerya%20purchasi%20407551030.jpg',
-    ];
-    return onlineFallbacks[index % onlineFallbacks.length];
   }
 
   List<String> _imageList(dynamic value) {
@@ -1864,90 +1797,6 @@ class _GalleryFallback extends StatelessWidget {
   }
 }
 
-class _ProblemPhotoCard extends StatelessWidget {
-  final String title;
-  final String description;
-  final String severity;
-  final String imageUrl;
-  const _ProblemPhotoCard({
-    required this.title,
-    required this.description,
-    required this.severity,
-    required this.imageUrl,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = severity.toLowerCase() == 'high'
-        ? kPoor
-        : severity.toLowerCase() == 'medium'
-            ? kFair
-            : kHealthy;
-    return Container(
-      margin: const EdgeInsets.only(right: 10),
-      decoration: BoxDecoration(
-        color: kBackground,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: kBorder),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Image.network(
-              imageUrl,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _GalleryFallback(
-                icon: Icons.bug_report_outlined,
-                label: 'Online image unavailable',
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w900, fontSize: 13)),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(severity,
-                          style: TextStyle(
-                              color: color,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w900)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 5),
-                Text(description,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        color: kMutedFg, fontSize: 11.5, height: 1.25)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _CareTile extends StatelessWidget {
   final IconData icon;

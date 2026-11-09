@@ -64,7 +64,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
   final _notesCtrl = TextEditingController();
 
   File? _photo;
-  String _health = 'Healthy';
+  String _health = 'Not assessed';
   bool _saving = false;
   bool _identifying = false;
   bool _gpsLoading = false;
@@ -1677,7 +1677,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
               decoration: const InputDecoration(
                   prefixIcon:
                       Icon(Icons.favorite_outline, size: 18, color: kMutedFg)),
-              items: ['Healthy', 'Fair', 'Poor']
+              items: ['Not assessed', 'Healthy', 'Fair', 'Poor']
                   .map((s) => DropdownMenuItem(
                       value: s,
                       child: Row(children: [

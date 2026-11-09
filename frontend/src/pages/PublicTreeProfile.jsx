@@ -1,13 +1,12 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { publicApiService } from "@/api/publicApi";
-import HealthBadge from "@/components/trees/HealthBadge";
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import {
   MapPin, Ruler, Leaf, Calendar, TreePine, Droplets,
   Sun, Thermometer, Wind, Shield, BookOpen, Star,
-  HelpCircle, AlertTriangle, Sprout, History, ChevronDown, ChevronUp,
+  HelpCircle, Sprout, History, ChevronDown, ChevronUp,
   ArrowLeft
 } from "lucide-react";
 
@@ -176,10 +175,9 @@ export default function PublicTreeProfile() {
           <div className={`px-3 py-2 rounded-full text-[11px] font-bold shadow-sm sm:text-xs ${
             tree.health_status === "Healthy" ? "bg-emerald-500 text-white" :
             tree.health_status === "Fair"    ? "bg-amber-500 text-white" :
-            "bg-red-500 text-white"
+            tree.health_status === "Poor" ? "bg-red-500 text-white" : "bg-slate-500 text-white"
           }`}>
-            {tree.health_status === "Healthy" ? "✓ This plant looks Healthy!" :
-             tree.health_status === "Fair"    ? "⚠ Fair condition" : "⚠ Poor condition"}
+            {`Health status: ${tree.health_status || "Not assessed"}`}
           </div>
         </div>
 
@@ -357,26 +355,7 @@ export default function PublicTreeProfile() {
               </div>
             )}
 
-            {/* Common Problems */}
-            {wiki.common_problems?.length > 0 && (
-              <div className="mx-4 bg-white rounded-2xl overflow-hidden border border-[#e8ede6]">
-                <Section icon={AlertTriangle} title="Common Problems">
-                  {wiki.common_problems.map((p, i) => (
-                    <div key={i} className="mb-3 last:mb-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-semibold text-[#1a2e1a]">{p.name}</span>
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                          p.severity === "High"   ? "bg-red-100 text-red-700" :
-                          p.severity === "Medium" ? "bg-amber-100 text-amber-700" :
-                          "bg-green-100 text-green-700"
-                        }`}>{p.severity}</span>
-                      </div>
-                      <p className="text-xs text-[#6b8f71] leading-relaxed">{p.description}</p>
-                    </div>
-                  ))}
-                </Section>
-              </div>
-            )}
+
           </div>
         )}
 
@@ -487,7 +466,7 @@ export default function PublicTreeProfile() {
                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
                           log.condition === "Healthy" ? "bg-emerald-100 text-emerald-700" :
                           log.condition === "Fair"    ? "bg-amber-100 text-amber-700" :
-                          "bg-red-100 text-red-700"
+                          log.condition === "Poor" ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-700"
                         }`}>{log.condition}</span>
                       </div>
                     </div>

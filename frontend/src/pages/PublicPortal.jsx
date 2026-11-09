@@ -21,10 +21,10 @@ L.Icon.Default.mergeOptions({
 });
 
 const DEFAULT_CENTER = [7.3047, 125.6856];
-const STATUS_COLORS = { Healthy: "#10b981", Fair: "#f59e0b", Poor: "#ef4444" };
+const STATUS_COLORS = { "Not assessed": "#94a3b8", Healthy: "#10b981", Fair: "#f59e0b", Poor: "#ef4444" };
 
 export function healthIcon(status) {
-  const color = STATUS_COLORS[status] || "#10b981";
+  const color = STATUS_COLORS[status] || "#94a3b8";
   return L.divIcon({
     className: "custom-leaflet-marker",
     html: `
@@ -128,7 +128,8 @@ export default function PublicPortal() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="Healthy">Healthy</SelectItem>
+                <SelectItem value="Not assessed">Not assessed</SelectItem>
+                  <SelectItem value="Healthy">Healthy</SelectItem>
                 <SelectItem value="Fair">Fair</SelectItem>
                 <SelectItem value="Poor">Poor</SelectItem>
               </SelectContent>
@@ -170,6 +171,9 @@ export default function PublicPortal() {
               </span>
               <span className="flex items-center gap-1.5 whitespace-nowrap text-muted-foreground">
                 <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" /> Poor
+              </span>
+              <span className="flex items-center gap-1.5 whitespace-nowrap text-muted-foreground">
+                <span className="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block" /> Not assessed
               </span>
               <span className="whitespace-nowrap text-muted-foreground text-xs">
                 {view === "map" ? geoTrees.length : filtered.length} trees {view === "map" ? "mapped" : "found"}

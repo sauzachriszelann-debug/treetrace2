@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 export default function HealthLogForm({ onSubmit, onCancel }) {
     const [form, setForm] = useState({
-        condition: "Healthy",
+        condition: "Not assessed",
         assessed_date: new Date().toISOString().split("T")[0],
         notes: "",
         dbh_cm: "",
@@ -61,6 +61,7 @@ export default function HealthLogForm({ onSubmit, onCancel }) {
                     <Select value={form.condition} onValueChange={v => set("condition", v)}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
+                            <SelectItem value="Not assessed">Not assessed</SelectItem>
                             <SelectItem value="Healthy">Healthy</SelectItem>
                             <SelectItem value="Fair">Fair</SelectItem>
                             <SelectItem value="Poor">Poor</SelectItem>

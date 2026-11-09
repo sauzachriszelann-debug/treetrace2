@@ -539,27 +539,8 @@ def _build_wiki(
         },
     ]
 
-    # Common problems
-    common_problems = [
-        {
-            "name":        "Leaf Blight",
-            "description": "Brown spots on leaves caused by fungal infection during wet season. Remove affected leaves and apply copper-based fungicide.",
-            "severity":    "Medium",
-            "image_url":   "https://commons.wikimedia.org/wiki/Special:FilePath/Cherry%20Leaf%20Spot%202.jpg",
-        },
-        {
-            "name":        "Root Rot",
-            "description": "Caused by overwatering or poor drainage. Ensure soil drains well and reduce watering frequency.",
-            "severity":    "High",
-            "image_url":   "https://commons.wikimedia.org/wiki/Special:FilePath/2011.%20Laminated%20root%20rot%20in%20western%20red%20cedar.%20Zigzag%20Ranger%20District%2C%20Mt.%20Hood%20National%20Forest%2C%20Oregon.%20%2838723503075%29.jpg",
-        },
-        {
-            "name":        "Scale Insects",
-            "description": "Small brown bumps on stems and leaves. Treat with neem oil or insecticidal soap spray.",
-            "severity":    "Low",
-            "image_url":   "https://commons.wikimedia.org/wiki/Special:FilePath/Icerya%20purchasi%20407551030.jpg",
-        },
-    ]
+    # Compatibility field only: species information is not photo diagnosis.
+    common_problems = []
 
     # Uses
     description = p.get("description", "") if p else ""

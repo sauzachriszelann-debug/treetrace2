@@ -418,7 +418,7 @@ def approve_submission(
         "scientific_name": submission.scientific_name,
         "dbh_cm": submission.dbh_cm,
         "height_m": submission.height_m,
-        "health_status": submission.health_status or "Healthy",
+        "health_status": submission.health_status or "Not assessed",
         "barangay": submission.barangay,
         "city": submission.city or "Panabo City",
         "province": submission.province or "Davao del Norte",

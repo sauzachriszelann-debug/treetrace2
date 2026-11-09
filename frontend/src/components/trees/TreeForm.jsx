@@ -99,7 +99,7 @@ export default function TreeForm({
     scientific_name: "",
     dbh_cm: "",
     height_m: "",
-    health_status: "Healthy",
+    health_status: "Not assessed",
     barangay: "",
     city: "Panabo City",
     province: "Davao del Norte",
@@ -836,6 +836,7 @@ export default function TreeForm({
           <Select value={form.health_status} onValueChange={(v) => set("health_status", v)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
+              <SelectItem value="Not assessed">Not assessed</SelectItem>
               <SelectItem value="Healthy">Healthy</SelectItem>
               <SelectItem value="Fair">Fair</SelectItem>
               <SelectItem value="Poor">Poor</SelectItem>

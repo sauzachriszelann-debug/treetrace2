@@ -81,12 +81,12 @@ export default function QRManager() {
   const statusColor = (s) =>
     s === "Healthy" ? "bg-emerald-100 text-emerald-700 border-emerald-200"
     : s === "Fair"  ? "bg-amber-100 text-amber-700 border-amber-200"
-    :                  "bg-red-100 text-red-700 border-red-200";
+    : s === "Poor" ? "bg-red-100 text-red-700 border-red-200" : "bg-slate-100 text-slate-700 border-slate-200";
 
   const statusDot = (s) =>
     s === "Healthy" ? "bg-emerald-500"
     : s === "Fair"  ? "bg-amber-500"
-    :                  "bg-red-500";
+    : s === "Poor" ? "bg-red-500" : "bg-slate-400";
 
   return (
     <div className="p-8">

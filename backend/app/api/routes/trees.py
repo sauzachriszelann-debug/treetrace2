@@ -646,6 +646,7 @@ def tree_stats(
         "healthy": healthy,
         "fair": fair,
         "poor": poor,
+        "not_assessed": total - healthy - fair - poor,
         "total_carbon_kg": round(total_carbon, 2),
         "gps_tagged": gps_tagged,
     }

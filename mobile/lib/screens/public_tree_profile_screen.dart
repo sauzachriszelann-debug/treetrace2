@@ -233,7 +233,7 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
         if (_wiki?['characteristics'] != null)
           _buildWikiSection('⭐ Characteristics', _wiki!['characteristics']),
         const SizedBox(height: 16),
-        _buildCommonProblems(),
+
         const SizedBox(height: 100),
       ],
     );
@@ -551,39 +551,6 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
     );
   }
 
-  Widget _buildCommonProblems() {
-    final raw = _wiki?['common_problems'];
-    final problems = raw is List
-        ? raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
-        : <Map<String, dynamic>>[];
-    if (problems.isEmpty) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Common Problems',
-            style:
-                GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18)),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 230,
-          child: PageView.builder(
-            controller: PageController(viewportFraction: 0.9),
-            itemCount: problems.length,
-            itemBuilder: (_, index) {
-              final item = problems[index];
-              return _ProblemCard(
-                title: item['name']?.toString() ?? 'Common problem',
-                description: item['description']?.toString() ?? '',
-                severity: item['severity']?.toString() ?? 'Watch',
-                imageUrl: item['image_url']?.toString() ?? '',
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildHowTos() {
     final raw = _wiki?['how_tos'];
     final items = raw is List
@@ -659,96 +626,12 @@ class _PublicHealthLog {
 
   factory _PublicHealthLog.fromJson(Map<String, dynamic> json) {
     return _PublicHealthLog(
-      condition: json['condition'] ?? 'Healthy',
+      condition: json['condition'] ?? 'Not assessed',
       assessedDate: json['assessed_date'] ?? '',
     );
   }
 }
 
-class _ProblemCard extends StatelessWidget {
-  final String title;
-  final String description;
-  final String severity;
-  final String imageUrl;
-
-  const _ProblemCard({
-    required this.title,
-    required this.description,
-    required this.severity,
-    required this.imageUrl,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = severity.toLowerCase() == 'high'
-        ? kPoor
-        : severity.toLowerCase() == 'medium'
-            ? kFair
-            : kHealthy;
-    return Container(
-      margin: const EdgeInsets.only(right: 10),
-      decoration: BoxDecoration(
-        color: kCard,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: kBorder),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: imageUrl.startsWith('http')
-                ? CachedNetworkImage(
-                    imageUrl: imageUrl,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorWidget: (_, __, ___) =>
-                        const Icon(Icons.bug_report_outlined, color: kMutedFg),
-                  )
-                : const Center(
-                    child: Icon(Icons.bug_report_outlined, color: kMutedFg)),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                        child: Text(title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(
-                                fontWeight: FontWeight.w800, fontSize: 13))),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                          color: color.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(999)),
-                      child: Text(severity,
-                          style: TextStyle(
-                              color: color,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w900)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 5),
-                Text(description,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        color: kMutedFg, fontSize: 11.5, height: 1.25)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _GuideCard extends StatelessWidget {
   final String title;

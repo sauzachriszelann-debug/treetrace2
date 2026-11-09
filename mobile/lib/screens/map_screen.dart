@@ -372,7 +372,7 @@ class _MapScreenState extends State<MapScreen> {
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
-                children: ['all', 'Healthy', 'Fair', 'Poor'].map((status) {
+                children: ['all', 'Not assessed', 'Healthy', 'Fair', 'Poor'].map((status) {
                   final isSelected = _filter == status;
                   return Padding(
                     padding: const EdgeInsets.only(right: 8),
@@ -430,7 +430,8 @@ class _MapScreenState extends State<MapScreen> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _legendItem('Healthy', kHealthy),
+              _legendItem('Not assessed', kMutedFg),
+                  _legendItem('Healthy', kHealthy),
               const SizedBox(width: 16),
               _legendItem('Fair', kFair),
               const SizedBox(width: 16),

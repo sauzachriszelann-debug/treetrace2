@@ -76,7 +76,7 @@ class TreeSubmission(Base):
     scientific_name = Column(String(150), nullable=True)
     dbh_cm = Column(Float, nullable=True)
     height_m = Column(Float, nullable=True)
-    health_status = Column(String(40), nullable=True, default="Healthy")
+    health_status = Column(String(40), nullable=True, default="Not assessed")
     barangay = Column(String(120), nullable=True)
     city = Column(String(120), nullable=True, default="Panabo City")
     province = Column(String(120), nullable=True, default="Davao del Norte")

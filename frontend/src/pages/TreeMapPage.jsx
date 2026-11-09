@@ -52,6 +52,7 @@ function InternalTreeMap() {
       {/* Summary bar */}
       <div className="flex gap-4 mb-4 text-sm">
         {[
+          { label: "Not assessed", color: "bg-slate-400" },
           { label: "Healthy", color: "bg-emerald-500" },
           { label: "Fair", color: "bg-amber-500" },
           { label: "Poor", color: "bg-red-500" },

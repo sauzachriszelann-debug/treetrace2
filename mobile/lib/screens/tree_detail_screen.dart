@@ -484,7 +484,7 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
                     DropdownButtonFormField<String>(
                       value: health,
                       decoration: const InputDecoration(labelText: 'Health'),
-                      items: ['Healthy', 'Fair', 'Poor']
+                      items: ['Not assessed', 'Healthy', 'Fair', 'Poor']
                           .map((item) =>
                               DropdownMenuItem(value: item, child: Text(item)))
                           .toList(),
@@ -1001,7 +1001,7 @@ class _HealthLogEntrySheetState extends State<HealthLogEntrySheet> {
                   labelText: 'Condition',
                   prefixIcon: Icon(Icons.favorite_outline_rounded),
                 ),
-                items: ['Healthy', 'Fair', 'Poor']
+                items: ['Not assessed', 'Healthy', 'Fair', 'Poor']
                     .map((item) =>
                         DropdownMenuItem(value: item, child: Text(item)))
                     .toList(),

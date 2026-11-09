@@ -172,7 +172,7 @@ void main() {
       home: TreeReviewsScreen(role: 'admin', apiOverride: _service(adapter)),
     ));
     await tester.pumpAndSettle();
-    await tester.drag(find.byType(ListView).first, const Offset(0, -350));
+    await tester.ensureVisible(find.text('Approve').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Approve').last);
     await tester.pumpAndSettle();
@@ -190,7 +190,7 @@ void main() {
       home: TreeReviewsScreen(role: 'admin', apiOverride: _service(adapter)),
     ));
     await tester.pumpAndSettle();
-    await tester.drag(find.byType(ListView).first, const Offset(0, -350));
+    await tester.ensureVisible(find.text('Approve').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Approve').last);
     await tester.pumpAndSettle();
@@ -206,7 +206,7 @@ void main() {
           role: 'field_worker', apiOverride: _service(adapter)),
     ));
     await tester.pumpAndSettle();
-    await tester.drag(find.byType(ListView).first, const Offset(0, -350));
+    await tester.ensureVisible(find.text('Reject').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Reject').last);
     await tester.pumpAndSettle();
@@ -240,7 +240,7 @@ void main() {
       home: TreeReviewsScreen(role: 'admin', apiOverride: _service(adapter)),
     ));
     await tester.pumpAndSettle();
-    await tester.drag(find.byType(ListView).first, const Offset(0, -350));
+    await tester.ensureVisible(find.text('Link existing tree').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Link existing tree').last);
     await tester.pumpAndSettle();
@@ -263,7 +263,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Rejected').first);
     await tester.pumpAndSettle();
-    await tester.drag(find.byType(ListView).first, const Offset(0, -350));
+    await tester.ensureVisible(find.text('Reopen').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Reopen').last);
     await tester.pumpAndSettle();

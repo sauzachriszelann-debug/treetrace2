@@ -487,6 +487,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                     child: Column(children: [
 
+                      _HealthBar('Not assessed', _trees.where((t) => !['Healthy', 'Fair', 'Poor'].contains(t.healthStatus)).length, _trees.length, kMutedFg,
+                          onTap: () => _openTreeInventory(status: 'Not assessed')),
+                      const SizedBox(height: 10),
                       _HealthBar('Healthy', healthy, _trees.length, kHealthy,
                           onTap: () =>
                               _openTreeInventory(status: 'Healthy')),

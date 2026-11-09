@@ -76,7 +76,8 @@ export default function TreeList() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="Healthy">Healthy</SelectItem>
+            <SelectItem value="Not assessed">Not assessed</SelectItem>
+                  <SelectItem value="Healthy">Healthy</SelectItem>
             <SelectItem value="Fair">Fair</SelectItem>
             <SelectItem value="Poor">Poor</SelectItem>
             <SelectItem value="attention">Need Attention</SelectItem>
