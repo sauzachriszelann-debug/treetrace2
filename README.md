@@ -722,7 +722,9 @@ The red preview shows trunk detection only. Diagnostic width is in uploaded-imag
 pixels at the mask midpoint, NOT a known 1.3 m row or a measured DBH. Missing or
 clipped trunks prevent the visual prediction request. The separately configured
 existing Gemini connection sees the photo and target-trunk pixel bounds; it is
-instructed to abstain when physical scale or relevant tree parts are unsupported.
+instructed to abstain when no plausible visible reference or relevant tree parts
+are available. Typical reference dimensions may be assumed only when explicitly
+disclosed as unverified assumptions.
 No new model weights, credentials or deployment settings are introduced.
 
 Responses contain `predicted_dbh_cm` / `predicted_height_m`, never measured
@@ -763,3 +765,32 @@ flutter test --no-pub test/photo_capture_metadata_store_test.dart test/gallery_t
 This endpoint must be deployed before the updated gallery card can produce
 predictions. Passing mocked tests does not prove live inference or field accuracy.
 The earlier original-photo HTTP 413 issue for metric captures remains separate.
+
+### Gallery diagnostics and assumed visual references
+
+The gallery predictor can now use an assumed typical dimension of an actually
+visible recognizable object (for example a tire, doorway, vehicle or roofline).
+These are not universal or measured dimensions. Each non-null prediction must
+provide its reference object's name, positive finite assumed dimension in metres,
+visual evidence and an uncertainty statement. The response returns those details
+in `assumptions`; the mobile prediction card displays them. A prediction without
+that disclosure is rejected. Hidden base/top and invalid-number rules still apply.
+Nothing fills missing reference objects or makes a predicted distance available.
+YOLO still detects pixels only; sensor-based camera measurements are unchanged.
+
+Gallery provider calls now request JSON and allow more output tokens. Parsing
+combines non-thought text parts rather than assuming the first part is text.
+Empty, blocked, truncated and malformed responses, missing credentials,
+HTTP access/model/request errors, quota limits, connection failures and timeouts
+return controlled error codes and plain-language reasons. No provider URLs,
+API-key values, raw error bodies, thought text or images are exposed in diagnostics.
+No retry is made for quota or credential errors. Existing species/model settings
+and the camera measurement routes are not modified by these gallery-only changes.
+The generic provider exception handler cannot establish why an older deployment
+failed; the updated deployment must be tested with a real request to learn that.
+
+Provider response fields: https://ai.google.dev/api/generate-content
+JSON output: https://ai.google.dev/gemini-api/docs/structured-output
+
+These changes do not validate assumed-reference accuracy. Compare experimental
+DBH predictions against tape and height against a clinometer before field use.

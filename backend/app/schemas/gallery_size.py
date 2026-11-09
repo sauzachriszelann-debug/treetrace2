@@ -13,6 +13,8 @@ class GallerySizeResponse(BaseModel):
     trunk_detected: bool = False
     trunk_width_px: Optional[float] = None
     preview_png: Optional[str] = None
+    error_code: Optional[str] = None
+    assumptions: list[str] = Field(default_factory=list)
     reason: str
     note: str = ('Unvalidated prediction; may be inaccurate. Experimental estimate: '
                  'validate DBH against tape and height against a clinometer.')

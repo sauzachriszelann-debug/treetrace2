@@ -115,9 +115,16 @@ void main() {
         'predicted_dbh_cm': valid ? 23 : 'bad',
         'predicted_height_m': valid ? 9 : double.nan,
         'reason': 'Visual prediction only.',
+        'assumptions': [
+          'Assumed visible tire dimension: 0.6 m; perspective uncertain.'
+        ],
       };
       await open(tester, (_, __) async => throw StateError('Must not measure'));
       expect(find.text('AI-predicted size'), findsOneWidget);
+      expect(
+          find.text(
+              'Assumed visible tire dimension: 0.6 m; perspective uncertain.'),
+          findsOneWidget);
       expect(find.text('Predicted DBH (cm): ${valid ? '23' : 'Unavailable'}'),
           findsOneWidget);
       expect(find.text('Predicted height (m): ${valid ? '9' : 'Unavailable'}'),

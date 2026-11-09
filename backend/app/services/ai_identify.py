@@ -1052,25 +1052,97 @@ async def _pipeline_with_status(image_bytes: bytes, image_b64: str, content_type
     return result
 
 
+class GalleryVisionError(RuntimeError):
+    """Only controlled diagnostics: never expose credentials, URLs or image data."""
+    REASONS = {
+        "missing_key": "Gallery prediction API key is not configured on this deployment.",
+        "model_unavailable": "The configured gallery AI model is unavailable.",
+        "request_rejected": "The AI provider rejected the gallery request format.",
+        "access_denied": "The AI provider rejected the configured credentials or permissions.",
+        "quota_exceeded": "Gallery AI quota or rate limit reached. Try again later.",
+        "provider_busy": "The gallery AI provider is temporarily unavailable.",
+        "provider_error": "The gallery AI provider returned an unexpected HTTP error.",
+        "timeout": "Gallery AI request timed out. Try again later.",
+        "connection_error": "Could not connect to the gallery AI provider.",
+        "blocked_response": "The AI provider did not allow a prediction for this photo.",
+        "truncated_response": "The gallery AI response was cut off before completion.",
+        "empty_response": "The gallery AI returned no prediction text.",
+        "invalid_response": "The gallery AI returned an unreadable prediction format.",
+    }
+    def __init__(self, code):
+        self.code = code if code in self.REASONS else "provider_error"
+        self.reason = self.REASONS[self.code]
+        super().__init__(self.reason)
+
+
+def _parse_gallery_vision_response(body):
+    if not isinstance(body, dict):
+        raise GalleryVisionError("invalid_response")
+    if body.get("promptFeedback", {}).get("blockReason"):
+        raise GalleryVisionError("blocked_response")
+    candidates = body.get("candidates") or []
+    if not isinstance(candidates, list) or not candidates:
+        raise GalleryVisionError("empty_response")
+    candidate = candidates[0]
+    if not isinstance(candidate, dict):
+        raise GalleryVisionError("invalid_response")
+    finish = candidate.get("finishReason")
+    if finish == "MAX_TOKENS":
+        raise GalleryVisionError("truncated_response")
+    if finish and finish != "STOP":
+        raise GalleryVisionError("blocked_response")
+    parts = candidate.get("content", {}).get("parts") or []
+    if not isinstance(parts, list):
+        raise GalleryVisionError("invalid_response")
+    # Text may be split across parts or preceded by a non-text/thought part.
+    raw = "".join(part["text"] for part in parts
+                  if isinstance(part, dict) and part.get("thought") is not True
+                  and isinstance(part.get("text"), str)).strip()
+    if not raw:
+        raise GalleryVisionError("empty_response")
+    raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw).strip()
+    try:
+        result = json.loads(raw)
+    except (ValueError, TypeError):
+        raise GalleryVisionError("invalid_response") from None
+    if not isinstance(result, dict):
+        raise GalleryVisionError("invalid_response")
+    return result
+
+
 async def gallery_vision_prediction(image_b64: str, content_type: str, prompt: str):
-    """Separate gallery-only request; no measured DBH fallback or species defaults."""
+    """Separate gallery request, with safe diagnostics and no numeric defaults."""
     if not GEMINI_API_KEY:
-        return None
+        raise GalleryVisionError("missing_key")
     payload = {"contents": [{"parts": [{"text": prompt},
         {"inline_data": {"mime_type": content_type, "data": image_b64}}]}],
-        "generationConfig": {"temperature": 0, "maxOutputTokens": 700}}
+        "generationConfig": {"temperature": 0, "maxOutputTokens": 2048,
+                             "responseMimeType": "application/json"}}
+    last_code = "model_unavailable"
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             for model in _gemini_candidate_models():
                 response = await client.post(
                     f"{_gemini_endpoint(model)}?key={GEMINI_API_KEY}", json=payload)
-                if response.status_code == 200:
-                    raw = response.json()["candidates"][0]["content"]["parts"][0]["text"]
-                    raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip())
-                    result = json.loads(raw)
-                    return result if isinstance(result, dict) else None
-                if response.status_code not in (400, 403, 404):
+                status = response.status_code
+                if status == 200:
+                    try:
+                        return _parse_gallery_vision_response(response.json())
+                    except GalleryVisionError:
+                        raise
+                    except (ValueError, TypeError, AttributeError):
+                        raise GalleryVisionError("invalid_response") from None
+                last_code = ("quota_exceeded" if status == 429 else
+                             "access_denied" if status in (401, 403) else
+                             "request_rejected" if status == 400 else
+                             "model_unavailable" if status == 404 else
+                             "provider_busy" if status >= 500 else "provider_error")
+                if status not in (400, 404):
                     break
-    except Exception:
-        pass
-    return None
+    except GalleryVisionError:
+        raise
+    except httpx.TimeoutException:
+        raise GalleryVisionError("timeout") from None
+    except httpx.HTTPError:
+        raise GalleryVisionError("connection_error") from None
+    raise GalleryVisionError(last_code)

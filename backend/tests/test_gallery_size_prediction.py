@@ -57,6 +57,11 @@ def model(monkeypatch):
     return predict
 
 
+def reference():
+    return {'assumption': 'Unmeasured tire size; perspective remains uncertain.',
+            'reference': {'object': 'visible tire', 'dimension_m': 0.6, 'assumed': True}}
+
+
 def run():
     return immediate(service.predict_gallery_size(photo(), 'image/jpeg')).model_dump()
 
@@ -70,8 +75,8 @@ def assert_not_measured(result):
 def test_model_detects_pixels_and_vision_predicts_separate_units(monkeypatch, model):
     provider = AsyncMock(return_value={
         'base_visible': True, 'top_visible': True,
-        'dbh': {'value': 23.2, 'evidence': 'visible trunk and nearby scale cue'},
-        'height': {'value': 9.4, 'evidence': 'visible tree and scale cue'},
+        'dbh': {'value': 23.2, 'evidence': 'visible trunk and nearby scale cue', **reference()},
+        'height': {'value': 9.4, 'evidence': 'visible tree and scale cue', **reference()},
     })
     monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', provider)
     result = run()
@@ -79,6 +84,8 @@ def test_model_detects_pixels_and_vision_predicts_separate_units(monkeypatch, mo
     assert result['predicted_dbh_cm'] == 23
     assert result['predicted_height_m'] == 9
     assert result['trunk_width_px'] == 100  # Not converted to centimetres.
+    assert len(result['assumptions']) == 2
+    assert '0.6 m' in result['assumptions'][0]
     assert model.call_count == 1
     Image.open(io.BytesIO(base64.b64decode(result['preview_png']))).verify()
     prompt = provider.call_args.args[2]
@@ -90,8 +97,8 @@ def test_model_detects_pixels_and_vision_predicts_separate_units(monkeypatch, mo
 def test_bad_values_never_become_defaults(monkeypatch, model, value):
     monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', AsyncMock(return_value={
         'base_visible': True, 'top_visible': True,
-        'dbh': {'value': value, 'evidence': 'cue'},
-        'height': {'value': value, 'evidence': 'cue'}}))
+        'dbh': {'value': value, 'evidence': 'cue', **reference()},
+        'height': {'value': value, 'evidence': 'cue', **reference()}}))
     result = run()
     assert result['status'] == 'cannot_estimate'
     assert result['predicted_dbh_cm'] is None and result['predicted_height_m'] is None
@@ -104,7 +111,7 @@ def test_bad_values_never_become_defaults(monkeypatch, model, value):
 def test_hidden_parts_are_not_reconstructed(monkeypatch, model, base, top, dbh, height):
     monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', AsyncMock(return_value={
         'base_visible': base, 'top_visible': top,
-        'dbh': {'value': 20, 'evidence': 'cue'}, 'height': {'value': 10, 'evidence': 'cue'}}))
+        'dbh': {'value': 20, 'evidence': 'cue', **reference()}, 'height': {'value': 10, 'evidence': 'cue', **reference()}}))
     result = run()
     assert result['predicted_dbh_cm'] == dbh and result['predicted_height_m'] == height
 
@@ -176,7 +183,9 @@ def test_route_preserves_quota_and_prediction_contract(monkeypatch, model):
 
 def test_missing_key_does_not_call_network(monkeypatch):
     monkeypatch.setattr(ai_identify, 'GEMINI_API_KEY', '')
-    assert immediate(ai_identify.gallery_vision_prediction('fake', 'image/jpeg', 'prompt')) is None
+    with pytest.raises(ai_identify.GalleryVisionError) as error:
+        immediate(ai_identify.gallery_vision_prediction('fake', 'image/jpeg', 'prompt'))
+    assert error.value.code == 'missing_key'
 
 
 @pytest.mark.parametrize('status,text', [(200, '{"base_visible": false}'),
@@ -196,7 +205,92 @@ def test_gallery_provider_uses_isolated_prompt_without_numeric_defaults(monkeypa
     monkeypatch.setattr(ai_identify, 'GEMINI_API_KEY', 'test-only')
     monkeypatch.setattr(ai_identify, '_gemini_candidate_models', lambda: ['test-model', 'other-model'])
     monkeypatch.setattr(ai_identify.httpx, 'AsyncClient', lambda **kwargs: Client())
-    result = immediate(ai_identify.gallery_vision_prediction('fake', 'image/jpeg', 'isolated gallery prompt'))
+    if status == 200 and text.startswith('{'):
+        result = immediate(ai_identify.gallery_vision_prediction('fake', 'image/jpeg', 'isolated gallery prompt'))
+        assert result == {'base_visible': False}
+    else:
+        with pytest.raises(ai_identify.GalleryVisionError) as error:
+            immediate(ai_identify.gallery_vision_prediction('fake', 'image/jpeg', 'isolated gallery prompt'))
+        assert error.value.code == ('quota_exceeded' if status == 429 else 'invalid_response')
     assert len(requests) == 1
     assert requests[0]['contents'][0]['parts'][0]['text'] == 'isolated gallery prompt'
-    assert result == ({'base_visible': False} if status == 200 and text.startswith('{') else None)
+    assert requests[0]['generationConfig']['responseMimeType'] == 'application/json'
+
+
+@pytest.mark.parametrize('body,code', [
+    ({'candidates': []}, 'empty_response'),
+    ({'promptFeedback': {'blockReason': 'SAFETY'}}, 'blocked_response'),
+    ({'candidates': [{'finishReason': 'MAX_TOKENS'}]}, 'truncated_response'),
+    ({'candidates': [{'finishReason': 'SAFETY'}]}, 'blocked_response'),
+    ({'candidates': [{'content': {'parts': [{'thought': True, 'text': 'private'}]}}]}, 'empty_response'),
+    ({'candidates': [{'content': {'parts': [{'text': '[]'}]}}]}, 'invalid_response'),
+])
+def test_response_diagnostics_are_specific(body, code):
+    with pytest.raises(ai_identify.GalleryVisionError) as error:
+        ai_identify._parse_gallery_vision_response(body)
+    assert error.value.code == code
+
+
+def test_response_parser_joins_text_parts_and_skips_thoughts():
+    body = {'candidates': [{'finishReason': 'STOP', 'content': {'parts': [
+        {'thought': True, 'text': 'not user output'}, {'inlineData': {}},
+        {'text': '```json\n{"base_'}, {'text': 'visible": false}\n```'}]}}]}
+    assert ai_identify._parse_gallery_vision_response(body) == {'base_visible': False}
+
+
+@pytest.mark.parametrize('code', ['quota_exceeded', 'timeout', 'access_denied',
+                                'invalid_response', 'truncated_response'])
+def test_safe_failure_reason_reaches_card_without_numbers(monkeypatch, model, code):
+    monkeypatch.setattr(ai_identify, 'gallery_vision_prediction',
+                        AsyncMock(side_effect=ai_identify.GalleryVisionError(code)))
+    result = run()
+    assert result['status'] == 'unavailable'
+    assert result['error_code'] == code
+    assert result['reason'] == ai_identify.GalleryVisionError.REASONS[code]
+    assert result['trunk_detected'] is True and result['preview_png']
+    assert result['predicted_dbh_cm'] is None and result['predicted_height_m'] is None
+
+
+@pytest.mark.parametrize('bad', [{}, {'object': 'tire', 'dimension_m': -1, 'assumed': True},
+    {'object': '', 'dimension_m': .6, 'assumed': True},
+    {'object': 'tire', 'dimension_m': .6, 'assumed': False}])
+def test_prediction_requires_a_disclosed_reference_assumption(monkeypatch, model, bad):
+    monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', AsyncMock(return_value={
+        'base_visible': True, 'top_visible': True,
+        'dbh': {'value': 20, 'evidence': 'cue', 'assumption': 'uncertain', 'reference': bad},
+        'height': {'value': 10, 'evidence': 'cue', 'assumption': 'uncertain', 'reference': bad}}))
+    result = run()
+    assert result['status'] == 'cannot_estimate'
+    assert result['predicted_dbh_cm'] is None and result['predicted_height_m'] is None
+    assert result['assumptions'] == []
+
+
+@pytest.mark.parametrize('failure,code,expected_calls', [
+    (401, 'access_denied', 1), (403, 'access_denied', 1),
+    (400, 'request_rejected', 2), (404, 'model_unavailable', 2),
+    (429, 'quota_exceeded', 1), (503, 'provider_busy', 1),
+    ('timeout', 'timeout', 1), ('connect', 'connection_error', 1)])
+def test_transport_failures_are_controlled_and_do_not_leak_secrets(monkeypatch, failure, code, expected_calls):
+    import httpx
+    from types import SimpleNamespace
+    calls = []
+    class Client:
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *args):
+            return False
+        async def post(self, url, json):
+            calls.append(True)
+            if failure == 'timeout':
+                raise httpx.ReadTimeout('do-not-expose-secret-url')
+            if failure == 'connect':
+                raise httpx.ConnectError('do-not-expose-secret-url')
+            return SimpleNamespace(status_code=failure)
+    monkeypatch.setattr(ai_identify, 'GEMINI_API_KEY', 'do-not-expose-secret-key')
+    monkeypatch.setattr(ai_identify, '_gemini_candidate_models', lambda: ['primary', 'secondary'])
+    monkeypatch.setattr(ai_identify.httpx, 'AsyncClient', lambda **kwargs: Client())
+    with pytest.raises(ai_identify.GalleryVisionError) as error:
+        immediate(ai_identify.gallery_vision_prediction('fake', 'image/jpeg', 'prompt'))
+    assert error.value.code == code
+    assert len(calls) == expected_calls
+    assert 'do-not-expose' not in str(error.value)
