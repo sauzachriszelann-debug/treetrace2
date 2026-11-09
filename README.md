@@ -114,3 +114,433 @@ FRONTEND_URL=http://localhost:5173
 ---
 
 Made with 💚 for Panabo City
+
+
+## Experimental photo DBH - Phase 1
+
+This is an **experimental estimate**, not a validated measuring instrument.
+Validate DBH against a tape measurement at 1.3 m and height against a clinometer.
+Phase 1 returns no height. No field accuracy is established by synthetic tests.
+
+### Assumptions and inputs
+
+- Rear-camera DBH shot is level: absolute pitch at most 5 degrees; missing pitch
+  returns `retake`. These formulas approximate the accepted shot as level.
+- Ground is flat; true trunk-ground contact is visible; camera height is correct
+  (default 1.4 m); the trunk is roughly round.
+- Send original bytes with EXIF intact: do not resize, strip EXIF or recompress.
+  EXIF orientation is applied in memory without rescaling the original geometry.
+- Focal length in pixels is supplied as `f_px`, or derived from EXIF 0xA405
+  (35 mm equivalent, including the nested Exif IFD):
+  `f_px = f35 * hypot(width, height) / 43.267`. No focal-length guess is used.
+- Optional `distance_m` must be distance to the trunk **surface for this shot**,
+  labelled `distance_source="sensor"` or `"ar"`. Do not pass an unrelated scene
+  median or stale camera position as a verified trunk distance.
+- Otherwise, use the lowest trunk-mask row to derive camera-height scale. The
+  green preview line MUST be confirmed by the operator before acceptance: a
+  mask bottom does not prove that the ground contact is visible.
+
+### Contract and algorithm
+
+Authenticated JSON `POST /api/ai/measure-dbh` and multipart
+`POST /api/ai/measure-dbh-file` accept optional `camera_height_m`, `pitch_deg`,
+`distance_m`, `distance_source`, and `f_px`. Existing legacy fields remain intact.
+New request fields are defined in `backend/app/schemas/dbh.py`.
+
+The cached v1 model predicts at 640 px with confidence 0.4. Masks are restored to
+original upright dimensions; the largest trunk is selected. The measurement
+uses median contiguous-run width over the 17-row band at 1.3 m. Disconnected
+pixels are not bridged. Diameter is calculated as:
+
+`dbh_cm = width_px * distance_m / (f_px - width_px / 2) * 100 * CALIB`
+
+`CALIB` defaults to 1.0. Side clipping, a hidden/bottom-clipped base, too few usable
+rows, width below 40 px, invalid/missing focal information, invalid scale and
+non-finite results cause `retake`. All measurement/scale numbers are null on
+failure. Preview PNGs are returned as base64 in memory: mask red, 1.3 m line
+yellow, base line green. No photo is logged or written by the service.
+
+Successful photo results use method `yolo_trunk_v1`, `height_m=null`, and
+`quality="experimental"`. `needs_base_confirmation=true` marks a provisional
+base-scaled estimate; it must not be accepted until the green line is confirmed.
+The new mobile confirmation UI belongs to Phase 2 and is not included here.
+
+Photo `ok` or `retake` returns immediately without legacy YOLO or Gemini.
+Disabled/unavailable v1 retains the previous legacy path. The old 25 cm / 8 m
+service-error fallback remains separately flagged `fallback=true`; it is not a
+measurement and must never be accepted by the new measured flow.
+
+### Existing AR service preserved
+
+Before replacement, `git status` reported `dbh_yolo.py` as untracked and `git log`
+contained no commit for it. It was introduced during the earlier assistant work,
+not sourced from a committed upstream version. Its exact original bytes are in
+`backend/app/services/dbh_yolo_ar_backup.py` (SHA-256
+`3876cf612604b81aafefd313af88d63523b053b649dea796e9c847c28e6d4c0a`).
+
+The old service segments the trunk, filters metric depth near 1.3 m, fits a
+circular cross-section, and returns DBH plus a camera-distance diagnostic, not
+height. The AR status/measurement routes and their mobile callers continue to
+use the preserved implementation. The mobile unified AR flow separately has a
+local height calculation. No AR workflow, mobile capture or web UI is changed
+in Phase 1. Accepting a supplied `ar` distance in the new service does not add a
+new AR distance reader or establish that the old diagnostic is surface distance.
+
+### Offline validation
+
+Use `backend/tests/dbh_check.py` with `tests/tape.csv`. The CSV is header-only:
+real tape/clinometer measurements have not been supplied. Required columns are
+`file,tape_dbh_cm,camera_height_m,pitch_deg,distance_m,clinometer_height_m,split`.
+Use `calib` or `eval` for split; image paths are relative to the CSV location.
+Optional metadata columns are `base_confirmed`, `expected_status`, `case` and
+`distance_source`. These record human decisions and rejection evidence, not
+invented measurements. A supplied CSV distance without an explicit source is
+labelled sensor; do not label it AR unless its origin is actually AR.
+
+For base-derived scale, set `base_confirmed=true` only after independently
+checking the green line; false means retake, and blank means pending confirmation.
+Retake/unavailable/unconfirmed results are excluded from error calculation but
+reported with reasons. Percent error is `abs(prediction-tape)/tape*100`.
+
+Suggested calibration is `mean(tape/uncalibrated_prediction)` from accepted
+**calib rows only**. The checker applies that factor to eval predictions, or an
+explicit `--calib` override. It never edits the service constant automatically.
+Without calib data it uses the configured constant. Rejection counts, eval
+coverage and missing required cases are reported alongside accepted errors.
+
+```powershell
+python backend/tests/dbh_check.py tests/tape.csv
+python backend/tests/dbh_check.py tests/tape.csv --calib 1.0
+```
+
+Include near and far shots, tilted phones, hidden bases and clipped trunks.
+Use `case` labels `near`, `far`, `tilted`, `hidden_base`, `clipped_trunk` and
+`expected_status=retake` on rejection examples. Occluded bases that resemble
+valid mask bottoms need human rejection; mask geometry cannot establish that
+semantic fact. A suggested calibration or a low error after dropping difficult
+samples is not an accuracy demonstration. Report rejection rates as well.
+
+### Production prerequisites - documentation only
+
+The deployed build currently installs only `requirements.txt`. Before enabling:
+install `backend/requirements-yolo.txt` (including its PyTorch dependency), supply
+`backend/models/tree_trunk_dbh_v1.pt`, retain Pillow, and set
+`DBH_TRUNK_ENABLED=true` in the server environment. The default is false.
+Check RAM, cold start and request limits on the intended host before enabling.
+Each process caches weights; using both preserved AR and photo services may hold
+two model instances. Neither model file is overwritten, including
+`tree_trunk_segmentation.pt`. No deployment files or credentials were changed.
+
+Future phases require separate approval. Phase 2 adds a separate level-guided
+camera option and preserves AR. Phase 3 uses a second, same-position crosshair
+capture and sensor pitch (no image analysis or treetop tap), with height rounded
+to 0.5 m. Phase 4 provides no web height without a tilt sensor. AR-distance
+research remains documentation only.
+
+
+### Run the four previously excluded async/HTTP tests locally
+
+Run these PowerShell commands from the repository root. Tests use SQLite and
+mocked inference; no running backend, real API keys or external requests are
+needed. Run on a normal local Python environment where asyncio/TestClient can
+create their local event-loop sockets.
+
+```powershell
+$env:TESTING = "true"
+$env:DATABASE_URL = "sqlite://"
+$env:PYTHONPATH = Join-Path (Get-Location) "backend"
+python -m pytest -v "backend/tests/test_dbh_ar.py::test_ar_never_calls_old_yolo_or_gemini" "backend/tests/test_dbh_ar.py::test_ar_endpoint_auth_and_retakes" "backend/tests/test_dbh_ar.py::test_legacy_endpoints_pass_through_retakes[measure-dbh-False]" "backend/tests/test_dbh_ar.py::test_legacy_endpoints_pass_through_retakes[measure-dbh-file-True]"
+```
+
+These are exactly four cases: one coroutine test, one AR endpoint test, and the
+JSON and multipart parameterizations of the legacy endpoint test. This command
+also runs exactly those four cases using a name filter:
+
+```powershell
+python -m pytest backend/tests/test_dbh_ar.py -v -k "test_ar_never_calls_old_yolo_or_gemini or test_ar_endpoint_auth_and_retakes or test_legacy_endpoints_pass_through_retakes"
+```
+
+### Run a real original photo through the local model
+
+After the dependencies and v1 weights are available locally, run from the
+repository root (replace the example photo path):
+
+```powershell
+$env:DBH_TRUNK_ENABLED = "true"
+python backend/tests/run_photo.py "C:\tree-photos\tree.jpg" --camera-height 1.4 --pitch 0
+```
+
+With a separately measured trunk-surface distance:
+
+```powershell
+python backend/tests/run_photo.py "C:\tree-photos\tree.jpg" --camera-height 1.4 --pitch 0 --distance 2.5
+```
+
+Use the actual capture pitch and camera height; do not supply zero pitch merely
+to bypass the level check. The default camera height is 1.4 m. Distance is in
+metres and is labelled sensor; the script does not read a distance sensor itself.
+The photo's original bytes and EXIF are passed unchanged to the service. Missing
+focal metadata, invalid geometry or tilt can produce retake with null numbers.
+A disabled/missing model produces unavailable; this CLI never invokes legacy AI.
+
+The JSON includes the full service result and `preview_file`. A successful
+preview is saved next to the original as `tree.dbh-preview.png`; repeated runs
+use numbered names without overwriting the original or earlier previews.
+Retake/unavailable produces no preview. A preview write failure is reported in
+JSON as `preview_error` and exits with status 1. Base-scaled results still need
+human confirmation of the green line before acceptance. Every result remains an
+experimental estimate requiring tape DBH/clinometer validation. This CLI has
+not by itself established model accuracy.
+
+
+## Phase 2: separate level-guided photo capture
+
+Add Tree > Add photo > Take Photo now opens one rear-camera capture with a live
+level indicator and one capture button. Measurement capture requires a fresh,
+stable sensor reading with absolute pitch at most 5 degrees. The one-time camera
+height setting defaults to 1.4 m and is adjustable with the settings slider;
+there is no per-photo height prompt or typed distance. Capture settings are
+persisted separately from authentication and inventory drafts.
+
+The existing AR camera, method channel, depth calculation and height flow are
+preserved. Open them through Add photo > Advanced (AR). The native AR activity,
+AR service/backup and backend contracts are not modified in Phase 2.
+
+### Focal scale and fixed-lens policy
+
+The installed CameraX plugin (0.6.30) filters its camera selector using the exact
+CameraDescription ID populated by availableCameras. The new screen chooses an
+exposed rear main-camera candidate by largest active sensor area, explicitly
+sets zoom to 1.0, locks portrait capture, and provides no pinch, zoom slider or
+lens-switch controls. The Android bridge reads that ID's lens focal length and
+sensor physical size, adjusted for the active/pixel array fraction. It reads the
+saved JPEG dimensions and EXIF FocalLength without altering the photo.
+
+Pixel focal lengths are lens_mm * saved_pixels / active_sensor_mm for each axis,
+matching long and short axes after portrait rotation. More than 5 percent
+disagreement between lens focal length and EXIF FocalLength causes retake, never
+an assumed focal value. Inconsistent image/sensor aspect ratios, zoom metadata,
+missing values and unlocked/ambiguous lens information also cause retake.
+
+An Android logical multi-camera can internally switch physical lenses even when
+the app holds its logical ID at 1x. This plugin does not expose a physical-ID lock
+or per-shot active physical ID through the current API. The bridge therefore
+REFUSES measurement for logical multi-cameras or multiple-focal configurations;
+it does not claim that setting 1x alone prevents every hardware lens switch.
+Skip measurement remains available. Camera selection, crop interpretation and
+physical metadata still need validation on each supported phone.
+
+The requested realme GT Master fixture uses 3468 x 4624 pixels, focal 4.73 mm and
+explicit nominal sensor dimensions 6.47 x 4.85 mm. It computes 3381.32 px, within
+3 percent of 3380 px. Those sensor dimensions are a TEST FIXTURE, not a production
+per-device constant or a calibration verified from the user's handset. Production
+always reads its own CameraCharacteristics. No f_px is guessed if reading fails.
+
+### Original photos and result safety
+
+The original camera file bytes and EXIF go unchanged through ApiService; there
+is no resize, imageQuality conversion, rotation re-encode or photo logging in
+this photo flow. Backend display orientation remains handled by Phase 1.
+Camera permission, lifecycle changes, stale sensors and metadata errors prevent
+measurement acceptance. A photo can still be used for species identification.
+
+Responses are checked for status/method/quality/fallback BEFORE numeric parsing.
+Only successful experimental yolo_trunk_v1 results can be accepted by this path;
+retake, unavailable, low-quality approximate and legacy fallback results cannot.
+The returned preview is decoded and displayed. A base-scaled result asks:
+"Is the green line at the bottom of the tree?" with Yes and Retake.
+The single Yes tap is required before using a measured number. Failed preview
+decoding cannot bypass that confirmation. Species is filled automatically using
+the existing AI identification endpoint; identification is still a suggestion.
+
+Skip measurement on the camera captures a photo even without a valid level
+reading and runs species identification without requesting DBH. The result
+screen also provides an explicit skip-and-save action. Both dimensions and their
+prediction metadata are cleared, rather than retaining stale previous numbers.
+The final save passes through the existing Add Tree validation, idempotency,
+authorization and offline review rules. A missing required species name or other
+invalid form field still prevents saving; nothing is invented to bypass it.
+There is no background or automatic inventory sync. The standalone DBH tool can
+return without a measurement but cannot save a whole tree on its own.
+
+All measurements remain EXPERIMENTAL estimates requiring comparison against
+tape DBH and clinometer height. The default photo flow does not calculate height
+in Phase 2. The optional same-position, upward crosshair height capture and its
+backend endpoint remain Phase 3, requiring separate approval. It must not reuse
+the DBH pitch or display a fabricated height meanwhile.
+
+### iPhone behavior
+
+This checkout has no iOS runner and no new iOS native code was built. The shared
+metadata adapter has an EXIF-only fallback for a future iPhone build: it omits
+f_px so the backend can use original EXIF FocalLengthIn35mmFilm. If that tag is
+missing, measurement returns retake. EXIF FocalLength in mm alone is insufficient
+without sensor dimensions. The Android-specific 5 percent cross-check and
+physical-lens guarantee are not advertised as implemented on iPhone. Actual
+AVFoundation capture and device behavior remain unverified.
+
+### Phase 2 checks
+
+Offline tests cover the focal fixture, invalid focal/lens/crop/zoom metadata,
+freshness and level limits, retake/fallback gating, saved height settings,
+original-byte upload, explicit skip clearing dimensions and the preserved AR
+review. Run from mobile:
+
+```powershell
+flutter analyze
+flutter test --no-pub test/level_dbh_capture_test.dart test/tree_scan_test.dart test/identify_upload_test.dart test/dbh_ar_test.dart
+flutter devices
+flutter run -d YOUR_PHONE_ID --flavor production
+```
+
+A full rebuild is required for MainActivity and CameraPhotoMetadata changes.
+The SDK lock-file restriction in this agent session may prevent Flutter tests
+or APK building; report that separately from static analysis or standalone
+geometry checks. Field accuracy and live backend/provider operation are not
+established by those checks. No deployment settings or dependencies were changed.
+
+
+### Phase 2 capture regression fixes
+
+The level-camera controller now stays alive through the result-route transition.
+For backgrounding, the preview is removed for a frame before its controller is
+released, and reopening waits for that release. Back is blocked during a shutter
+request. The shutter uses the ready sensor snapshot and continues monitoring for
+out-of-range tilt, sensor gaps and lifecycle interruptions; UI stability after
+JPEG processing is not used as a second shutter gate. Stale or invalid sensor
+evidence still returns retake, never a number.
+
+Add Tree and AI Tree Scanner share safe identification error messages for session,
+quota, payload size, unsupported image, missing route, timeout and server errors.
+An optional local-history read/write failure no longer discards a successful AI
+response. Leaving the AI scanner before a response arrives no longer triggers
+setState on its disposed screen. Original photo bytes and the provider pipeline
+are unchanged. These client fixes do not establish the cause of a remote provider
+failure: check the displayed HTTP status and backend terminal after retrying.
+Do not claim live identification or field accuracy from static checks alone.
+
+Regression coverage is in `level_dbh_capture_test.dart`,
+`identify_upload_test.dart`, `identification_error_test.dart` and
+`ai_identify_badges_test.dart`. Run from mobile:
+
+```powershell
+flutter test --no-pub test/level_dbh_capture_test.dart test/identify_upload_test.dart test/identification_error_test.dart test/ai_identify_badges_test.dart
+```
+
+In the agent session, standalone Dart checks exercise the shutter guard and
+identification error classifications. Full Flutter tests remain blocked by the
+SDK cache lock-file permission. Live camera transitions and provider responses
+must still be checked on the phone. Advanced AR and height phases are unchanged.
+
+
+### HTTP 413 photo upload fix (Phase 2)
+
+Species identification uses an in-memory derivative only when the original is
+larger than 1,500,000 bytes. It scales that species-only copy until the encoded
+PNG fits the budget. The original file is never overwritten, logged or used as
+a resized measurement input. Both Add Tree and AI Tree Scanner use this shared
+path. Small original species images are sent unchanged. This changes the earlier
+Phase 2 species-upload behavior; original bytes remain mandatory for DBH.
+
+The new mobile DBH path sends original bytes/EXIF with capture metadata to
+`/api/ai/measure-dbh-file` as multipart instead of base64 JSON, avoiding base64
+body expansion. Its strict `method=yolo_trunk_v1` invokes only the new trunk
+model: missing/disabled runtime returns unavailable, not old YOLO/Gemini or
+placeholder numbers. The red/yellow/green preview is display-only and bounded
+to 1024 pixels on its longest side; calculations still use original dimensions.
+
+Multipart does not remove an upstream host's body-size limit. Originals above
+that limit require a backend that accepts full-size uploads. The client reports
+that HTTP 413 explicitly, and reports the model's unavailable reason. A hot
+restart updates Dart but cannot deploy backend Python changes or install YOLO.
+No deployment files, API keys, storage uploads or AR workflow were changed.
+
+For local full-original testing, open a PowerShell terminal in `backend`:
+
+```powershell
+$env:DBH_TRUNK_ENABLED = "true"
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+Keep that terminal running. Use the existing documented local API build override
+(`TREETRACE_API_BASE_URL`, pointing at that computer's LAN IP and `/api`) when
+launching Flutter on the same Wi-Fi. A build without the override still uses the
+hosted backend. Normal authentication still applies. The model file and
+`requirements-yolo.txt` dependencies must exist on the backend actually used.
+
+Gallery photos identify species but do not inherit DBH/height guesses from a
+species response. Missing capture pitch/distance cannot become measured values.
+Height capture remains separately approved Phase 3; no height is fabricated.
+Backend validation: `python -m pytest tests/test_dbh_photo.py -q` passed 56 tests,
+including strict multipart routing and bounded-preview checks. Flutter image
+codec/upload regression tests were added; running them in the agent environment
+remains blocked by SDK cache permissions. This is not field-accuracy evidence.
+
+
+## Phase 3: two captures in the same camera session
+
+The default camera now keeps the same main lens at 1x through both stages.
+The first original photo starts existing species identification and strict DBH
+processing. A camera-height-based DBH still requires the single green-line Yes
+confirmation. Only accepted/confirmed DBH enables the second stage: a center
+crosshair aimed at the highest point, with Capture height and Skip height.
+There is no treetop tap, manual distance entry, crown model or Gemini height.
+
+The second shutter uses fresh, stable portrait-motion-sensor pitch in 5..85 deg.
+It blocks invalid angles and rejects sensor gaps, capture motion beyond 1.5 deg,
+and lifecycle interruptions. Its image is not analyzed or uploaded; the temporary
+second capture is removed from plugin cache. The original first photo remains the
+inventory/species photo. Species processing can finish while the user aims up.
+Late identification results from an older trunk photo cannot overwrite a newer
+capture. Retaking the trunk clears all pending measurement state.
+
+Authenticated `POST /api/ai/measure-height` accepts only pitch_deg,
+camera_height_m, distance_m (from distance_m_used on the accepted DBH response),
+dbh_status and base_confirmed. It calculates:
+
+    height_m = distance_m * tan(radians(pitch_deg)) + camera_height_m
+
+The result is rounded to the nearest 0.5 m. Angles above 70 deg are labelled low
+quality; other successful results are experimental. Missing/invalid inputs,
+rejected DBH or missing confirmation return retake with null height/angle/distance.
+The client checks status/method/quality before numeric parsing. Retakes never fill
+a height. Skip height preserves species and accepted DBH; Skip measurement clears
+both dimensions. Combined review retains height quality metadata in TreeScanResult.
+
+Assumptions remain flat ground, correct saved camera height, a roughly round trunk
+with visible ground contact for DBH, and original DBH EXIF kept intact. Both shots
+must use the SAME standing position and lens height; only tilt the phone. Ordinary
+accelerometers cannot reliably detect a step or verify translation. The camera
+therefore instructs the user to stay put and offers 'I moved - restart trunk
+capture'. Backgrounding interrupts height eligibility; retry from the trunk or
+skip height. No AR translation-tracking claim is made. Existing Advanced AR,
+legacy manual height screens, DBH calibration and deployment files are unchanged.
+
+All heights are experimental estimates requiring clinometer validation. DBH still
+requires tape validation. The observed 16.6 cm vs approximately 11.8 cm tape-derived
+DBH discrepancy is NOT corrected in this phase, and its distance/camera-height
+uncertainty also affects height. Two captures do not establish measurement accuracy.
+
+Verification commands:
+
+```powershell
+# backend
+python -m pytest tests/test_height_tilt.py tests/test_dbh_photo.py -q
+# mobile
+flutter analyze
+flutter test --no-pub test/two_capture_session_test.dart test/level_dbh_capture_test.dart test/tree_scan_test.dart
+```
+
+Backend checks passed 80 tests. They cover formula/rounding, angle boundaries,
+steep-angle quality, null failures, strict input types and authenticated routing,
+plus the existing DBH suite. Mobile regression tests fake the camera and sensors
+for second capture, base confirmation, skip, retake and interrupted sessions.
+Static analysis and standalone sensor checks are reported separately; full
+Flutter test execution remains blocked by the SDK cache lock-file permissions in
+the agent environment. Live camera transitions and field accuracy remain unverified.
+
+For phone testing, restart the local backend to load the new endpoint (the existing
+uvicorn command without --reload does not reload source changes), then hot restart
+Flutter with Shift+R while keeping the existing local API build override. Capture
+the trunk, confirm the base, stay in place and capture the treetop or skip height.
+Review both results together. This phase adds no iOS native code or web height flow.

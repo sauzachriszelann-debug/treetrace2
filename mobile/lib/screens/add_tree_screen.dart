@@ -8,11 +8,15 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../services/api_service.dart';
+import '../services/identification_error.dart';
 import '../services/auth_provider.dart';
 import '../services/gps_capture.dart';
 import '../services/theme.dart';
 import 'dbh_measure_screen.dart';
 import 'height_measure_screen.dart';
+import 'tree_scan_screen.dart';
+import '../services/tree_scan_result.dart';
+import '../services/dbh_ar_service.dart';
 import 'tree_detail_screen.dart';
 
 /// Seam for the platform reverse geocoder (Phase 12B.1A). Production uses
@@ -94,9 +98,10 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
       _roboflowCandidate = _extractRoboflowCandidate(r);
       _nameCtrl.text = r['common_name'] ?? '';
       _sciCtrl.text = r['scientific_name'] ?? '';
-      _dbhCtrl.text = r['estimated_dbh_cm']?.toString() ?? '';
-      _heightCtrl.text = r['estimated_height_m']?.toString() ?? '';
-      _predictedDbhCm = (r['estimated_dbh_cm'] as num?)?.toDouble();
+      // Species scanner output cannot fill measured dimensions without scale.
+      _dbhCtrl.clear();
+      _heightCtrl.clear();
+      _predictedDbhCm = null;
       _notesCtrl.text = _usefulAiNote(r['description']) ?? '';
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -315,16 +320,17 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
       setState(() {
         _roboflowCandidate = _extractRoboflowCandidate(r);
       });
+      if (r['not_identified'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(r['reason']?.toString() ?? 'Species not identified. Try a clearer leaf photo.'),
+            backgroundColor: kFair));
+      }
       if (r['not_identified'] != true) {
         setState(() {
           _aiPrediction = r;
           if (_nameCtrl.text.isEmpty) _nameCtrl.text = r['common_name'] ?? '';
           if (_sciCtrl.text.isEmpty) _sciCtrl.text = r['scientific_name'] ?? '';
-          if (_dbhCtrl.text.isEmpty)
-            _dbhCtrl.text = r['estimated_dbh_cm']?.toString() ?? '';
-          _predictedDbhCm ??= (r['estimated_dbh_cm'] as num?)?.toDouble();
-          if (_heightCtrl.text.isEmpty)
-            _heightCtrl.text = r['estimated_height_m']?.toString() ?? '';
+          // Species responses do not carry verified photo scale or tilt.
           if (_notesCtrl.text.isEmpty)
             _notesCtrl.text = _usefulAiNote(r['description']) ?? '';
         });
@@ -333,10 +339,60 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
               content: Text('AI identified: ${r['common_name']}'),
               backgroundColor: kHealthy));
       }
-    } catch (_) {
+    } catch (error) {
+      if (mounted) {
+
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(identificationError(error)),
+            backgroundColor: kPoor));
+      }
     } finally {
-      setState(() => _identifying = false);
+      if (mounted) setState(() => _identifying = false);
     }
+  }
+
+  Future<void> _openTreeScan({bool advancedAr = false}) async {
+    final result = await Navigator.push<TreeScanResult>(
+        context, MaterialPageRoute(builder: (_) => TreeScanScreen(advancedAr: advancedAr)));
+    if (result == null || !mounted) return;
+    setState(() {
+      final species = result.species;
+      if (species != null || result.photo != null) {
+        // Keep original AI output for evaluation; corrections are actual labels.
+        _aiPrediction = species;
+        _roboflowCandidate = species == null ? null : _extractRoboflowCandidate(species);
+      }
+      if (result.reviewedCommonName?.isNotEmpty == true || species != null) {
+        _nameCtrl.text = result.reviewedCommonName ?? species?['common_name']?.toString() ?? '';
+      }
+      if (result.reviewedScientificName?.isNotEmpty == true || species != null) {
+        _sciCtrl.text = result.reviewedScientificName ?? species?['scientific_name']?.toString() ?? '';
+      }
+      final dbh = result.dbh;
+      final value = dbh == null ? null : acceptedAutomaticDbh(dbh);
+      if (value != null) {
+        _dbhCtrl.text = value.toStringAsFixed(1);
+        _predictedDbhCm = value;
+        _dbhConfidence = 'Low';
+        _dbhMethod = dbh!['method']?.toString();
+      }
+      if (result.reviewedDbhCm != null) {
+        _dbhCtrl.text = result.reviewedDbhCm!.toStringAsFixed(1);
+        if (value == null || (result.reviewedDbhCm! - value).abs() > 0.051) {
+          _dbhMethod = 'Reviewed measurement';
+          _dbhConfidence = null;
+        }
+      }
+      final height = result.reviewedHeightMeters ?? result.heightMeters;
+      if (height != null) _heightCtrl.text = height.toStringAsFixed(2);
+      if (result.measurementSkipped) {
+        _dbhCtrl.clear(); _heightCtrl.clear(); _predictedDbhCm = null;
+        _dbhConfidence = null; _dbhMethod = null;
+      }
+      if (result.photo != null) _photo = result.photo;
+    });
+    // The user's explicit skip-and-save reuses ordinary validation/idempotency.
+    if (result.saveRequested && mounted) await _save();
   }
 
   Future<void> _openDBHMeasure() async {
@@ -1578,7 +1634,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
               Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             // ── Photo ────────────────────────────────────────────────────
             GestureDetector(
-              onTap: _showPhotoOptions,
+              onTap: _identifying || _saving ? null : _showPhotoOptions,
               child: Container(
                 height: 180,
                 decoration: BoxDecoration(
@@ -1613,7 +1669,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
                                         fontWeight: FontWeight.w500)),
                                 const SizedBox(height: 4),
                                 const Text(
-                                    'AI identifies species automatically',
+                                    'Camera: species and experimental DBH',
                                     style: TextStyle(
                                         color: kMutedFg, fontSize: 12)),
                               ]),
@@ -1740,6 +1796,10 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
             ]),
             const SizedBox(height: 8),
 
+            ExpansionTile(
+              title: const Text('Individual measurement tools'),
+              childrenPadding: const EdgeInsets.only(bottom: 12),
+              children: [
             // Existing manual height entry remains editable; the optional
             // clinometer only fills it after the worker accepts a result.
             Align(
@@ -1769,6 +1829,9 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
                   foregroundColor: kPrimary,
                   side: const BorderSide(color: kPrimary),
                   padding: const EdgeInsets.symmetric(vertical: 10)),
+            ),
+
+              ],
             ),
 
             // Show method used if measured
@@ -2112,7 +2175,14 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
             title: const Text('Take Photo'),
             onTap: () {
               Navigator.pop(context);
-              _pickPhoto(ImageSource.camera);
+              _openTreeScan();
+            }),
+        ListTile(
+            leading: const Icon(Icons.view_in_ar, color: kPrimary),
+            title: const Text('Advanced (AR)'),
+            onTap: () {
+              Navigator.pop(context);
+              _openTreeScan(advancedAr: true);
             }),
         ListTile(
             leading: const Icon(Icons.photo_library_outlined, color: kPrimary),

@@ -5,12 +5,15 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import date, datetime, timezone
 import base64
+import asyncio
 import json
 
 from app.db.database import get_db
 from app.models.tree_submission import TreeSubmission
 from app.models.user import User, UserRole
 from app.models.unknown_species import UnknownSpecies
+from app.schemas.dbh import ARDBHRequest, ARDBHResponse, PhotoDBHRequest as MeasureDBHRequest
+from app.schemas.height import HeightRequest, HeightResponse
 from app.core.security import get_current_user, require_admin
 from app.api.routes.tree_submissions import (
     TREE_SUBMISSION_DAILY_LIMITS,
@@ -36,6 +39,27 @@ def _get_local_species_classifier():
 from app.services.species_db import get_all_protected, lookup_species, PHILIPPINE_ENDANGERED_SPECIES
 
 router = APIRouter()
+
+
+
+@router.post("/measure-height", response_model=HeightResponse)
+def measure_height(payload: HeightRequest, _: User = Depends(get_current_user)):
+    from app.services.height_tilt import measure_height as calculate
+    return calculate(**payload.model_dump())
+
+
+@router.get("/dbh-ar-status")
+async def dbh_ar_status(_: User = Depends(get_current_user)):
+    from app.services.dbh_yolo_ar_backup import runtime_status
+    return runtime_status()
+
+
+@router.post("/measure-dbh-ar", response_model=ARDBHResponse)
+async def measure_dbh_ar(payload: ARDBHRequest, _: User = Depends(get_current_user)):
+    # Dedicated contract: no reference objects, Gemini or placeholder values.
+    return await measure_dbh_from_base64(
+        payload.image_base64, ar_capture=payload.capture,
+    )
 
 
 @router.get("/dbh-status")
@@ -257,14 +281,6 @@ class IdentifyFromURLRequest(BaseModel):
     image_url: str
 
 
-class MeasureDBHRequest(BaseModel):
-    image_base64: str
-    content_type: str = "image/jpeg"
-    reference_hint: str = "No reference object provided."
-    method: str = "Camera-assisted photo measurement"
-    known_distance_m: Optional[float] = None
-
-
 def _safe_dbh_estimate(reason: str, reference_hint: str, known_distance_m: Optional[float]):
     has_reference = reference_hint and "no reference" not in reference_hint.lower()
     has_distance = isinstance(known_distance_m, (int, float)) and known_distance_m > 0
@@ -303,7 +319,14 @@ async def measure_dbh(
             payload.reference_hint,
             payload.method,
             payload.known_distance_m,
+            camera_height_m=payload.camera_height_m,
+            pitch_deg=payload.pitch_deg,
+            distance_m=payload.distance_m,
+            distance_source=payload.distance_source,
+            f_px=payload.f_px,
         )
+        if result.get("status") in {"retake", "unavailable"}:
+            return result
         if result.get("error"):
             return _safe_dbh_estimate(result.get("detail", "AI DBH analysis failed."), payload.reference_hint, payload.known_distance_m)
         return result
@@ -317,6 +340,11 @@ async def measure_dbh_file(
     reference_hint: str = Form("No reference object provided."),
     method: str = Form("Camera-assisted photo measurement"),
     known_distance_m: Optional[float] = Form(None),
+    camera_height_m: float = Form(1.4),
+    pitch_deg: Optional[float] = Form(None),
+    distance_m: Optional[float] = Form(None),
+    distance_source: Optional[str] = Form(None),
+    f_px: Optional[float] = Form(None),
     _: User = Depends(get_current_user),
 ):
     image_bytes = b""
@@ -326,6 +354,15 @@ async def measure_dbh_file(
         if not (file.content_type or "").startswith("image/"):
             raise HTTPException(status_code=400, detail="File must be an image.")
         image_bytes = await file.read()
+        if method == "yolo_trunk_v1":
+            # Strict measured-photo path: disabled/missing model must never
+            # invoke legacy YOLO, Gemini or placeholder dimensions.
+            from app.services.dbh_yolo import measure_dbh_trunk
+            return await asyncio.to_thread(
+                measure_dbh_trunk, image_bytes,
+                camera_height_m=camera_height_m, pitch_deg=pitch_deg,
+                distance_m=distance_m, distance_source=distance_source, f_px=f_px,
+            )
         image_base64 = base64.standard_b64encode(image_bytes).decode("utf-8")
 
         result = await measure_dbh_from_base64(
@@ -334,7 +371,14 @@ async def measure_dbh_file(
             reference_hint,
             method,
             known_distance_m,
+            camera_height_m=camera_height_m,
+            pitch_deg=pitch_deg,
+            distance_m=distance_m,
+            distance_source=distance_source,
+            f_px=f_px,
         )
+        if result.get("status") in {"retake", "unavailable"}:
+            return result
         if not result.get("error") and result.get("dbh_cm"):
             return result
 
@@ -343,7 +387,12 @@ async def measure_dbh_file(
             reference_hint,
             known_distance_m,
         )
+    except HTTPException:
+        raise
     except Exception as exc:
+        if method == "yolo_trunk_v1":
+            from app.services.dbh_yolo import failure
+            return failure("unavailable", "Trunk measurement failed on the server. Check the backend terminal.")
         return _safe_dbh_estimate(
             f"AI measurement service was unavailable: {exc}",
             reference_hint,

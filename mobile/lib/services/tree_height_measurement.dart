@@ -54,5 +54,12 @@ double phoneElevationDegrees({
     throw const FormatException(
         'Hold the phone upright in portrait orientation.');
   }
-  return math.atan2(-z, -y) * 180 / math.pi;
+  // Android/iOS device coordinates: +Y points toward the top of the
+  // portrait display, +Z out of its front. Rear-camera upward elevation
+  // therefore has positive Z when the upright phone tilts toward the sky.
+  if (y <= 0) {
+    throw const FormatException(
+        'Hold the phone upright, with its top edge up.');
+  }
+  return math.atan2(z, y) * 180 / math.pi;
 }

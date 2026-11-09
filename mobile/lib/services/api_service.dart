@@ -9,6 +9,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'offline_queue.dart';
+import 'identification_photo.dart';
 
 /// Narrow secure-storage surface. G6 safeguard: authentication cleanup must
 /// NEVER wipe unrelated keys (the legacy code called deleteAll() on error,
@@ -677,10 +678,15 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> identifyTree(File imageFile) async {
+    final photo = await prepareIdentificationPhoto(
+        await imageFile.readAsBytes(), _imageContentType(imageFile).toString());
     final formData = FormData.fromMap({
-      'file': await MultipartFile.fromFile(
-        imageFile.path,
-        filename: imageFile.path.split('/').last,
+      'file': MultipartFile.fromBytes(
+        photo.bytes,
+        filename: photo.mimeType == 'image/png'
+            ? 'species.png'
+            : 'species.${imageFile.path.split('.').last}',
+        contentType: DioMediaType.parse(photo.mimeType),
       ),
     });
     // Note: Don't set Content-Type header manually, Dio handles boundary automatically for FormData
@@ -693,8 +699,16 @@ class ApiService {
         receiveTimeout: const Duration(seconds: 120),
       ),
     );
-    await _recordAiIdentification(res.data);
-    return res.data;
+    if (res.data is! Map) {
+      throw const FormatException('Invalid identification response');
+    }
+    final result = Map<String, dynamic>.from(res.data as Map);
+    // History is optional local metadata. A storage failure must not discard
+    // an otherwise successful species response in either scanner.
+    try {
+      await _recordAiIdentification(result);
+    } catch (_) {/* Keep the actual AI result; never invent an identity. */}
+    return result;
   }
 
   Future<Map<String, dynamic>> submitUnknownSpecies(
@@ -713,7 +727,28 @@ class ApiService {
     required String referenceHint,
     required String method,
     double? knownDistanceM,
+    double? cameraHeightM,
+    double? pitchDeg,
+    double? focalPixels,
   }) async {
+    if (method == 'yolo_trunk_v1') {
+      // Original JPEG and EXIF: multipart avoids base64's 33% body expansion.
+      final response = await _dio.post('/ai/measure-dbh-file',
+          data: FormData.fromMap({
+            'file': await MultipartFile.fromFile(imageFile.path,
+                filename: 'trunk.${imageFile.path.split('.').last}',
+                contentType: _imageContentType(imageFile)),
+            'method': method,
+            'reference_hint': referenceHint,
+            if (cameraHeightM != null) 'camera_height_m': cameraHeightM,
+            if (pitchDeg != null) 'pitch_deg': pitchDeg,
+            if (focalPixels != null) 'f_px': focalPixels,
+          }),
+          options: Options(
+              sendTimeout: const Duration(seconds: 90),
+              receiveTimeout: const Duration(seconds: 120)));
+      return Map<String, dynamic>.from(response.data as Map);
+    }
     final bytes = await imageFile.readAsBytes();
     final res = await _dio.post('/ai/measure-dbh', data: {
       'image_base64': base64Encode(bytes),
@@ -721,8 +756,39 @@ class ApiService {
       'reference_hint': referenceHint,
       'method': method,
       'known_distance_m': knownDistanceM,
+      if (cameraHeightM != null) 'camera_height_m': cameraHeightM,
+      if (pitchDeg != null) 'pitch_deg': pitchDeg,
+      if (focalPixels != null) 'f_px': focalPixels,
     });
     return res.data;
+  }
+
+  Future<Map<String, dynamic>> measureHeight(
+      {required double pitchDeg,
+      required double cameraHeightM,
+      required double distanceM,
+      required bool baseConfirmed}) async {
+    final response = await _dio.post('/ai/measure-height', data: {
+      'pitch_deg': pitchDeg,
+      'camera_height_m': cameraHeightM,
+      'distance_m': distanceM,
+      'dbh_status': 'ok',
+      'base_confirmed': baseConfirmed,
+    });
+    return Map<String, dynamic>.from(response.data as Map);
+  }
+
+  Future<Map<String, dynamic>> dbhArStatus() async {
+    final res = await _dio.get('/ai/dbh-ar-status');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> measureDbhAr(
+      Map<String, dynamic> capture) async {
+    final res = await _dio.post('/ai/measure-dbh-ar',
+        data: capture,
+        options: Options(receiveTimeout: const Duration(seconds: 90)));
+    return Map<String, dynamic>.from(res.data as Map);
   }
 
   // ── Public ────────────────────────────────────────────────────────────────

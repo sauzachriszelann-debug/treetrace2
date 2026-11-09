@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/identification_error.dart';
 import '../services/botanical_overview.dart';
 import '../services/theme.dart';
 import '../widgets/widgets.dart';
@@ -131,43 +132,20 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
     }
     try {
       final r = await (widget.identifyFn ?? api.identifyTree)(f);
+      if (!mounted) return;
       _incrementUsage('ai');
       setState(() => _result = r);
     } catch (e) {
-      debugPrint('AI identify failed: $e');
-      final isLimit = e is DioException && e.response?.statusCode == 402;
-      if (e is DioException) {
-        debugPrint('AI identify status: ${e.response?.statusCode}');
-        debugPrint('AI identify response: ${e.response?.data}');
-        debugPrint('AI identify type: ${e.type}');
-        debugPrint('AI identify message: ${e.message}');
-      }
-      final responseData = e is DioException ? e.response?.data : null;
-      final detail = responseData is Map ? responseData['detail'] : null;
-      final statusCode = e is DioException ? e.response?.statusCode : null;
-      final errorType = e is DioException ? e.type : null;
-      final errorText = detail?.toString();
-      final fallbackReason = errorType == DioExceptionType.connectionTimeout ||
-              errorType == DioExceptionType.receiveTimeout ||
-              errorType == DioExceptionType.sendTimeout
-          ? 'AI identification is taking too long. The backend or AI service may be temporarily unavailable. Please try again in a moment.'
-          : errorType == DioExceptionType.connectionError
-              ? 'AI identification could not connect to the backend. Check your connection and try again.'
-              : 'AI identification could not connect. Please check internet connection, or submit this photo for expert review.';
+      if (!mounted) return;
+      final isLimit = e is DioException &&
+          (e.response?.statusCode == 402 || e.response?.statusCode == 429);
       setState(() => _result = {
             'not_identified': true,
             'limit_reached': isLimit,
-            'reason': isLimit
-                ? detail ??
-                    'Free AI limit reached. Upgrade to Pro for unlimited scans.'
-                : errorText != null && errorText.isNotEmpty
-                    ? errorText
-                    : statusCode != null
-                        ? 'AI identification service returned error $statusCode. You can still submit this photo for expert review.'
-                        : fallbackReason
+            'reason': identificationError(e)
           });
     } finally {
-      setState(() => _identifying = false);
+      if (mounted) setState(() => _identifying = false);
     }
   }
 

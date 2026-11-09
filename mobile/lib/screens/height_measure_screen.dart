@@ -24,7 +24,6 @@ class HeightMeasureScreen extends StatefulWidget {
 }
 
 class _HeightMeasureScreenState extends State<HeightMeasureScreen> {
-  final _distanceController = TextEditingController();
   final _topAngleController = TextEditingController();
   final _baseAngleController = TextEditingController();
   final _correctedHeightController = TextEditingController();
@@ -94,7 +93,6 @@ class _HeightMeasureScreenState extends State<HeightMeasureScreen> {
   void dispose() {
     _sensorTimeout?.cancel();
     _sensorSubscription?.cancel();
-    _distanceController.dispose();
     _topAngleController.dispose();
     _baseAngleController.dispose();
     _correctedHeightController.dispose();
@@ -115,17 +113,16 @@ class _HeightMeasureScreenState extends State<HeightMeasureScreen> {
   }
 
   void _calculate() {
-    final distance = double.tryParse(_distanceController.text.trim());
     final top = double.tryParse(_topAngleController.text.trim());
     final base = double.tryParse(_baseAngleController.text.trim());
-    if (distance == null || top == null || base == null) {
+    if (top == null || base == null) {
       setState(() => _error =
-          'Enter a horizontal distance and both top and base angles in degrees.');
+          'Capture both readings or enter readings from a clinometer.');
       return;
     }
     try {
       final height = calculateTreeHeightMeters(
-        horizontalDistanceMeters: distance,
+        horizontalDistanceMeters: 10,
         topAngleDegrees: top,
         baseAngleDegrees: base,
       );
@@ -172,22 +169,17 @@ class _HeightMeasureScreenState extends State<HeightMeasureScreen> {
             children: [
               _instructions(),
               const SizedBox(height: 16),
-              _numberField(
-                controller: _distanceController,
-                label: 'Horizontal distance to tree base (m)',
-                hint: 'e.g. 10',
-                keyName: 'horizontal-distance',
-              ),
+              const Text('Horizontal distance: 10 m'),
               const SizedBox(height: 16),
               _angleField(
                 controller: _topAngleController,
-                label: 'Angle to tree top (°)',
+                label: 'Upper clinometer reading (°)',
                 keyName: 'top-angle',
               ),
               const SizedBox(height: 12),
               _angleField(
                 controller: _baseAngleController,
-                label: 'Angle to tree base (°)',
+                label: 'Base clinometer reading (°)',
                 keyName: 'base-angle',
               ),
               if (_sensorMessage != null) ...[
@@ -234,10 +226,10 @@ class _HeightMeasureScreenState extends State<HeightMeasureScreen> {
                 style: TextStyle(fontWeight: FontWeight.w700, color: kPrimary)),
             SizedBox(height: 8),
             Text(
-                'Measure the horizontal distance from your position to the tree base. Keep the phone upright in portrait orientation and point its rear camera toward the target.'),
+                'Stand 10 m horizontally from the trunk at ground level. Hold the phone upright in portrait orientation and aim its rear camera at the highest visible point of the crown.'),
             SizedBox(height: 6),
             Text(
-                'Capture the top angle, then the base angle. Angles are signed relative to horizontal; a base below your eye level should have a negative angle. On sloping ground, use horizontal distance, not distance measured along the slope.'),
+                'Capture the crown reading, then aim at the trunk where it meets the ground and capture the base reading. A point below horizontal has a negative reading.'),
             SizedBox(height: 6),
             Text(
                 'Stand safely where both points are visible. Reposition if the tree leans, the top or base is hidden, or the phone cannot be held steady. The result is an estimate; check and correct it before accepting.'),
@@ -253,12 +245,17 @@ class _HeightMeasureScreenState extends State<HeightMeasureScreen> {
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _numberField(
-            controller: controller,
-            label: label,
-            hint: 'Enter manually or capture',
-            keyName: keyName,
-          ),
+          if (_liveAngle == null)
+            _numberField(
+              controller: controller,
+              label: label,
+              hint: 'Enter a reading from a clinometer',
+              keyName: keyName,
+            )
+          else
+            Text(controller.text.isEmpty
+                ? label
+                : '$label: ${controller.text}°'),
           const SizedBox(height: 6),
           OutlinedButton.icon(
             key: Key('capture-$keyName'),

@@ -213,7 +213,7 @@ void main() {
 
     expect(find.text('Could Not Identify'), findsOneWidget);
     expect(
-      find.textContaining('AI identification could not connect'),
+      find.textContaining('Could not identify this photo'),
       findsOneWidget,
     );
     expect(find.text('Submit Unknown Species'), findsOneWidget);
@@ -233,7 +233,7 @@ void main() {
     expect(find.text('Daily Limit Reached'), findsOneWidget);
     expect(find.text('Could Not Identify'), findsNothing);
     expect(
-      find.text('Free AI limit reached. Upgrade to Pro for unlimited scans.'),
+      find.text('Identification limit reached. Try again later or check your plan.'),
       findsOneWidget,
     );
     expect(find.text('View Pro Plans'), findsOneWidget);

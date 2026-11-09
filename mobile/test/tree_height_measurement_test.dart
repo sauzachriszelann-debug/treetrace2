@@ -60,15 +60,15 @@ void main() {
     });
   });
 
-  testWidgets('sensor angle can be captured and manual angle remains editable',
+  testWidgets('sensor reading can be captured without typing an angle',
       (tester) async {
     const radians = 25 * math.pi / 180;
     await tester.pumpWidget(MaterialApp(
       home: HeightMeasureScreen(
         sensorEvents: Stream.value(AccelerometerEvent(
           0,
-          -9.8 * math.cos(radians),
-          -9.8 * math.sin(radians),
+          9.8 * math.cos(radians),
+          9.8 * math.sin(radians),
           DateTime.utc(2026, 1, 1),
         )),
       ),
@@ -79,20 +79,8 @@ void main() {
     await tester.ensureVisible(captureTop);
     await tester.tap(captureTop);
     await tester.pump();
-    expect(
-        tester
-            .widget<TextField>(find.byKey(const Key('top-angle')))
-            .controller!
-            .text,
-        '25.0');
-
-    await tester.enterText(find.byKey(const Key('top-angle')), '30');
-    expect(
-        tester
-            .widget<TextField>(find.byKey(const Key('top-angle')))
-            .controller!
-            .text,
-        '30');
+    expect(find.text('Upper clinometer reading (°): 25.0°'), findsOneWidget);
+    expect(find.byKey(const Key('top-angle')), findsNothing);
   });
 
   testWidgets('sensor errors leave manual angle entry available',
@@ -116,7 +104,8 @@ void main() {
       250,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.textContaining('Enter top and base angles manually'), findsOneWidget);
+    expect(find.textContaining('Enter top and base angles manually'),
+        findsOneWidget);
     await tester.scrollUntilVisible(
       find.byKey(const Key('capture-top-angle')),
       250,
@@ -153,17 +142,11 @@ void main() {
     ));
     await tester.tap(find.text('Open height tool'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const Key('horizontal-distance')), '10');
+    expect(find.text('Horizontal distance: 10 m'), findsOneWidget);
     await tester.ensureVisible(find.byKey(const Key('top-angle')));
     await tester.enterText(find.byKey(const Key('top-angle')), '45');
     await tester.ensureVisible(find.byKey(const Key('base-angle')));
     await tester.enterText(find.byKey(const Key('base-angle')), '-10');
-    expect(
-        tester
-            .widget<TextField>(find.byKey(const Key('horizontal-distance')))
-            .controller!
-            .text,
-        '10');
     expect(
         tester
             .widget<TextField>(find.byKey(const Key('top-angle')))

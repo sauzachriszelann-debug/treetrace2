@@ -55,3 +55,7 @@ productFlavors {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    implementation("com.google.ar:core:1.48.0")
+}

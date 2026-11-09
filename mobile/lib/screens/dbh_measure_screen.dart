@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
 import '../services/theme.dart';
+import 'tree_scan_screen.dart';
+import '../services/photo_measurement_rules.dart';
 
 // Result returned to AddTreeScreen
 class DBHResult {
@@ -62,8 +64,9 @@ const _references = [
 // ── Main Screen ───────────────────────────────────────────────────────────────
 class DBHMeasureScreen extends StatefulWidget {
   final File? initialPhoto;
+  final bool legacy;
 
-  const DBHMeasureScreen({super.key, this.initialPhoto});
+  const DBHMeasureScreen({super.key, this.initialPhoto, this.legacy = false});
 
   @override
   State<DBHMeasureScreen> createState() => _DBHMeasureScreenState();
@@ -88,6 +91,19 @@ class _DBHMeasureScreenState extends State<DBHMeasureScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.legacy) {
+      return TreeScanScreen(onUse: (result) {
+        final response = result.dbh;
+        if (result.measurementSkipped || response == null) { Navigator.pop(context); return; }
+        if (!photoMeasurementAccepted(response, baseConfirmed: true)) return;
+        Navigator.pop(context, DBHResult(
+          dbhCm: result.reviewedDbhCm ?? (response['dbh_cm'] as num).toDouble(),
+          confidence: 'Low', method: 'yolo_trunk_v1',
+          notes: response['analysis_notes']?.toString() ?? '', segmentationUsed: true,
+          accuracyNote: response['accuracy_note']?.toString(),
+        ));
+      });
+    }
     return Scaffold(
       backgroundColor: kBackground,
       appBar: AppBar(
@@ -705,6 +721,12 @@ class _DBHMeasureScreenState extends State<DBHMeasureScreen> {
         method: method,
         knownDistanceM: knownDistance,
       );
+
+      if (!mounted) return;
+      if (json['status'] == 'retake' || json['status'] == 'unavailable') {
+        setState(() { _result = null; _error = json['reason']?.toString() ?? 'Please rescan.'; });
+        return;
+      }
 
       final result = DBHResult(
         dbhCm: (json['dbh_cm'] as num).toDouble(),

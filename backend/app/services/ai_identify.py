@@ -817,7 +817,41 @@ async def measure_dbh_from_base64(
     reference_hint: str = "No reference object provided.",
     method: str = "Camera-assisted photo measurement",
     known_distance_m: float | None = None,
+    ar_capture=None,
+    camera_height_m: float = 1.4,
+    pitch_deg: float | None = None,
+    distance_m: float | None = None,
+    distance_source: str | None = None,
+    f_px: float | None = None,
 ) -> dict:
+    # AR requests must never fall through to guessed photo measurements.
+    # Legacy photo/reference callers retain their existing behavior.
+    if ar_capture is not None:
+        # Preserve the original AR implementation byte-for-byte in its backup.
+        from app.services.dbh_yolo_ar_backup import measure_dbh_trunk, failure
+        try:
+            image_bytes = base64.b64decode(image_data, validate=True)
+        except (ValueError, TypeError):
+            return failure("retake", "The camera image is invalid. Rescan.")
+        return await asyncio.to_thread(measure_dbh_trunk, image_bytes, ar_capture)
+
+    # Phase 1 photo path: valid measurements and retakes terminate here.
+    # Only unavailable (including the default disabled flag) preserves the
+    # existing legacy behavior below. Species identification is unchanged.
+    from app.services.dbh_yolo import measure_dbh_trunk, failure, runtime_status
+    if runtime_status()["ready"]:
+        try:
+            original_bytes = base64.b64decode(image_data, validate=True)
+        except (ValueError, TypeError):
+            return failure("retake", "The original photo is invalid; retake it.")
+        result = await asyncio.to_thread(
+            measure_dbh_trunk, original_bytes,
+            camera_height_m=camera_height_m, pitch_deg=pitch_deg,
+            distance_m=distance_m, distance_source=distance_source, f_px=f_px,
+        )
+        if result.get("status") in {"ok", "retake"}:
+            return result
+
     known_distance = (
         f"{known_distance_m:.2f} meters"
         if isinstance(known_distance_m, (int, float)) and known_distance_m > 0
