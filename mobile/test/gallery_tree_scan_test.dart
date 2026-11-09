@@ -115,12 +115,24 @@ void main() {
         'predicted_dbh_cm': valid ? 23 : 'bad',
         'predicted_height_m': valid ? 9 : double.nan,
         'reason': 'Visual prediction only.',
+        'dbh_reason':
+            valid ? 'Reference assumption used.' : 'No visible reference.',
+        'height_reason':
+            valid ? 'Reference assumption used.' : 'Treetop hidden.',
         'assumptions': [
           'Assumed visible tire dimension: 0.6 m; perspective uncertain.'
         ],
       };
       await open(tester, (_, __) async => throw StateError('Must not measure'));
       expect(find.text('AI-predicted size'), findsOneWidget);
+      expect(
+          find.text(
+              'DBH: ${valid ? 'Reference assumption used.' : 'No visible reference.'}'),
+          findsOneWidget);
+      expect(
+          find.text(
+              'Height: ${valid ? 'Reference assumption used.' : 'Treetop hidden.'}'),
+          findsOneWidget);
       expect(
           find.text(
               'Assumed visible tire dimension: 0.6 m; perspective uncertain.'),

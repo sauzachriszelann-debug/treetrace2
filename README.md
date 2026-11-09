@@ -794,3 +794,26 @@ JSON output: https://ai.google.dev/gemini-api/docs/structured-output
 
 These changes do not validate assumed-reference accuracy. Compare experimental
 DBH predictions against tape and height against a clinometer before field use.
+
+### Per-metric gallery rejection reasons and response schema
+
+Gallery AI requests now include a required response schema for both prediction
+objects, their reference/evidence/assumption/reason fields, and both visibility
+flags. The prompt asks for actual observations rather than presenting a template
+filled with null predictions and false flags. JSON mode alone did not enforce
+that structure. This improves format consistency but cannot guarantee predictions.
+
+The response now includes `dbh_reason_code`, `dbh_reason`, `height_reason_code`
+and `height_reason`. The card displays the reasons separately. Reasons distinguish
+physical obstacles (missing reference, hidden base/top, obscured DBH, uncertain
+perspective, ambiguous target, AI abstention) from rejected output (missing metric,
+missing visibility flag, invalid number, missing evidence or incomplete reference
+assumptions). Unsupported or contradictory numbers stay null. A hidden top does
+not suppress otherwise supported DBH; an invalid DBH does not suppress supported
+height. Error/abstention reasons use controlled text rather than raw AI reasoning.
+
+This is a response-contract and diagnostic correction, not field validation or
+proof of the cause of a previous request. No photos are logged, no extra retry
+calls are introduced, no measurements or carbon inputs are filled, and camera/AR
+measurement geometry is unchanged. Assumed-reference predictions remain
+experimental: validate DBH against tape and height against a clinometer.

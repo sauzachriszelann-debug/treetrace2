@@ -1112,12 +1112,14 @@ def _parse_gallery_vision_response(body):
 
 async def gallery_vision_prediction(image_b64: str, content_type: str, prompt: str):
     """Separate gallery request, with safe diagnostics and no numeric defaults."""
+    from app.schemas.gallery_size import GALLERY_VISION_RESPONSE_SCHEMA
     if not GEMINI_API_KEY:
         raise GalleryVisionError("missing_key")
     payload = {"contents": [{"parts": [{"text": prompt},
         {"inline_data": {"mime_type": content_type, "data": image_b64}}]}],
         "generationConfig": {"temperature": 0, "maxOutputTokens": 2048,
-                             "responseMimeType": "application/json"}}
+                             "responseMimeType": "application/json",
+                             "responseSchema": GALLERY_VISION_RESPONSE_SCHEMA}}
     last_code = "model_unavailable"
     try:
         async with httpx.AsyncClient(timeout=30) as client:

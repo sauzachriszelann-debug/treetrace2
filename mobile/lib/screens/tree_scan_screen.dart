@@ -654,6 +654,11 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
                             'Predicted DBH (cm): ${_predictionValue('predicted_dbh_cm', 300)}'),
                         Text(
                             'Predicted height (m): ${_predictionValue('predicted_height_m', 80)}'),
+                        if (_galleryPrediction?['dbh_reason'] is String)
+                          Text('DBH: ${_galleryPrediction!['dbh_reason']}'),
+                        if (_galleryPrediction?['height_reason'] is String)
+                          Text(
+                              'Height: ${_galleryPrediction!['height_reason']}'),
                         if (_galleryPrediction?['assumptions'] is List)
                           ...(_galleryPrediction!['assumptions'] as List)
                               .whereType<String>()

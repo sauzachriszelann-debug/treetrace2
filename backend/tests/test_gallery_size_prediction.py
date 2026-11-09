@@ -215,6 +215,12 @@ def test_gallery_provider_uses_isolated_prompt_without_numeric_defaults(monkeypa
     assert len(requests) == 1
     assert requests[0]['contents'][0]['parts'][0]['text'] == 'isolated gallery prompt'
     assert requests[0]['generationConfig']['responseMimeType'] == 'application/json'
+    schema = requests[0]['generationConfig']['responseSchema']
+    assert set(schema['required']) == {'dbh', 'height', 'base_visible', 'top_visible'}
+    for name in ('dbh', 'height'):
+        metric_schema = schema['properties'][name]
+        assert set(metric_schema['required']) == {'value', 'evidence', 'assumption', 'reference', 'reason_code'}
+        assert metric_schema['properties']['value']['nullable'] is True
 
 
 @pytest.mark.parametrize('body,code', [
@@ -294,3 +300,54 @@ def test_transport_failures_are_controlled_and_do_not_leak_secrets(monkeypatch, 
     assert error.value.code == code
     assert len(calls) == expected_calls
     assert 'do-not-expose' not in str(error.value)
+
+
+@pytest.mark.parametrize('raw,code', [
+    ({}, 'missing_metric'),
+    ({'dbh': {'value': 20}}, 'missing_visibility'),
+    ({'base_visible': False, 'dbh': {'value': 20}}, 'base_hidden'),
+    ({'base_visible': True, 'dbh': {'value': None, 'reason_code': 'no_reference'}}, 'no_reference'),
+    ({'base_visible': True, 'dbh': {'value': None, 'reason_code': 'perspective_uncertain'}}, 'perspective_uncertain'),
+    ({'base_visible': True, 'dbh': {'value': '20'}}, 'invalid_value'),
+    ({'base_visible': True, 'dbh': {'value': 20}}, 'missing_evidence'),
+    ({'base_visible': True, 'dbh': {'value': 20, 'evidence': 'cue'}}, 'missing_reference_details'),
+    ({'base_visible': True, 'dbh': {'value': None, 'reason_code': 'unknown private text'}}, 'cannot_estimate'),
+    ({'base_visible': True, 'dbh': {'value': 20, 'reason_code': 'no_reference',
+                                  'evidence': 'cue', **reference()}}, 'no_reference'),
+])
+def test_each_rejection_has_a_controlled_specific_reason(raw, code):
+    value, actual, reason = service._metric_result(raw, 'dbh', 300)
+    assert value is None
+    assert actual == code
+    assert reason == service.METRIC_REASONS[code]
+    assert 'unknown private text' not in reason
+
+
+def test_hidden_top_does_not_suppress_usable_dbh(monkeypatch, model):
+    monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', AsyncMock(return_value={
+        'base_visible': True, 'top_visible': False,
+        'dbh': {'value': 20, 'evidence': 'cue', 'reason_code': 'predicted', **reference()},
+        'height': {'value': None, 'reason_code': 'top_hidden'},
+    }))
+    result = run()
+    assert result['status'] == 'predicted'
+    assert result['predicted_dbh_cm'] == 20
+    assert result['dbh_reason_code'] == 'predicted'
+    assert result['predicted_height_m'] is None
+    assert result['height_reason_code'] == 'top_hidden'
+    assert result['height_reason'] == service.METRIC_REASONS['top_hidden']
+    assert len(result['assumptions']) == 1
+    assert_not_measured(result)
+
+
+def test_invalid_dbh_does_not_suppress_supported_height(monkeypatch, model):
+    monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', AsyncMock(return_value={
+        'base_visible': True, 'top_visible': True,
+        'dbh': {'value': 0},
+        'height': {'value': 10, 'evidence': 'cue', 'reason_code': 'predicted', **reference()},
+    }))
+    result = run()
+    assert result['predicted_dbh_cm'] is None and result['predicted_height_m'] == 10
+    assert result['dbh_reason_code'] == 'invalid_value'
+    assert result['height_reason_code'] == 'predicted'
+    assert_not_measured(result)
