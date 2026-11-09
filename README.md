@@ -669,3 +669,97 @@ are not ready until the upload phase and a real deployed inference test pass.
 ### Vercel requirements parser correction
 
 The first cloud build rejected the nested requirements include. Deployment dependencies are now listed directly in `backend/requirements.txt`, with official CPU wheel URLs for the pinned Python 3.12 / Linux x86_64 runtime. No nested includes or index directives are used there. Other local platforms must install `requirements-yolo.txt` explicitly. A successful cloud build and deployed inference check are still required.
+
+## Original gallery photos and saved capture evidence
+
+Add Tree > Choose from Gallery now opens the same species/DBH review, without
+requesting resizing or JPEG quality changes from ImagePicker. Species analysis
+may create its existing bounded derivative; DBH receives the selected original.
+
+New level-guided captures save pitch, the camera height at capture time and
+validated focal pixels (or the existing EXIF focal path) in local secure storage,
+indexed by SHA-256 of the exact original bytes. This is capture evidence, not
+photo logging: no image bytes, locations or calculated DBH/height are stored in
+that index. The most recent 200 unique originals are retained. Storage failures
+never block live measurement. Uninstalling/clearing app data, moving to another
+phone, editing/recompressing an image, or OS picker conversion can lose the match.
+There is no automatic export to the system gallery and no metadata sync/export;
+this flow can restore evidence only when the same original is available locally.
+Existing photos captured before this update cannot acquire historical readings.
+
+For matching originals, gallery review automatically requests fresh DBH inference
+using the historical readings, never today's camera height, lens or motion sensor.
+Camera-height distance still requires one Yes/Retake base confirmation; retakes,
+legacy fallbacks and missing evidence cannot fill or accept measured DBH. Unknown
+photos still identify species and offer Skip measurement with null DBH/height.
+Height observations are not restored from this index; gallery height stays empty.
+
+Assumptions remain: level DBH shot (absolute pitch <= 5 degrees), flat ground,
+visible trunk/soil contact, correct camera height, roughly round trunk and intact
+original EXIF. Every result is an experimental estimate requiring validation
+against tape for DBH and a clinometer for height. This does not establish accuracy
+for arbitrary gallery images or bypass Vercel's original-upload size limit.
+
+Validation commands (mobile directory):
+
+```powershell
+flutter test test/photo_capture_metadata_store_test.dart test/gallery_tree_scan_test.dart test/two_capture_session_test.dart test/tree_scan_test.dart
+flutter analyze
+```
+
+## Gallery-only AI-predicted size (unvalidated)
+
+Select Gallery without matching historical capture readings now requests a
+separate `POST /api/ai/gallery-size-prediction` prediction. The authenticated
+endpoint consumes the existing AI quota, separately from species identification.
+It accepts JPEG/PNG/WebP up to 2 MB; mobile sends a bounded, in-memory derivative
+using the existing identification-photo helper. The selected original is never
+overwritten. This derivative is NOT passed to metric DBH/height calculations.
+
+The existing cached `tree_trunk_dbh_v1.pt` model first segments the largest trunk.
+It must be enabled with `DBH_TRUNK_ENABLED=true` and available on the backend.
+The red preview shows trunk detection only. Diagnostic width is in uploaded-image
+pixels at the mask midpoint, NOT a known 1.3 m row or a measured DBH. Missing or
+clipped trunks prevent the visual prediction request. The separately configured
+existing Gemini connection sees the photo and target-trunk pixel bounds; it is
+instructed to abstain when physical scale or relevant tree parts are unsupported.
+No new model weights, credentials or deployment settings are introduced.
+
+Responses contain `predicted_dbh_cm` / `predicted_height_m`, never measured
+`dbh_cm` / `height_m`. Null is an expected outcome. Wrong types, non-finite,
+nonpositive/out-of-range values, missing evidence and hidden base/top are rejected
+rather than replaced or clamped to defaults. Returned values use whole-unit
+rounding to avoid suggesting instrumental precision. The model's self-reported
+visual evidence is NOT independently verified or a confidence/accuracy guarantee.
+Predictions may be substantially wrong even if detection looks correct.
+
+The mobile card reads **AI-predicted size** and **Unvalidated prediction; may be
+inaccurate**. Predictions stay out of editable measurement fields, TreeScanResult,
+tree create/update payloads, offline measurement queues and carbon calculations.
+They are transient display-only results. Skip measurement still saves with null
+measurements. A known original uses the existing strict measurement path instead;
+a measured retake does not silently become an AI guess. Take Photo, Advanced AR,
+base confirmation and the second tilted height capture are unchanged.
+
+Every output is an experimental estimate requiring validation against tape DBH
+and clinometer height. Gallery guesses do not assume a level phone, flat ground,
+1.4 m camera height or intact EXIF when those facts are unknown. Those assumptions,
+a roughly round trunk and visible soil contact still apply to the separate metric
+photo measurement path. No photos or inference images are logged or saved by this
+new backend service. No real provider calls are made by automated tests.
+
+Validation (backend directory):
+
+```powershell
+python -m pytest tests/test_gallery_size_prediction.py tests/test_dbh_photo.py tests/test_height_tilt.py -q
+```
+
+Validation (mobile directory):
+
+```powershell
+flutter test --no-pub test/photo_capture_metadata_store_test.dart test/gallery_tree_scan_test.dart test/two_capture_session_test.dart test/tree_scan_test.dart
+```
+
+This endpoint must be deployed before the updated gallery card can produce
+predictions. Passing mocked tests does not prove live inference or field accuracy.
+The earlier original-photo HTTP 413 issue for metric captures remains separate.

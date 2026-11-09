@@ -41,8 +41,11 @@ void main() {
     expect(find.text('Review Tree Scan'), findsOneWidget);
     expect(find.text('DBH (cm)'), findsOneWidget);
     expect(find.text('Height (m)'), findsOneWidget);
-    await tester.scrollUntilVisible(
-        find.byKey(const Key('use-tree-scan')), 250);
+    await tester.scrollUntilVisible(find.byKey(const Key('use-tree-scan')), 250,
+        scrollable: find
+            .descendant(
+                of: find.byType(ListView), matching: find.byType(Scrollable))
+            .first);
     final button =
         tester.widget<ElevatedButton>(find.byKey(const Key('use-tree-scan')));
     expect(button.onPressed, isNull);

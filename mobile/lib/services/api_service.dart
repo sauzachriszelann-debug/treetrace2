@@ -677,6 +677,24 @@ class ApiService {
     return Map<String, dynamic>.from(res.data);
   }
 
+  /// Display-only AI prediction. A bounded derivative is permitted here:
+  /// this route never supplies measured DBH/height or original EXIF geometry.
+  Future<Map<String, dynamic>> predictGallerySize(File imageFile) async {
+    final photo = await prepareIdentificationPhoto(
+        await imageFile.readAsBytes(), _imageContentType(imageFile).toString());
+    final response = await _dio.post('/ai/gallery-size-prediction',
+        data: FormData.fromMap({
+          'file': MultipartFile.fromBytes(photo.bytes,
+              filename:
+                  photo.mimeType == 'image/png' ? 'gallery.png' : 'gallery.jpg',
+              contentType: DioMediaType.parse(photo.mimeType))
+        }),
+        options: Options(
+            sendTimeout: const Duration(seconds: 60),
+            receiveTimeout: const Duration(seconds: 120)));
+    return Map<String, dynamic>.from(response.data as Map);
+  }
+
   Future<Map<String, dynamic>> identifyTree(File imageFile) async {
     final photo = await prepareIdentificationPhoto(
         await imageFile.readAsBytes(), _imageContentType(imageFile).toString());

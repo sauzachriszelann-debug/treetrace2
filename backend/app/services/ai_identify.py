@@ -1050,3 +1050,27 @@ async def _pipeline_with_status(image_bytes: bytes, image_b64: str, content_type
         result["status_source"]     = info.get("source", "default")
 
     return result
+
+
+async def gallery_vision_prediction(image_b64: str, content_type: str, prompt: str):
+    """Separate gallery-only request; no measured DBH fallback or species defaults."""
+    if not GEMINI_API_KEY:
+        return None
+    payload = {"contents": [{"parts": [{"text": prompt},
+        {"inline_data": {"mime_type": content_type, "data": image_b64}}]}],
+        "generationConfig": {"temperature": 0, "maxOutputTokens": 700}}
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            for model in _gemini_candidate_models():
+                response = await client.post(
+                    f"{_gemini_endpoint(model)}?key={GEMINI_API_KEY}", json=payload)
+                if response.status_code == 200:
+                    raw = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+                    raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip())
+                    result = json.loads(raw)
+                    return result if isinstance(result, dict) else None
+                if response.status_code not in (400, 403, 404):
+                    break
+    except Exception:
+        pass
+    return None

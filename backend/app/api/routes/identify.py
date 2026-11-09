@@ -14,6 +14,7 @@ from app.models.user import User, UserRole
 from app.models.unknown_species import UnknownSpecies
 from app.schemas.dbh import ARDBHRequest, ARDBHResponse, PhotoDBHRequest as MeasureDBHRequest
 from app.schemas.height import HeightRequest, HeightResponse
+from app.schemas.gallery_size import GallerySizeResponse
 from app.core.security import get_current_user, require_admin
 from app.api.routes.tree_submissions import (
     TREE_SUBMISSION_DAILY_LIMITS,
@@ -241,6 +242,23 @@ def ai_usage(
         "qr_scan": {"unlimited": True},
         "public_map": {"unlimited": True},
     }
+
+@router.post("/gallery-size-prediction", response_model=GallerySizeResponse)
+async def gallery_size_prediction(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # Authenticated, quota-limited, display-only predictions; never tree writes.
+    if file.content_type not in ("image/jpeg", "image/png", "image/webp"):
+        raise HTTPException(status_code=400, detail="Use JPEG, PNG or WebP.")
+    contents = await file.read(2_000_001)
+    if not contents or len(contents) > 2_000_000:
+        raise HTTPException(status_code=413, detail="Prediction photo must be at most 2 MB.")
+    enforce_ai_limit(current_user, db)
+    from app.services.gallery_size_prediction import predict_gallery_size
+    return await predict_gallery_size(contents, file.content_type)
+
 
 @router.post("/identify")
 async def identify_tree(

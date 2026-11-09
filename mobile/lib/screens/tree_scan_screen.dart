@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../services/api_service.dart';
+import '../services/photo_capture_metadata_store.dart';
 import '../services/identification_error.dart';
 import '../services/ar_tree_height.dart';
 import '../services/dbh_ar_service.dart';
@@ -19,6 +20,12 @@ import '../services/photo_measurement_rules.dart';
 /// Add photo opens this session directly. Capture stages advance in the native
 /// camera; processing and species identification run automatically afterwards.
 class TreeScanScreen extends StatefulWidget {
+  final Future<Map<String, dynamic>> Function(File)? predictGallerySize;
+  final File? galleryPhoto;
+  final PhotoCaptureMetadataStore metadataStore;
+  final Future<Map<String, dynamic>> Function(File)? identifyPhoto;
+  final Future<Map<String, dynamic>> Function(File, PhotoCaptureMetadata)?
+      measurePhoto;
   final bool autoStart;
   final bool advancedAr;
   final ValueChanged<TreeScanResult>? onUse;
@@ -26,6 +33,11 @@ class TreeScanScreen extends StatefulWidget {
   const TreeScanScreen(
       {super.key,
       this.autoStart = true,
+      this.galleryPhoto,
+      this.predictGallerySize,
+      this.metadataStore = const PhotoCaptureMetadataStore(),
+      this.identifyPhoto,
+      this.measurePhoto,
       this.initialResult,
       this.advancedAr = false,
       this.onUse});
@@ -34,6 +46,8 @@ class TreeScanScreen extends StatefulWidget {
 }
 
 class _TreeScanScreenState extends State<TreeScanScreen> {
+  Map<String, dynamic>? _galleryPrediction;
+  Uint8List? _galleryTrunkPreview;
   Map<String, dynamic>? _photoMeasurement;
   Uint8List? _preview;
   bool _baseConfirmed = false;
@@ -91,7 +105,13 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
     }
     if (widget.autoStart) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _scan();
+        if (mounted) {
+          if (widget.galleryPhoto != null) {
+            _scanGallery(widget.galleryPhoto!);
+          } else {
+            _scan();
+          }
+        }
       });
     }
   }
@@ -100,6 +120,8 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
     final previous = _photo;
     final deletePrevious = _ownsPhoto;
     _photo = photo;
+    _galleryPrediction = null;
+    _galleryTrunkPreview = null;
     _ownsPhoto = owned;
     _species = null;
     _fillSpecies();
@@ -108,6 +130,104 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
         await previous.delete();
       } catch (_) {/* Already removed by cache cleanup. */}
     }
+  }
+
+  Future<void> _scanGallery(File photo) async {
+    setState(() {
+      _busy = true;
+      _message = 'Identifying original gallery photo.';
+      _dbhMessage = 'Checking saved capture readings.';
+      _heightMessage =
+          'Height unavailable: this photo has no saved height observation.';
+    });
+    Future<void>? speciesWork;
+    try {
+      await _replacePhoto(photo);
+      if (!mounted) return;
+      speciesWork = _identify(photo);
+      final metadata = await widget.metadataStore.read(photo);
+      if (!mounted) return;
+      if (metadata == null) {
+        setState(() => _dbhMessage =
+            'DBH unavailable: no saved TreeTrace capture readings for this original photo. Take a level photo to measure DBH.');
+        await _predictGallery(photo);
+        return;
+      }
+      final result = await (widget.measurePhoto?.call(photo, metadata) ??
+          api.measureDbh(photo,
+              referenceHint:
+                  'Original gallery photo with saved capture readings',
+              method: 'yolo_trunk_v1',
+              cameraHeightM: metadata.cameraHeightMeters,
+              pitchDeg: metadata.pitchDegrees,
+              focalPixels: metadata.focalPixels));
+      // Reject retakes/fallbacks BEFORE reading any numeric result fields.
+      final valid = photoMeasurementAccepted(result, baseConfirmed: true);
+      final preview = await _decodePreview(result['preview_png']);
+      if (!mounted) return;
+      setState(() {
+        _preview = preview;
+        _previewReady = preview != null;
+        _photoMeasurement = valid ? result : null;
+        _dbh = valid ? result : null;
+        _baseConfirmed = false;
+        _diameter.text = valid && result['needs_base_confirmation'] != true
+            ? (result['dbh_cm'] as num).toStringAsFixed(1)
+            : '';
+        _dbhMessage = valid
+            ? 'Experimental estimate - validate DBH against tape and height against a clinometer.'
+            : result['reason']?.toString() ??
+                'No reliable DBH. Retake or skip measurement.';
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => _dbhMessage = error is DioException &&
+                error.response?.statusCode == 413
+            ? 'Original photo exceeds the server upload limit (HTTP 413).'
+            : 'DBH unavailable. Check the connection or take a new level photo.');
+      }
+    } finally {
+      if (speciesWork != null) await speciesWork;
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _predictGallery(File photo) async {
+    try {
+      final prediction = await (widget.predictGallerySize?.call(photo) ??
+          api.predictGallerySize(photo));
+      final preview = await _decodePreview(prediction['preview_png']);
+      if (!mounted || _photo?.path != photo.path) return;
+      setState(() {
+        _galleryPrediction = prediction;
+        _galleryTrunkPreview = preview;
+      });
+    } catch (_) {
+      if (!mounted || _photo?.path != photo.path) return;
+      setState(() => _galleryPrediction = {
+            'status': 'unavailable',
+            'reason':
+                'Gallery size prediction unavailable. Check the connection or updated backend.'
+          });
+    }
+  }
+
+  String _predictionValue(String key, double maximum) {
+    final p = _galleryPrediction;
+    final value = p?[key];
+    if (p?['status'] != 'predicted' ||
+        p?['method'] != 'gallery_yolo_vision_prediction' ||
+        p?['quality'] != 'unvalidated' ||
+        p?['validated_accuracy'] != false ||
+        p?['trunk_detected'] != true ||
+        p?['fallback'] == true ||
+        value is! num ||
+        !value.isFinite ||
+        value < 1 ||
+        value > maximum) {
+      return 'Unavailable';
+    }
+    return value.toStringAsFixed(0);
   }
 
   Future<void> _scan() => widget.advancedAr ? _scanAr() : _scanLevel();
@@ -363,7 +483,8 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
 
   Future<void> _identify(File photo) async {
     try {
-      final result = await api.identifyTree(photo);
+      final result =
+          await (widget.identifyPhoto?.call(photo) ?? api.identifyTree(photo));
       if (!mounted || _photo?.path != photo.path) return;
       final name = result['scientific_name']?.toString().trim() ?? '';
       setState(() {
@@ -514,6 +635,33 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
             ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Image.file(_photo!, height: 200, fit: BoxFit.cover)),
+          if (_galleryPrediction != null)
+            Card(
+              key: const Key('gallery-size-prediction'),
+              child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('AI-predicted size',
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        const Text(
+                            'Unvalidated prediction; may be inaccurate.'),
+                        if (_galleryTrunkPreview != null)
+                          Image.memory(_galleryTrunkPreview!,
+                              height: 180, fit: BoxFit.contain),
+                        Text(
+                            'Predicted DBH (cm): ${_predictionValue('predicted_dbh_cm', 300)}'),
+                        Text(
+                            'Predicted height (m): ${_predictionValue('predicted_height_m', 80)}'),
+                        Text(_galleryPrediction?['reason']?.toString() ??
+                            'No size prediction.'),
+                        const Text(
+                            'Trunk detection provides pixels, not physical scale. '
+                            'Experimental estimates: validate DBH against tape and height against a clinometer. '
+                            'Predictions are not saved as measurements or used for carbon calculations.'),
+                      ])),
+            ),
           if (_preview != null) ...[
             const SizedBox(height: 12),
             Image.memory(_preview!, fit: BoxFit.contain),

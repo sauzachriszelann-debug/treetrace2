@@ -8,7 +8,6 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../services/api_service.dart';
-import '../services/identification_error.dart';
 import '../services/auth_provider.dart';
 import '../services/gps_capture.dart';
 import '../services/theme.dart';
@@ -301,62 +300,25 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
   }
 
   Future<void> _pickPhoto(ImageSource source) async {
-    final x = await ImagePicker()
-        .pickImage(source: source, imageQuality: 80, maxWidth: 1200);
-    if (x == null) return;
-    final f = File(x.path);
-    setState(() {
-      _photo = f;
-      _roboflowCandidate = null;
-    });
-    if (widget.aiResult == null) await _autoIdentify(f);
-  }
-
-  Future<void> _autoIdentify(File f) async {
+    final x = await ImagePicker().pickImage(source: source);
+    if (x == null || !mounted) return;
     setState(() => _identifying = true);
     try {
-      final r = await api.identifyTree(f);
-      if (!mounted) return;
-      setState(() {
-        _roboflowCandidate = _extractRoboflowCandidate(r);
-      });
-      if (r['not_identified'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(r['reason']?.toString() ?? 'Species not identified. Try a clearer leaf photo.'),
-            backgroundColor: kFair));
-      }
-      if (r['not_identified'] != true) {
-        setState(() {
-          _aiPrediction = r;
-          if (_nameCtrl.text.isEmpty) _nameCtrl.text = r['common_name'] ?? '';
-          if (_sciCtrl.text.isEmpty) _sciCtrl.text = r['scientific_name'] ?? '';
-          // Species responses do not carry verified photo scale or tilt.
-          if (_notesCtrl.text.isEmpty)
-            _notesCtrl.text = _usefulAiNote(r['description']) ?? '';
-        });
-        if (mounted)
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text('AI identified: ${r['common_name']}'),
-              backgroundColor: kHealthy));
-      }
-    } catch (error) {
-      if (mounted) {
-
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(identificationError(error)),
-            backgroundColor: kPoor));
-      }
+      await _openTreeScan(galleryPhoto: File(x.path));
     } finally {
       if (mounted) setState(() => _identifying = false);
     }
   }
 
-  Future<void> _openTreeScan({bool advancedAr = false}) async {
+  Future<void> _openTreeScan({bool advancedAr = false, File? galleryPhoto}) async {
     final result = await Navigator.push<TreeScanResult>(
-        context, MaterialPageRoute(builder: (_) => TreeScanScreen(advancedAr: advancedAr)));
+        context, MaterialPageRoute(builder: (_) => TreeScanScreen(advancedAr: advancedAr, galleryPhoto: galleryPhoto)));
     if (result == null || !mounted) return;
     setState(() {
       final species = result.species;
+      if (galleryPhoto != null && species != null && _notesCtrl.text.isEmpty) {
+        _notesCtrl.text = _usefulAiNote(species['description']) ?? '';
+      }
       if (species != null || result.photo != null) {
         // Keep original AI output for evaluation; corrections are actual labels.
         _aiPrediction = species;

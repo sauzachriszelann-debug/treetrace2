@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import '../services/camera_height_settings.dart';
+import '../services/photo_capture_metadata_store.dart';
 import '../services/camera_photo_metadata.dart';
 import '../services/photo_measurement_rules.dart';
 import '../services/tree_height_measurement.dart';
@@ -44,11 +45,13 @@ class LevelDbhCameraScreen extends StatefulWidget {
       onMeasureHeight;
   final Stream<AccelerometerEvent>? sensorEvents;
   final CameraHeightSettings settings;
+  final PhotoCaptureMetadataStore metadataStore;
   const LevelDbhCameraScreen(
       {super.key,
       this.onMeasureTrunk,
       this.onMeasureHeight,
       this.sensorEvents,
+      this.metadataStore = const PhotoCaptureMetadataStore(),
       this.settings = const CameraHeightSettings()});
   @override
   State<LevelDbhCameraScreen> createState() => _LevelDbhCameraScreenState();
@@ -291,6 +294,14 @@ class _LevelDbhCameraScreenState extends State<LevelDbhCameraScreen>
         });
         return;
       }
+      // Bind the checked sensor readings to original bytes for later gallery use.
+      await widget.metadataStore.save(
+          capture.photo,
+          PhotoCaptureMetadata(
+              pitchDegrees: capture.pitchDegrees!,
+              cameraHeightMeters: capture.cameraHeightMeters,
+              focalPixels: capture.focalPixels));
+      if (!mounted) return;
       try {
         final result = await widget.onMeasureTrunk!(capture);
         if (!mounted) return;

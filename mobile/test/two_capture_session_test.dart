@@ -13,9 +13,22 @@ import 'package:treetrace_mobile/screens/level_dbh_camera_screen.dart';
 import 'package:treetrace_mobile/services/camera_height_settings.dart';
 import 'package:treetrace_mobile/services/camera_photo_metadata.dart';
 import 'package:treetrace_mobile/services/photo_measurement_rules.dart';
+import 'package:treetrace_mobile/services/photo_capture_metadata_store.dart';
 
 const png =
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jBz0AAAAASUVORK5CYII=';
+    'iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAFElEQVR4nGM8kWLEAANMDEgANwcARfYBZhhDpbAAAAAASUVORK5CYII=';
+
+class _CaptureStore extends PhotoCaptureMetadataStore {
+  int saves = 0;
+  @override
+  Future<bool> save(File photo, PhotoCaptureMetadata metadata) async {
+    saves++;
+    expect(metadata.pitchDegrees, closeTo(0, 0.01));
+    expect(metadata.cameraHeightMeters, 1.4);
+    expect(metadata.focalPixels, closeTo(3380, 100));
+    return true;
+  }
+}
 
 class FakeCamera extends CameraPlatform {
   final List<String> shots;
@@ -98,12 +111,13 @@ void main() {
   for (final mode in ['height', 'skip', 'retake', 'interrupted']) {
     testWidgets('same camera session: $mode', (tester) async {
       final directory =
-          await Directory.systemTemp.createTemp('treetrace_two_shots_');
-      addTearDown(() => directory.delete(recursive: true));
-      final first = await File('${directory.path}/trunk.png')
-          .writeAsBytes(base64Decode(png));
-      final second = await File('${directory.path}/top.png')
-          .writeAsBytes(base64Decode(png));
+          Directory.systemTemp.createTempSync('treetrace_two_shots_');
+      addTearDown(() => directory.deleteSync(recursive: true));
+      final first = File('${directory.path}/trunk.png')
+        ..writeAsBytesSync(base64Decode(png));
+      final second = File('${directory.path}/top.png')
+        ..writeAsBytesSync(base64Decode(png));
+      final captureStore = _CaptureStore();
       final originalPlatform = CameraPlatform.instance;
       final camera = FakeCamera([first.path, second.path]);
       CameraPlatform.instance = camera;
@@ -133,6 +147,13 @@ void main() {
       });
       addTearDown(() => tester.binding.defaultBinaryMessenger
           .setMockMethodCallHandler(CameraPhotoMetadata.channel, null));
+      // Dispose subscriptions before closing the sensor controller, including
+      // after an assertion failure, so teardown itself cannot hang.
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump();
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      });
       LevelPhotoCapture? returned;
       int heightCalls = 0;
       await tester.pumpWidget(MaterialApp(
@@ -145,6 +166,7 @@ void main() {
                             MaterialPageRoute(
                                 builder: (_) => LevelDbhCameraScreen(
                                       sensorEvents: sensors.stream,
+                                      metadataStore: captureStore,
                                       settings: CameraHeightSettings(
                                           reader: () async => '1.4'),
                                       onMeasureTrunk: (_) async => mode ==
@@ -195,7 +217,21 @@ void main() {
 
       await aim(0);
       await tester.tap(find.byKey(const Key('capture-level-dbh')));
-      await tester.pumpAndSettle();
+      // The real preview codec runs outside fake time; wait for the observable
+      // confirmation/retake state, not for an indeterminate progress animation.
+      await tester.runAsync(() async {
+        for (var i = 0; i < 100; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          await tester.pump();
+          if (find
+                  .text('Is the green line at the bottom of the tree?')
+                  .evaluate()
+                  .isNotEmpty ||
+              find.text('Move closer').evaluate().isNotEmpty) {
+            break;
+          }
+        }
+      });
       expect(camera.captures, 1);
       expect(camera.disposals, 0);
       if (mode == 'retake') {
@@ -225,17 +261,26 @@ void main() {
           await tester.tap(find.text('Skip height'));
         }
       }
+      // Height deletes its temporary second shot asynchronously. Allow real
+      // filesystem completion while keeping the shutter's sensor gate tested.
+      await tester.runAsync(() async {
+        for (var i = 0; i < 100 && returned == null; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          await tester.pump();
+        }
+      });
       await tester.pumpAndSettle();
+      expect(captureStore.saves, 1);
       expect(tester.takeException(), isNull);
       expect(returned?.photo.path, first.path);
       expect(returned?.heightResponse?['height_m'],
           mode == 'height' ? 11.5 : isNull);
       expect(heightCalls, mode == 'height' ? 1 : 0);
       expect(camera.captures, mode == 'height' ? 2 : 1);
-      expect(await first.exists(), isTrue);
-      if (mode == 'height') expect(await second.exists(), isFalse);
+      expect(first.existsSync(), isTrue);
+      if (mode == 'height') expect(second.existsSync(), isFalse);
       expect(returned?.skipMeasurement, mode == 'retake');
       if (mode != 'retake') expect(returned?.baseConfirmed, isTrue);
-    });
+    }, timeout: const Timeout(Duration(seconds: 30)));
   }
 }
