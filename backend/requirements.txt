@@ -16,3 +16,6 @@ Pillow==10.4.0
 email-validator==2.2.0
 resend==2.4.0
 psycopg2-binary==2.9.9
+
+# Vercel installs this file; include the measured-trunk CPU runtime explicitly.
+-r requirements-yolo.txt

@@ -28,6 +28,7 @@ scratch/
 timbervision/
 backend/models/*.pt
 !backend/models/tree_trunk_segmentation.pt
+!backend/models/tree_trunk_dbh_v1.pt
 yolov8n-seg.pt
 *.zip
 

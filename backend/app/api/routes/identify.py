@@ -41,6 +41,28 @@ from app.services.species_db import get_all_protected, lookup_species, PHILIPPIN
 router = APIRouter()
 
 
+@router.get("/dbh-trunk-status")
+def dbh_trunk_status(_: User = Depends(get_current_user)):
+    """Configuration checks only: never load weights or claim verified inference."""
+    from app.services.dbh_yolo import runtime_status
+    status = runtime_status()
+    configuration_ready = status.pop("ready", False)
+    reasons = []
+    if not status.get("enabled"):
+        reasons.append("Set DBH_TRUNK_ENABLED=true for this deployment.")
+    if not status.get("model_found"):
+        reasons.append("The deployed tree_trunk_dbh_v1.pt model is missing.")
+    if not status.get("dependencies_available"):
+        reasons.append("The deployed CPU YOLO dependencies are missing.")
+    return {
+        **status, "model": "tree_trunk_dbh_v1.pt", "device": "cpu",
+        "method": "yolo_trunk_v1", "configuration_ready": configuration_ready,
+        "inference_verified": False, "check_type": "configuration_only",
+        "reason": " ".join(reasons) if reasons else
+            "Configuration found. Run an inference probe before field use.",
+    }
+
+
 
 @router.post("/measure-height", response_model=HeightResponse)
 def measure_height(payload: HeightRequest, _: User = Depends(get_current_user)):

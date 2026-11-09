@@ -1,3 +1,9 @@
-ultralytics==8.3.40
+# CPU wheels only: do not pull CUDA/NVIDIA packages into a serverless function.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.12.0+cpu
+torchvision==0.27.0+cpu
+# Official headless distribution avoids the GUI OpenCV/libGL dependency.
+# It exports the same `ultralytics` Python module; do not install both variants.
+ultralytics-opencv-headless==8.3.243
 opencv-python-headless==4.10.0.84
 numpy==1.26.4

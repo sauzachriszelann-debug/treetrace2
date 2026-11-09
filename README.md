@@ -544,3 +544,124 @@ uvicorn command without --reload does not reload source changes), then hot resta
 Flutter with Shift+R while keeping the existing local API build override. Capture
 the trunk, confirm the base, stay in place and capture the treetop or skip height.
 Review both results together. This phase adds no iOS native code or web height flow.
+
+
+## Online Phase 1: Vercel CPU model packaging
+
+APK building and large-photo upload changes are paused. This phase prepares the
+model/runtime and configuration diagnostics only. It does not claim a successful
+Vercel deployment or remove the 4.5 MB function-body limit.
+
+### Packaged assets and dependencies
+
+The existing, unmodified `backend/models/tree_trunk_dbh_v1.pt` is now explicitly
+allowlisted in Git and included in the function configuration. It must be included
+in the eventual commit/push; changing .gitignore alone does not upload the file.
+The old `tree_trunk_segmentation.pt` is not overwritten. The reviewed new file is
+54,846,172 bytes with SHA-256:
+
+    23833b4a12ba8175275a132c3c4dde87c90d2d3bedb127a49ee1dfce49793962
+
+`requirements.txt` now includes `requirements-yolo.txt`, because Vercel installs
+only the default requirements file. The deployment profile pins CPU-only Torch
+2.12.0+cpu and torchvision 0.27.0+cpu from the official PyTorch CPU index. It uses
+the official `ultralytics-opencv-headless==8.3.243` distribution, which exports the
+same `ultralytics` module, with headless OpenCV 4.10.0.84 and NumPy 1.26.4. This
+replaces the old 8.3.40 wrapper in the deployment profile; the trained model bytes
+and DBH calibration are unchanged. Install into a clean environment: do not mix
+standard ultralytics/opencv-python with their headless distributions. CPU PyTorch
+wheels exist for the project's Python 3.12 Linux target. Keep `.python-version`
+at 3.12 when using this profile; the legacy runtime.txt is not the version source
+for this modern configuration.
+
+The current Vercel configuration uses the FastAPI preset and `functions` for
+`app/main.py`, replacing deprecated `builds` so packaging/runtime limits can be
+configured in one place. Routing remains to the same app/main.py entrypoint.
+It sets Fluid compute, a 2,048 MB function memory target and 300-second maximum,
+includes the new model and excludes test/scratch/environment files. YOLO and
+Matplotlib configuration writes use /tmp; prediction continues to use CPU and
+save=False. There are no new photo logs, API keys or photo-network operations.
+No global or GPU package installation is performed by this phase's code edits.
+
+### Required dashboard steps before deployment testing
+
+Keep the Vercel project Root Directory as `backend`. For the environment actually
+being tested (Preview or Production), set these non-secret project variables:
+
+- `DBH_TRUNK_ENABLED=true` (new model; ENABLE_YOLO_DBH is the legacy model flag).
+- `VERCEL_SUPPORT_LARGE_FUNCTIONS=1` for an existing project's larger-function
+  opt-in, if enabled for the account. Confirm Fluid compute/Active CPU settings.
+- Optionally `VERCEL_ANALYZE_BUILD_OUTPUT=1` to inspect actual function sizes.
+
+Then redeploy without stale dependency caches. The Python normal bundle limit is
+500 MB uncompressed; Vercel documents a 5 GB large-functions beta. The CPU Torch
+package alone measured about 496 MiB on this Windows installation, so do not assume
+the complete Linux deployment fits the normal limit. Dashboard/account eligibility
+and the actual built bundle must be checked; this repository cannot prove either.
+A configured 2 GB target is not proof of sufficient memory for full-resolution
+images, concurrent scans, startup imports and database code.
+
+A Preview deployment marked Ready does not prove that the APK's stable Production
+URL serves the same commit. Verify the actual URL/version before building the APK.
+No dashboard settings, branch promotion, commit, push or live deployment are
+performed automatically in this phase. Existing secret values stay in Vercel;
+never paste them into source code, screenshots or chat.
+
+### New model status and offline probe
+
+Authenticated `GET /api/ai/dbh-trunk-status` checks the new model's enabled flag,
+file and dependency presence. It reports `configuration_ready`, the model filename,
+CPU device and missing prerequisites. It deliberately returns
+`inference_verified=false`, `check_type=configuration_only` and
+`validated_accuracy=false`: a fast status request does not load weights or prove
+successful inference. The existing /dbh-status still describes the legacy model.
+
+Run the probe from backend in an isolated environment with adequate disk space:
+
+```powershell
+$env:DBH_TRUNK_ENABLED = "true"
+python tests/check_dbh_runtime.py --self-test
+```
+
+The probe blocks networking, uses a synthetic 640x640 image without writing it,
+checks the model task and exact single trunk class, reports package versions,
+model checksum, elapsed cold import/inference time and sampled process peak RSS.
+It cannot validate DBH/height accuracy or prove Linux/Vercel compatibility. Exit 2
+means configuration/inference failed; exit 3 means the installed profile differs
+from the declared deployment profile. JSON is still printed so a successful
+local baseline is not confused with successful profile verification.
+
+To measure an already-built function, add `--bundle-dir` pointing at its actual
+`.vercel/output/functions/...func` directory. The tool measures real files and
+flags bundles over 500 MiB; it does not invent a bundle-size estimate. The 20 ms
+RSS sampling is a local lower-bound observation, not a concurrency/load test.
+
+Observed local baseline: Windows Python 3.11.9, Torch 2.12.0+cpu, torchvision
+0.27.0+cpu and the previously installed standard Ultralytics 8.3.40 loaded the
+packaged segmentation model with exactly {0: trunk}. Synthetic cold probe time
+was 56.819 seconds and sampled peak RSS was 614,285,312 bytes (about 586 MiB).
+`deployment_profile_matches=false` and `vercel_verified=false` remained false.
+The new headless distribution could not be fetched in the agent environment, so
+the new clean deployment profile and actual Linux bundle are NOT yet verified.
+Do not call online DBH ready or field validated based on this baseline.
+
+Offline regression checks:
+
+```powershell
+python -m pytest tests/test_dbh_deployment.py tests/test_dbh_photo.py tests/test_height_tilt.py -q
+```
+
+### Sources and the next phase
+
+- Vercel limits: https://vercel.com/docs/functions/limitations
+- FastAPI entrypoint/preset: https://vercel.com/docs/frameworks/backend/fastapi
+- Python CPU wheels: https://download.pytorch.org/whl/cpu/torch/
+- Headless distribution: https://docs.ultralytics.com/quickstart/
+
+The next separately approved phase will handle original photo uploads through
+private, authenticated storage transfers without Vercel's 4.5 MB request body.
+That transfer must preserve original bytes/EXIF, enforce ownership and size/type
+limits, avoid arbitrary user-supplied fetch URLs, and clean up temporary objects.
+It is not implemented here. Mobile, web, AR, height logic and APK outputs remain
+unchanged. Even after a working model deployment, full-size outdoor photo scans
+are not ready until the upload phase and a real deployed inference test pass.

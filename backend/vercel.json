@@ -1,11 +1,21 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "builds": [
-    {
-      "src": "app/main.py",
-      "use": "@vercel/python"
+  "framework": "fastapi",
+  "fluid": true,
+  "functions": {
+    "app/main.py": {
+      "memory": 2048,
+      "maxDuration": 300,
+      "includeFiles": "models/tree_trunk_dbh_v1.pt",
+      "excludeFiles": "{tests/**,.pytest_cache/**,.venv/**,venv/**,sandbox_uploads/**,**/__pycache__/**,**/*.pyc,.env*,*.jpg,*.png,models/roboflow_efficientnet/**}"
     }
-  ],
+  },
+  "env": {
+    "YOLO_CONFIG_DIR": "/tmp/treetrace-yolo",
+    "MPLCONFIGDIR": "/tmp/treetrace-matplotlib",
+    "OMP_NUM_THREADS": "2",
+    "MKL_NUM_THREADS": "2"
+  },
   "routes": [
     {
       "src": "/(.*)",
