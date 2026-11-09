@@ -127,7 +127,7 @@ def test_unavailable_or_unsupported_ai_never_fills_sizes(monkeypatch, model, raw
     assert_not_measured(result)
 
 
-@pytest.mark.parametrize('condition', ['disabled', 'clipped', 'broken'])
+@pytest.mark.parametrize('condition', ['disabled', 'broken'])
 def test_no_trunk_evidence_never_calls_provider(monkeypatch, model, condition):
     provider = AsyncMock(side_effect=AssertionError('No prediction without trunk'))
     monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', provider)
@@ -167,6 +167,23 @@ def test_gallery_retry_is_bounded_when_both_views_miss(model):
     assert model.call_count == 2
     assert detection['trunk_detected'] is False
     assert detection['target_source'] == 'ai_visual'
+
+
+def test_partial_trunk_preserves_overlay_and_independent_predictions(monkeypatch, model):
+    model.return_value[0][:, :300] = True
+    provider = AsyncMock(return_value={
+        'base_visible': True, 'top_visible': True,
+        'dbh': {'value': None, 'reason_code': 'dbh_obscured'},
+        'height': {'value': 9, 'evidence': 'Visible canopy', **visual_support()}})
+    monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', provider)
+    result = run()
+    provider.assert_awaited_once()
+    assert result['trunk_detected'] is True
+    assert result['trunk_width_px'] is None
+    assert result['preview_png']
+    assert result['predicted_dbh_cm'] is None
+    assert result['predicted_height_m'] == 9
+    assert_not_measured(result)
 
 
 def test_route_requires_authentication():

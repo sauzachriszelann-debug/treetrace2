@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:treetrace_mobile/screens/tree_scan_screen.dart';
@@ -12,18 +13,24 @@ const png =
 // Widget tests isolate the review contract from filesystem scheduling.
 class _EvidenceStore extends PhotoCaptureMetadataStore {
   PhotoCaptureMetadata? evidence;
+  bool fail = false;
   @override
-  Future<PhotoCaptureMetadata?> read(File photo) async => evidence;
+  Future<PhotoCaptureMetadata?> read(File photo) async {
+    if (fail) throw const FileSystemException('Capture index unavailable');
+    return evidence;
+  }
 }
 
 void main() {
   late File photo;
   late _EvidenceStore store;
   Map<String, dynamic>? prediction;
+  Object? predictionError;
   setUp(() {
     photo = File('gallery-original.png');
     store = _EvidenceStore();
     prediction = null;
+    predictionError = null;
   });
 
   Future<void> open(
@@ -53,9 +60,11 @@ void main() {
           home: TreeScanScreen(
         galleryPhoto: photo,
         metadataStore: store,
-        predictGallerySize: (_) async =>
-            prediction ??
-            {'status': 'cannot_estimate', 'reason': 'No visible scale.'},
+        predictGallerySize: (_) async {
+          if (predictionError != null) throw predictionError!;
+          return prediction ??
+              {'status': 'cannot_estimate', 'reason': 'No visible scale.'};
+        },
         measurePhoto: measure,
         identifyPhoto: (_) async =>
             {'common_name': 'Mango', 'scientific_name': 'Mangifera indica'},
@@ -103,8 +112,15 @@ void main() {
         isNull);
   });
 
-  for (final mode in ['yolo', 'unavailable', 'ai_visual', 'ambiguous']) {
-    final valid = mode == 'yolo' || mode == 'ai_visual';
+  for (final mode in [
+    'yolo',
+    'unavailable',
+    'ai_visual',
+    'ambiguous',
+    'history_error'
+  ]) {
+    final valid =
+        mode == 'yolo' || mode == 'ai_visual' || mode == 'history_error';
     testWidgets('gallery prediction stays separate from measurements: $mode',
         (tester) async {
       prediction = {
@@ -113,7 +129,8 @@ void main() {
         'quality': 'unvalidated',
         'prediction_basis': 'visual_appearance',
         'validated_accuracy': false,
-        'trunk_detected': mode == 'yolo' || mode == 'unavailable',
+        'trunk_detected':
+            mode == 'yolo' || mode == 'unavailable' || mode == 'history_error',
         'target_source': mode == 'yolo' ? 'yolo' : 'ai_visual',
         'target_identified': mode == 'ai_visual',
         'detection_note': 'AI assessed the photo without a YOLO mask.',
@@ -129,6 +146,7 @@ void main() {
           'Physical scale is unknown; prediction may be inaccurate.'
         ],
       };
+      store.fail = mode == 'history_error';
       await open(tester, (_, __) async => throw StateError('Must not measure'));
       expect(find.text('AI-predicted size'), findsOneWidget);
       expect(find.text('AI assessed the photo without a YOLO mask.'),
@@ -165,6 +183,26 @@ void main() {
               .widget<ElevatedButton>(find.byKey(const Key('use-tree-scan')))
               .onPressed,
           isNull);
+    });
+  }
+
+  for (final status in [413, 429, 503]) {
+    testWidgets('gallery explains request failure $status', (tester) async {
+      final request = RequestOptions(path: '/ai/gallery-size-prediction');
+      predictionError = DioException(
+          requestOptions: request,
+          response: Response(requestOptions: request, statusCode: status),
+          type: DioExceptionType.badResponse);
+      await open(tester, (_, __) async => throw StateError('Must not measure'));
+      expect(
+          find.text(status == 413
+              ? 'The gallery upload exceeded the server size limit.'
+              : status == 429
+                  ? 'The AI request limit has been reached. Try again later.'
+                  : 'The gallery prediction server could not complete the request. Try again.'),
+          findsOneWidget);
+      expect(find.text('Predicted DBH (cm): Unavailable'), findsOneWidget);
+      expect(find.text('Predicted height (m): Unavailable'), findsOneWidget);
     });
   }
 

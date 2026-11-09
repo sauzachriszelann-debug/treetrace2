@@ -145,7 +145,13 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
       await _replacePhoto(photo);
       if (!mounted) return;
       speciesWork = _identify(photo);
-      final metadata = await widget.metadataStore.read(photo);
+      PhotoCaptureMetadata? metadata;
+      try {
+        metadata = await widget.metadataStore.read(photo);
+      } catch (_) {
+        // Local capture history is optional. Its failure must not prevent
+        // gallery-only visual prediction for the selected photo.
+      }
       if (!mounted) return;
       if (metadata == null) {
         setState(() => _dbhMessage =
@@ -202,13 +208,35 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
         _galleryPrediction = prediction;
         _galleryTrunkPreview = preview;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted || _photo?.path != photo.path) return;
-      setState(() => _galleryPrediction = {
-            'status': 'unavailable',
-            'reason':
-                'Gallery size prediction unavailable. Check the connection or updated backend.'
-          });
+      var reason = 'Gallery prediction could not complete. Try again.';
+      if (error is DioException) {
+        final status = error.response?.statusCode;
+        if (status == 413) {
+          reason = 'The gallery upload exceeded the server size limit.';
+        } else if (status == 429) {
+          reason = 'The AI request limit has been reached. Try again later.';
+        } else if (status == 401 || status == 403) {
+          reason =
+              'Gallery prediction access was denied. Sign in again or check deployment access.';
+        } else if (error.type == DioExceptionType.receiveTimeout ||
+            error.type == DioExceptionType.sendTimeout ||
+            error.type == DioExceptionType.connectionTimeout) {
+          reason =
+              'Gallery prediction timed out. Try again when the connection is stable.';
+        } else if (error.type == DioExceptionType.connectionError) {
+          reason = 'Cannot connect to the gallery prediction service.';
+        } else if (status != null && status >= 500) {
+          reason =
+              'The gallery prediction server could not complete the request. Try again.';
+        }
+      } else if (error is FormatException) {
+        reason =
+            'This photo could not be prepared for upload. Choose a JPEG or PNG photo.';
+      }
+      setState(() =>
+          _galleryPrediction = {'status': 'unavailable', 'reason': reason});
     }
   }
 

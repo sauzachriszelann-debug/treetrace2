@@ -104,8 +104,14 @@ def _detect(image_bytes):
     widths = [dbh_yolo._row_width(mask, y)
               for y in range(max(0, row - 5), min(image.height, row + 6))]
     widths = [w for w in widths if w]
-    if not widths or xs.min() == 0 or xs.max() == image.width - 1:
-        return None, 'Target trunk is clipped or its width is unclear.'
+    # An outline can still be displayed even when its width cannot be measured.
+    # Let the visual predictor assess each metric independently; do not discard
+    # a real mask using restrictions from the physical-measurement path.
+    width_px = (float(np.median(widths)) if widths and xs.min() > 0
+                and xs.max() < image.width - 1 else None)
+    if width_px is None:
+        detection_note = ('YOLO detected a partial trunk outline. Its pixel width is '
+                          'unavailable; AI assesses DBH and height separately.')
     pixels = np.asarray(image).copy()
     pixels[mask] = (pixels[mask] * .5 + np.array([255, 0, 0]) * .5).astype('uint8')
     preview = Image.fromarray(pixels)
@@ -113,11 +119,11 @@ def _detect(image_bytes):
     out = io.BytesIO()
     preview.save(out, format='PNG')
     return dict(trunk_detected=True, target_source='yolo', detection_note=detection_note,
-                trunk_width_px=float(np.median(widths)),
+                trunk_width_px=width_px,
                 preview_png=base64.b64encode(out.getvalue()).decode(),
                 target=dict(image_width=image.width, image_height=image.height,
                             bbox=[int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())],
-                            width_px=float(np.median(widths)))), None
+                            width_px=width_px)), None
 
 
 def _metric_result(raw, name, maximum):

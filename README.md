@@ -839,3 +839,5 @@ unchanged. No new credentials, photo logging, model files or deployment changes.
 Gallery prediction: YOLO runs first. If it returns no mask, AI can assess one clearly identifiable main tree directly. The response identifies this as `ai_visual`, with no YOLO mask or pixel width. Ambiguous targets return no sizes. Predictions remain separate from measurements and carbon inputs. Disabled or failed trunk inference does not trigger the fallback.
 
 Gallery trunk detection retries once on the lower two-thirds of the photo only when the full-image pass finds no mask. It keeps the model at 640 px and confidence 0.4, restores crop masks to original coordinates, and labels the detected portion. This retry is display-only and does not change Take Photo measurement geometry.
+
+Gallery resilience: partial trunk masks remain visible even when diagnostic width is unavailable; AI evaluates DBH and height independently. Unreadable local capture history falls back to the gallery prediction path. Upload size, request quota, access, timeout and server failures have distinct mobile messages. These changes do not bypass measured-photo validation.
