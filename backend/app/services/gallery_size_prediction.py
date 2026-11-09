@@ -16,6 +16,10 @@ from app.schemas.gallery_size import GallerySizeResponse
 from app.services import dbh_yolo
 
 PROMPT = """Inspect the gallery photo and the YOLO target-trunk diagnostics.
+Set target_identified=true only for a single clearly identifiable main tree.
+If YOLO found no mask, assess the original photo directly; do not invent a mask
+or pixel diagnostics. If multiple trees make the target ambiguous, set
+target_identified=false and both values null with ambiguous_target.
 This is an APPEARANCE-BASED, best-effort visual size PREDICTION, not measurement
 or calibrated photogrammetry. No reference object is required. Do not require or
 assume dimensions of tires, fences, people, doors, vehicles or other scene objects.
@@ -73,7 +77,10 @@ def _detect(image_bytes):
     masks = dbh_yolo._predict_masks(image)
     masks = [m for m in masks if np.any(m)]
     if not masks:
-        return None, 'No target trunk detected. Choose a clearer tree photo.'
+        return dict(trunk_detected=False, target_source='ai_visual',
+                    detection_note='YOLO did not detect a trunk mask; AI assessed the original photo directly.',
+                    target=dict(image_width=image.width, image_height=image.height,
+                                mask_found=False)), None
     mask = max(masks, key=np.count_nonzero)
     ys, xs = np.where(mask)
     # The midpoint of a mask is NOT known breast height. Diagnostic pixels only.
@@ -89,7 +96,7 @@ def _detect(image_bytes):
     preview.thumbnail((768, 768))
     out = io.BytesIO()
     preview.save(out, format='PNG')
-    return dict(trunk_detected=True, trunk_width_px=float(np.median(widths)),
+    return dict(trunk_detected=True, target_source='yolo', trunk_width_px=float(np.median(widths)),
                 preview_png=base64.b64encode(out.getvalue()).decode(),
                 target=dict(image_width=image.width, image_height=image.height,
                             bbox=[int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())],
@@ -156,11 +163,19 @@ async def predict_gallery_size(image_bytes, content_type):
     if not isinstance(raw, dict):
         return GallerySizeResponse(status='unavailable', **detection,
                                    reason='Size prediction service unavailable. No sizes predicted.')
+    identified = raw.get('target_identified') is True
+    if detection['target_source'] == 'ai_visual' and not identified:
+        return GallerySizeResponse(
+            status='cannot_estimate', **detection,
+            dbh_reason_code='ambiguous_target', dbh_reason=METRIC_REASONS['ambiguous_target'],
+            height_reason_code='ambiguous_target', height_reason=METRIC_REASONS['ambiguous_target'],
+            reason='AI could not identify one clear target tree. No sizes predicted.')
     dbh, dbh_code, dbh_reason = _metric_result(raw, 'dbh', 300)
     height, height_code, height_reason = _metric_result(raw, 'height', 80)
     return GallerySizeResponse(
         status='predicted' if dbh is not None or height is not None else 'cannot_estimate',
         predicted_dbh_cm=dbh, predicted_height_m=height, **detection,
+        target_identified=identified,
         dbh_reason_code=dbh_code, dbh_reason=dbh_reason,
         height_reason_code=height_code, height_reason=height_reason,
         uncertainties=([f"DBH: {raw['dbh']['uncertainty'].strip()[:450]}"] if dbh is not None else []) +

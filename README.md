@@ -835,3 +835,5 @@ confidence intervals. Tomorrow's field test must compare to tape/clinometer;
 passing mocked tests does not demonstrate prediction accuracy or live availability.
 Take Photo, saved-original metric geometry, Advanced AR and carbon inputs remain
 unchanged. No new credentials, photo logging, model files or deployment changes.
+
+Gallery prediction: YOLO runs first. If it returns no mask, AI can assess one clearly identifiable main tree directly. The response identifies this as `ai_visual`, with no YOLO mask or pixel width. Ambiguous targets return no sizes. Predictions remain separate from measurements and carbon inputs. Disabled or failed trunk inference does not trigger the fallback.

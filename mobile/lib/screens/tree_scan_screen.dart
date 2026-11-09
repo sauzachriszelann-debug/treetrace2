@@ -220,7 +220,9 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
         p?['quality'] != 'unvalidated' ||
         p?['prediction_basis'] != 'visual_appearance' ||
         p?['validated_accuracy'] != false ||
-        p?['trunk_detected'] != true ||
+        (p?['trunk_detected'] != true &&
+            !(p?['target_source'] == 'ai_visual' &&
+                p?['target_identified'] == true)) ||
         p?['fallback'] == true ||
         value is! num ||
         !value.isFinite ||
@@ -667,8 +669,10 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
                               .map((uncertainty) => Text(uncertainty)),
                         Text(_galleryPrediction?['reason']?.toString() ??
                             'No size prediction.'),
+                        if (_galleryPrediction?['detection_note'] is String)
+                          Text(_galleryPrediction!['detection_note'] as String),
                         const Text(
-                            'YOLO locates the trunk; AI predicts size from tree appearance. No reference object is required. '
+                            'YOLO looks for the trunk; AI predicts size from tree appearance, including when no mask is found. No reference object is required. '
                             'Experimental estimates: validate DBH against tape and height against a clinometer. '
                             'Predictions are not saved as measurements or used for carbon calculations.'),
                       ])),

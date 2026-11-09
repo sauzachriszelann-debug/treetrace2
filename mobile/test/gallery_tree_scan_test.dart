@@ -103,18 +103,22 @@ void main() {
         isNull);
   });
 
-  for (final valid in [true, false]) {
-    testWidgets('gallery prediction stays separate from measurements: $valid',
+  for (final mode in ['yolo', 'unavailable', 'ai_visual', 'ambiguous']) {
+    final valid = mode == 'yolo' || mode == 'ai_visual';
+    testWidgets('gallery prediction stays separate from measurements: $mode',
         (tester) async {
       prediction = {
-        'status': valid ? 'predicted' : 'unavailable',
+        'status': mode == 'unavailable' ? 'unavailable' : 'predicted',
         'method': 'gallery_yolo_vision_prediction',
         'quality': 'unvalidated',
         'prediction_basis': 'visual_appearance',
         'validated_accuracy': false,
-        'trunk_detected': true,
-        'predicted_dbh_cm': valid ? 23 : 'bad',
-        'predicted_height_m': valid ? 9 : double.nan,
+        'trunk_detected': mode == 'yolo' || mode == 'unavailable',
+        'target_source': mode == 'yolo' ? 'yolo' : 'ai_visual',
+        'target_identified': mode == 'ai_visual',
+        'detection_note': 'AI assessed the photo without a YOLO mask.',
+        'predicted_dbh_cm': 23,
+        'predicted_height_m': 9,
         'reason': 'Visual prediction only.',
         'dbh_reason': valid
             ? 'Appearance-based visual prediction.'
@@ -127,6 +131,8 @@ void main() {
       };
       await open(tester, (_, __) async => throw StateError('Must not measure'));
       expect(find.text('AI-predicted size'), findsOneWidget);
+      expect(find.text('AI assessed the photo without a YOLO mask.'),
+          findsOneWidget);
       expect(
           find.text(
               'DBH: ${valid ? 'Appearance-based visual prediction.' : 'Insufficient tree detail.'}'),

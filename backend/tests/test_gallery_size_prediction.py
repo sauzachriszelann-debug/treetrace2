@@ -127,7 +127,7 @@ def test_unavailable_or_unsupported_ai_never_fills_sizes(monkeypatch, model, raw
     assert_not_measured(result)
 
 
-@pytest.mark.parametrize('condition', ['disabled', 'no_trunk', 'clipped', 'broken'])
+@pytest.mark.parametrize('condition', ['disabled', 'clipped', 'broken'])
 def test_no_trunk_evidence_never_calls_provider(monkeypatch, model, condition):
     provider = AsyncMock(side_effect=AssertionError('No prediction without trunk'))
     monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', provider)
@@ -218,7 +218,7 @@ def test_gallery_provider_uses_isolated_prompt_without_numeric_defaults(monkeypa
     assert requests[0]['contents'][0]['parts'][0]['text'] == 'isolated gallery prompt'
     assert requests[0]['generationConfig']['responseMimeType'] == 'application/json'
     schema = requests[0]['generationConfig']['responseSchema']
-    assert set(schema['required']) == {'dbh', 'height', 'base_visible', 'top_visible'}
+    assert set(schema['required']) == {'dbh', 'height', 'base_visible', 'top_visible', 'target_identified'}
     for name in ('dbh', 'height'):
         metric_schema = schema['properties'][name]
         assert set(metric_schema['required']) == {'value', 'evidence', 'uncertainty', 'reason_code'}
@@ -355,4 +355,23 @@ def test_invalid_dbh_does_not_suppress_supported_height(monkeypatch, model):
     assert result['predicted_dbh_cm'] is None and result['predicted_height_m'] == 10
     assert result['dbh_reason_code'] == 'invalid_value'
     assert result['height_reason_code'] == 'predicted'
+    assert_not_measured(result)
+
+
+@pytest.mark.parametrize('identified', [True, False, None, 'true'])
+def test_no_mask_uses_ai_only_for_identified_target(monkeypatch, model, identified):
+    model.return_value = []
+    provider = AsyncMock(return_value={
+        'target_identified': identified, 'base_visible': True, 'top_visible': True,
+        'dbh': {'value': 23, 'evidence': 'Visible main trunk', **visual_support()},
+        'height': {'value': 9, 'evidence': 'Visible canopy', **visual_support()}})
+    monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', provider)
+    result = run()
+    provider.assert_awaited_once()
+    assert result['trunk_detected'] is False
+    assert result['target_source'] == 'ai_visual'
+    assert result['preview_png'] is None and result['trunk_width_px'] is None
+    assert result['detection_note']
+    assert result['predicted_dbh_cm'] == (23 if identified is True else None)
+    assert result['predicted_height_m'] == (9 if identified is True else None)
     assert_not_measured(result)

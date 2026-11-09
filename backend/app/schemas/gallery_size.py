@@ -23,10 +23,11 @@ GALLERY_VISION_RESPONSE_SCHEMA = {
     'type': 'OBJECT',
     'properties': {
         'dbh': _metric_schema(), 'height': _metric_schema(),
+        'target_identified': {'type': 'BOOLEAN'},
         'base_visible': {'type': 'BOOLEAN'},
         'top_visible': {'type': 'BOOLEAN'},
     },
-    'required': ['dbh', 'height', 'base_visible', 'top_visible'],
+    'required': ['dbh', 'height', 'base_visible', 'top_visible', 'target_identified'],
 }
 
 
@@ -38,6 +39,9 @@ class GallerySizeResponse(BaseModel):
     validated_accuracy: Literal[False] = False
     predicted_dbh_cm: Optional[float] = Field(None, gt=0, le=300)
     predicted_height_m: Optional[float] = Field(None, gt=0, le=80)
+    target_source: Literal['yolo', 'ai_visual', 'none'] = 'none'
+    target_identified: bool = False
+    detection_note: Optional[str] = None
     trunk_detected: bool = False
     trunk_width_px: Optional[float] = None
     preview_png: Optional[str] = None
