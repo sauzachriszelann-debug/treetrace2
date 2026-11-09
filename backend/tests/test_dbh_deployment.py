@@ -40,7 +40,17 @@ def test_only_new_trunk_model_is_newly_allowlisted():
 
 def test_default_deployment_installs_the_cpu_headless_profile():
     requirements = (BACKEND / "requirements.txt").read_text()
-    assert "-r requirements-yolo.txt" in requirements.splitlines()
+    from packaging.requirements import Requirement
+    entries = [line for line in requirements.splitlines() if line.strip() and not line.startswith("#")]
+    assert all(not line.startswith("-") for line in entries)
+    parsed = {Requirement(line).name: Requirement(line) for line in entries}
+    for name, version in (("torch", "2.12.0"), ("torchvision", "0.27.0")):
+        wheel = parsed[name]
+        assert wheel.url.startswith("https://download.pytorch.org/whl/cpu/")
+        assert f"{name}-{version}%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl" in wheel.url
+        assert wheel.marker.evaluate({"sys_platform": "linux", "python_version": "3.12", "platform_machine": "x86_64"})
+        assert not wheel.marker.evaluate({"sys_platform": "win32", "python_version": "3.11", "platform_machine": "AMD64"})
+    assert str(parsed["ultralytics-opencv-headless"].specifier) == "==8.3.243"
     lines = (BACKEND / "requirements-yolo.txt").read_text().splitlines()
     assert "--extra-index-url https://download.pytorch.org/whl/cpu" in lines
     assert "torch==2.12.0+cpu" in lines

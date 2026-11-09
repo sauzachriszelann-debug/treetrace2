@@ -562,7 +562,7 @@ The old `tree_trunk_segmentation.pt` is not overwritten. The reviewed new file i
 
     23833b4a12ba8175275a132c3c4dde87c90d2d3bedb127a49ee1dfce49793962
 
-`requirements.txt` now includes `requirements-yolo.txt`, because Vercel installs
+`requirements.txt` now lists the CPU/headless dependencies directly, because Vercel installs
 only the default requirements file. The deployment profile pins CPU-only Torch
 2.12.0+cpu and torchvision 0.27.0+cpu from the official PyTorch CPU index. It uses
 the official `ultralytics-opencv-headless==8.3.243` distribution, which exports the
@@ -665,3 +665,7 @@ limits, avoid arbitrary user-supplied fetch URLs, and clean up temporary objects
 It is not implemented here. Mobile, web, AR, height logic and APK outputs remain
 unchanged. Even after a working model deployment, full-size outdoor photo scans
 are not ready until the upload phase and a real deployed inference test pass.
+
+### Vercel requirements parser correction
+
+The first cloud build rejected the nested requirements include. Deployment dependencies are now listed directly in `backend/requirements.txt`, with official CPU wheel URLs for the pinned Python 3.12 / Linux x86_64 runtime. No nested includes or index directives are used there. Other local platforms must install `requirements-yolo.txt` explicitly. A successful cloud build and deployed inference check are still required.
