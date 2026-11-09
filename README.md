@@ -722,14 +722,14 @@ The red preview shows trunk detection only. Diagnostic width is in uploaded-imag
 pixels at the mask midpoint, NOT a known 1.3 m row or a measured DBH. Missing or
 clipped trunks prevent the visual prediction request. The separately configured
 existing Gemini connection sees the photo and target-trunk pixel bounds; it is
-instructed to abstain when no plausible visible reference or relevant tree parts
-are available. Typical reference dimensions may be assumed only when explicitly
-disclosed as unverified assumptions.
+instructed to make a best-effort appearance-based prediction without requiring
+reference objects, distance, sensor readings or EXIF. Visible trunk/crown features
+and explicit uncertainty are required; hidden relevant parts still cause abstention.
 No new model weights, credentials or deployment settings are introduced.
 
 Responses contain `predicted_dbh_cm` / `predicted_height_m`, never measured
 `dbh_cm` / `height_m`. Null is an expected outcome. Wrong types, non-finite,
-nonpositive/out-of-range values, missing evidence and hidden base/top are rejected
+nonpositive/out-of-range values, missing evidence/uncertainty and hidden base/top are rejected
 rather than replaced or clamped to defaults. Returned values use whole-unit
 rounding to avoid suggesting instrumental precision. The model's self-reported
 visual evidence is NOT independently verified or a confidence/accuracy guarantee.
@@ -766,17 +766,16 @@ This endpoint must be deployed before the updated gallery card can produce
 predictions. Passing mocked tests does not prove live inference or field accuracy.
 The earlier original-photo HTTP 413 issue for metric captures remains separate.
 
-### Gallery diagnostics and assumed visual references
+### Gallery appearance predictions and provider diagnostics
 
-The gallery predictor can now use an assumed typical dimension of an actually
-visible recognizable object (for example a tire, doorway, vehicle or roofline).
-These are not universal or measured dimensions. Each non-null prediction must
-provide its reference object's name, positive finite assumed dimension in metres,
-visual evidence and an uncertainty statement. The response returns those details
-in `assumptions`; the mobile prediction card displays them. A prediction without
-that disclosure is rejected. Hidden base/top and invalid-number rules still apply.
-Nothing fills missing reference objects or makes a predicted distance available.
-YOLO still detects pixels only; sensor-based camera measurements are unchanged.
+Gallery prediction no longer requires or assumes dimensions of a tire, fence,
+roof, door, person or other reference object. YOLO locates the target trunk and
+provides diagnostic pixels. Gemini makes a best-effort visual prediction from
+visible tree form and learned visual patterns. This is not a metric calibration;
+absolute physical scale remains unknown and errors may be substantial. No actual
+size, reference object, distance or measurement is manufactured by the backend.
+Fixed species/maturity tables and numeric fallbacks are not used. Each returned
+number requires photo-specific visual evidence and an uncertainty statement.
 
 Gallery provider calls now request JSON and allow more output tokens. Parsing
 combines non-thought text parts rather than assuming the first part is text.
@@ -798,22 +797,41 @@ DBH predictions against tape and height against a clinometer before field use.
 ### Per-metric gallery rejection reasons and response schema
 
 Gallery AI requests now include a required response schema for both prediction
-objects, their reference/evidence/assumption/reason fields, and both visibility
+objects, their evidence/uncertainty/reason fields, and both visibility
 flags. The prompt asks for actual observations rather than presenting a template
 filled with null predictions and false flags. JSON mode alone did not enforce
 that structure. This improves format consistency but cannot guarantee predictions.
 
 The response now includes `dbh_reason_code`, `dbh_reason`, `height_reason_code`
 and `height_reason`. The card displays the reasons separately. Reasons distinguish
-physical obstacles (missing reference, hidden base/top, obscured DBH, uncertain
+physical obstacles (insufficient visible tree detail, hidden base/top, obscured DBH, uncertain
 perspective, ambiguous target, AI abstention) from rejected output (missing metric,
-missing visibility flag, invalid number, missing evidence or incomplete reference
-assumptions). Unsupported or contradictory numbers stay null. A hidden top does
+missing visibility flag, invalid number, missing evidence or missing uncertainty). Unsupported or contradictory numbers stay null. A hidden top does
 not suppress otherwise supported DBH; an invalid DBH does not suppress supported
 height. Error/abstention reasons use controlled text rather than raw AI reasoning.
 
 This is a response-contract and diagnostic correction, not field validation or
 proof of the cause of a previous request. No photos are logged, no extra retry
 calls are introduced, no measurements or carbon inputs are filled, and camera/AR
-measurement geometry is unchanged. Assumed-reference predictions remain
+measurement geometry is unchanged. Appearance-based predictions remain
 experimental: validate DBH against tape and height against a clinometer.
+
+### Current Select Gallery behavior: no reference objects required
+
+For an original without saved TreeTrace sensor readings, the provider schema now
+requires only value, visible-tree evidence, uncertainty and reason_code for each
+metric, plus base/top visibility flags. It no longer requests a reference object
+or reference dimensions. Response `prediction_basis` is `visual_appearance`, and
+`uncertainties` contains the statements shown on the card. Legacy `assumptions`
+is retained as an empty list for response compatibility. The mobile card accepts
+only the unvalidated appearance basis and cannot copy guesses into measurements.
+
+Missing reference objects must not alone cause abstention. However, unsupported
+predictions can remain null: no trunk detection, hidden base or breast-height
+trunk, hidden/cropped treetop, ambiguous target, insufficient visual evidence,
+malformed values, or missing evidence/uncertainty. DBH and height are evaluated
+independently. Whole-unit outputs are model predictions, not verified sizes or
+confidence intervals. Tomorrow's field test must compare to tape/clinometer;
+passing mocked tests does not demonstrate prediction accuracy or live availability.
+Take Photo, saved-original metric geometry, Advanced AR and carbon inputs remain
+unchanged. No new credentials, photo logging, model files or deployment changes.

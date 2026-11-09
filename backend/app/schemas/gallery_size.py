@@ -9,22 +9,13 @@ def _metric_schema():
         'properties': {
             'value': {'type': 'NUMBER', 'nullable': True},
             'evidence': {'type': 'STRING'},
-            'assumption': {'type': 'STRING'},
-            'reference': {
-                'type': 'OBJECT', 'nullable': True,
-                'properties': {
-                    'object': {'type': 'STRING'},
-                    'dimension_m': {'type': 'NUMBER'},
-                    'assumed': {'type': 'BOOLEAN'},
-                },
-                'required': ['object', 'dimension_m', 'assumed'],
-            },
+            'uncertainty': {'type': 'STRING'},
             'reason_code': {'type': 'STRING', 'enum': [
-                'predicted', 'no_reference', 'base_hidden', 'top_hidden',
+                'predicted', 'insufficient_visual_evidence', 'base_hidden', 'top_hidden',
                 'dbh_obscured', 'perspective_uncertain', 'ambiguous_target',
                 'cannot_estimate']},
         },
-        'required': ['value', 'evidence', 'assumption', 'reference', 'reason_code'],
+        'required': ['value', 'evidence', 'uncertainty', 'reason_code'],
     }
 
 
@@ -51,7 +42,9 @@ class GallerySizeResponse(BaseModel):
     trunk_width_px: Optional[float] = None
     preview_png: Optional[str] = None
     error_code: Optional[str] = None
-    assumptions: list[str] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)  # Legacy compatibility; left empty.
+    prediction_basis: Literal['visual_appearance'] = 'visual_appearance'
+    uncertainties: list[str] = Field(default_factory=list)
     dbh_reason_code: Optional[str] = None
     dbh_reason: Optional[str] = None
     height_reason_code: Optional[str] = None

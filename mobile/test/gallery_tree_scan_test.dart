@@ -110,32 +110,33 @@ void main() {
         'status': valid ? 'predicted' : 'unavailable',
         'method': 'gallery_yolo_vision_prediction',
         'quality': 'unvalidated',
+        'prediction_basis': 'visual_appearance',
         'validated_accuracy': false,
         'trunk_detected': true,
         'predicted_dbh_cm': valid ? 23 : 'bad',
         'predicted_height_m': valid ? 9 : double.nan,
         'reason': 'Visual prediction only.',
-        'dbh_reason':
-            valid ? 'Reference assumption used.' : 'No visible reference.',
+        'dbh_reason': valid
+            ? 'Appearance-based visual prediction.'
+            : 'Insufficient tree detail.',
         'height_reason':
-            valid ? 'Reference assumption used.' : 'Treetop hidden.',
-        'assumptions': [
-          'Assumed visible tire dimension: 0.6 m; perspective uncertain.'
+            valid ? 'Appearance-based visual prediction.' : 'Treetop hidden.',
+        'uncertainties': [
+          'Physical scale is unknown; prediction may be inaccurate.'
         ],
       };
       await open(tester, (_, __) async => throw StateError('Must not measure'));
       expect(find.text('AI-predicted size'), findsOneWidget);
       expect(
           find.text(
-              'DBH: ${valid ? 'Reference assumption used.' : 'No visible reference.'}'),
+              'DBH: ${valid ? 'Appearance-based visual prediction.' : 'Insufficient tree detail.'}'),
           findsOneWidget);
       expect(
           find.text(
-              'Height: ${valid ? 'Reference assumption used.' : 'Treetop hidden.'}'),
+              'Height: ${valid ? 'Appearance-based visual prediction.' : 'Treetop hidden.'}'),
           findsOneWidget);
       expect(
-          find.text(
-              'Assumed visible tire dimension: 0.6 m; perspective uncertain.'),
+          find.text('Physical scale is unknown; prediction may be inaccurate.'),
           findsOneWidget);
       expect(find.text('Predicted DBH (cm): ${valid ? '23' : 'Unavailable'}'),
           findsOneWidget);

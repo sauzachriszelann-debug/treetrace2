@@ -218,6 +218,7 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
     if (p?['status'] != 'predicted' ||
         p?['method'] != 'gallery_yolo_vision_prediction' ||
         p?['quality'] != 'unvalidated' ||
+        p?['prediction_basis'] != 'visual_appearance' ||
         p?['validated_accuracy'] != false ||
         p?['trunk_detected'] != true ||
         p?['fallback'] == true ||
@@ -659,15 +660,15 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
                         if (_galleryPrediction?['height_reason'] is String)
                           Text(
                               'Height: ${_galleryPrediction!['height_reason']}'),
-                        if (_galleryPrediction?['assumptions'] is List)
-                          ...(_galleryPrediction!['assumptions'] as List)
+                        if (_galleryPrediction?['uncertainties'] is List)
+                          ...(_galleryPrediction!['uncertainties'] as List)
                               .whereType<String>()
                               .take(2)
-                              .map((assumption) => Text(assumption)),
+                              .map((uncertainty) => Text(uncertainty)),
                         Text(_galleryPrediction?['reason']?.toString() ??
                             'No size prediction.'),
                         const Text(
-                            'Trunk detection provides pixels, not physical scale. '
+                            'YOLO locates the trunk; AI predicts size from tree appearance. No reference object is required. '
                             'Experimental estimates: validate DBH against tape and height against a clinometer. '
                             'Predictions are not saved as measurements or used for carbon calculations.'),
                       ])),

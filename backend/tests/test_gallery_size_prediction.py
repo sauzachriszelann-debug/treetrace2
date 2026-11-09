@@ -57,9 +57,8 @@ def model(monkeypatch):
     return predict
 
 
-def reference():
-    return {'assumption': 'Unmeasured tire size; perspective remains uncertain.',
-            'reference': {'object': 'visible tire', 'dimension_m': 0.6, 'assumed': True}}
+def visual_support():
+    return {'uncertainty': 'Physical scale is unknown; appearance-based prediction may be substantially wrong.'}
 
 
 def run():
@@ -75,8 +74,8 @@ def assert_not_measured(result):
 def test_model_detects_pixels_and_vision_predicts_separate_units(monkeypatch, model):
     provider = AsyncMock(return_value={
         'base_visible': True, 'top_visible': True,
-        'dbh': {'value': 23.2, 'evidence': 'visible trunk and nearby scale cue', **reference()},
-        'height': {'value': 9.4, 'evidence': 'visible tree and scale cue', **reference()},
+        'dbh': {'value': 23.2, 'evidence': 'visible trunk proportions and branching', **visual_support()},
+        'height': {'value': 9.4, 'evidence': 'visible canopy and trunk form', **visual_support()},
     })
     monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', provider)
     result = run()
@@ -84,12 +83,15 @@ def test_model_detects_pixels_and_vision_predicts_separate_units(monkeypatch, mo
     assert result['predicted_dbh_cm'] == 23
     assert result['predicted_height_m'] == 9
     assert result['trunk_width_px'] == 100  # Not converted to centimetres.
-    assert len(result['assumptions']) == 2
-    assert '0.6 m' in result['assumptions'][0]
+    assert result['assumptions'] == []
+    assert len(result['uncertainties']) == 2
+    assert result['prediction_basis'] == 'visual_appearance'
     assert model.call_count == 1
     Image.open(io.BytesIO(base64.b64decode(result['preview_png']))).verify()
     prompt = provider.call_args.args[2]
     assert 'NOT metric scale' in prompt and 'bbox' in prompt
+    assert 'No reference object is required.' in prompt
+    assert 'Do not abstain solely because a reference object' in prompt
     assert_not_measured(result)
 
 
@@ -97,8 +99,8 @@ def test_model_detects_pixels_and_vision_predicts_separate_units(monkeypatch, mo
 def test_bad_values_never_become_defaults(monkeypatch, model, value):
     monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', AsyncMock(return_value={
         'base_visible': True, 'top_visible': True,
-        'dbh': {'value': value, 'evidence': 'cue', **reference()},
-        'height': {'value': value, 'evidence': 'cue', **reference()}}))
+        'dbh': {'value': value, 'evidence': 'cue', **visual_support()},
+        'height': {'value': value, 'evidence': 'cue', **visual_support()}}))
     result = run()
     assert result['status'] == 'cannot_estimate'
     assert result['predicted_dbh_cm'] is None and result['predicted_height_m'] is None
@@ -111,7 +113,7 @@ def test_bad_values_never_become_defaults(monkeypatch, model, value):
 def test_hidden_parts_are_not_reconstructed(monkeypatch, model, base, top, dbh, height):
     monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', AsyncMock(return_value={
         'base_visible': base, 'top_visible': top,
-        'dbh': {'value': 20, 'evidence': 'cue', **reference()}, 'height': {'value': 10, 'evidence': 'cue', **reference()}}))
+        'dbh': {'value': 20, 'evidence': 'cue', **visual_support()}, 'height': {'value': 10, 'evidence': 'cue', **visual_support()}}))
     result = run()
     assert result['predicted_dbh_cm'] == dbh and result['predicted_height_m'] == height
 
@@ -219,8 +221,10 @@ def test_gallery_provider_uses_isolated_prompt_without_numeric_defaults(monkeypa
     assert set(schema['required']) == {'dbh', 'height', 'base_visible', 'top_visible'}
     for name in ('dbh', 'height'):
         metric_schema = schema['properties'][name]
-        assert set(metric_schema['required']) == {'value', 'evidence', 'assumption', 'reference', 'reason_code'}
+        assert set(metric_schema['required']) == {'value', 'evidence', 'uncertainty', 'reason_code'}
         assert metric_schema['properties']['value']['nullable'] is True
+        assert 'reference' not in metric_schema['properties']
+        assert 'no_reference' not in metric_schema['properties']['reason_code']['enum']
 
 
 @pytest.mark.parametrize('body,code', [
@@ -260,14 +264,14 @@ def test_safe_failure_reason_reaches_card_without_numbers(monkeypatch, model, co
 @pytest.mark.parametrize('bad', [{}, {'object': 'tire', 'dimension_m': -1, 'assumed': True},
     {'object': '', 'dimension_m': .6, 'assumed': True},
     {'object': 'tire', 'dimension_m': .6, 'assumed': False}])
-def test_prediction_requires_a_disclosed_reference_assumption(monkeypatch, model, bad):
+def test_reference_metadata_is_not_required_or_used(monkeypatch, model, bad):
     monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', AsyncMock(return_value={
         'base_visible': True, 'top_visible': True,
-        'dbh': {'value': 20, 'evidence': 'cue', 'assumption': 'uncertain', 'reference': bad},
-        'height': {'value': 10, 'evidence': 'cue', 'assumption': 'uncertain', 'reference': bad}}))
+        'dbh': {'value': 20, 'evidence': 'cue', **visual_support(), 'reference': bad},
+        'height': {'value': 10, 'evidence': 'cue', **visual_support(), 'reference': bad}}))
     result = run()
-    assert result['status'] == 'cannot_estimate'
-    assert result['predicted_dbh_cm'] is None and result['predicted_height_m'] is None
+    assert result['status'] == 'predicted'
+    assert result['predicted_dbh_cm'] == 20 and result['predicted_height_m'] == 10
     assert result['assumptions'] == []
 
 
@@ -306,14 +310,14 @@ def test_transport_failures_are_controlled_and_do_not_leak_secrets(monkeypatch, 
     ({}, 'missing_metric'),
     ({'dbh': {'value': 20}}, 'missing_visibility'),
     ({'base_visible': False, 'dbh': {'value': 20}}, 'base_hidden'),
-    ({'base_visible': True, 'dbh': {'value': None, 'reason_code': 'no_reference'}}, 'no_reference'),
+    ({'base_visible': True, 'dbh': {'value': None, 'reason_code': 'insufficient_visual_evidence'}}, 'insufficient_visual_evidence'),
     ({'base_visible': True, 'dbh': {'value': None, 'reason_code': 'perspective_uncertain'}}, 'perspective_uncertain'),
     ({'base_visible': True, 'dbh': {'value': '20'}}, 'invalid_value'),
     ({'base_visible': True, 'dbh': {'value': 20}}, 'missing_evidence'),
-    ({'base_visible': True, 'dbh': {'value': 20, 'evidence': 'cue'}}, 'missing_reference_details'),
+    ({'base_visible': True, 'dbh': {'value': 20, 'evidence': 'cue'}}, 'missing_uncertainty'),
     ({'base_visible': True, 'dbh': {'value': None, 'reason_code': 'unknown private text'}}, 'cannot_estimate'),
-    ({'base_visible': True, 'dbh': {'value': 20, 'reason_code': 'no_reference',
-                                  'evidence': 'cue', **reference()}}, 'no_reference'),
+    ({'base_visible': True, 'dbh': {'value': 20, 'reason_code': 'insufficient_visual_evidence',
+                                  'evidence': 'cue', **visual_support()}}, 'insufficient_visual_evidence'),
 ])
 def test_each_rejection_has_a_controlled_specific_reason(raw, code):
     value, actual, reason = service._metric_result(raw, 'dbh', 300)
@@ -326,7 +330,7 @@ def test_each_rejection_has_a_controlled_specific_reason(raw, code):
 def test_hidden_top_does_not_suppress_usable_dbh(monkeypatch, model):
     monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', AsyncMock(return_value={
         'base_visible': True, 'top_visible': False,
-        'dbh': {'value': 20, 'evidence': 'cue', 'reason_code': 'predicted', **reference()},
+        'dbh': {'value': 20, 'evidence': 'cue', 'reason_code': 'predicted', **visual_support()},
         'height': {'value': None, 'reason_code': 'top_hidden'},
     }))
     result = run()
@@ -336,7 +340,8 @@ def test_hidden_top_does_not_suppress_usable_dbh(monkeypatch, model):
     assert result['predicted_height_m'] is None
     assert result['height_reason_code'] == 'top_hidden'
     assert result['height_reason'] == service.METRIC_REASONS['top_hidden']
-    assert len(result['assumptions']) == 1
+    assert result['assumptions'] == []
+    assert len(result['uncertainties']) == 1
     assert_not_measured(result)
 
 
@@ -344,7 +349,7 @@ def test_invalid_dbh_does_not_suppress_supported_height(monkeypatch, model):
     monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', AsyncMock(return_value={
         'base_visible': True, 'top_visible': True,
         'dbh': {'value': 0},
-        'height': {'value': 10, 'evidence': 'cue', 'reason_code': 'predicted', **reference()},
+        'height': {'value': 10, 'evidence': 'cue', 'reason_code': 'predicted', **visual_support()},
     }))
     result = run()
     assert result['predicted_dbh_cm'] is None and result['predicted_height_m'] == 10
