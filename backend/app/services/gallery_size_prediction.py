@@ -76,6 +76,22 @@ def _detect(image_bytes):
         image = ImageOps.exif_transpose(original).convert('RGB')
     masks = dbh_yolo._predict_masks(image)
     masks = [m for m in masks if np.any(m)]
+    detection_note = None
+    if not masks:
+        # A full portrait is reduced to 640 px for inference. Retry the lower
+        # scene at the same trained size/confidence to give the trunk more pixels.
+        # This is gallery-only; mapped masks never enter measured DBH geometry.
+        offset = image.height // 3
+        crop = image.crop((0, offset, image.width, image.height))
+        for candidate in dbh_yolo._predict_masks(crop):
+            if not np.any(candidate):
+                continue
+            restored = np.zeros((image.height, image.width), dtype=bool)
+            restored[offset:, :] = candidate
+            masks.append(restored)
+        if masks:
+            detection_note = ('YOLO detected the trunk in a closer view of the lower photo; '
+                              'the overlay shows the detected portion.')
     if not masks:
         return dict(trunk_detected=False, target_source='ai_visual',
                     detection_note='YOLO did not detect a trunk mask; AI assessed the original photo directly.',
@@ -96,7 +112,8 @@ def _detect(image_bytes):
     preview.thumbnail((768, 768))
     out = io.BytesIO()
     preview.save(out, format='PNG')
-    return dict(trunk_detected=True, target_source='yolo', trunk_width_px=float(np.median(widths)),
+    return dict(trunk_detected=True, target_source='yolo', detection_note=detection_note,
+                trunk_width_px=float(np.median(widths)),
                 preview_png=base64.b64encode(out.getvalue()).decode(),
                 target=dict(image_width=image.width, image_height=image.height,
                             bbox=[int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())],

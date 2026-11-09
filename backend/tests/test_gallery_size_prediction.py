@@ -133,8 +133,6 @@ def test_no_trunk_evidence_never_calls_provider(monkeypatch, model, condition):
     monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', provider)
     if condition == 'disabled':
         monkeypatch.setattr(dbh_yolo, 'runtime_status', lambda: {'ready': False})
-    elif condition == 'no_trunk':
-        model.return_value = []
     elif condition == 'broken':
         model.side_effect = RuntimeError('unavailable')
     else:
@@ -143,6 +141,32 @@ def test_no_trunk_evidence_never_calls_provider(monkeypatch, model, condition):
     provider.assert_not_called()
     assert result['predicted_dbh_cm'] is None
     assert result['predicted_height_m'] is None
+
+
+def test_gallery_retry_restores_crop_mask_to_original_coordinates(monkeypatch, model):
+    crop_mask = np.zeros((320, 640), dtype=bool)
+    crop_mask[20:280, 270:370] = True
+    model.side_effect = [[], [crop_mask]]
+    detection, reason = service._detect(photo())
+    assert reason is None
+    assert model.call_count == 2
+    assert model.call_args_list[0].args[0].size == (640, 480)
+    assert model.call_args_list[1].args[0].size == (640, 320)
+    assert detection['target_source'] == 'yolo'
+    assert detection['trunk_detected'] is True
+    assert detection['target']['bbox'] == [270, 180, 369, 439]
+    assert detection['trunk_width_px'] == 100
+    assert 'lower photo' in detection['detection_note']
+    Image.open(io.BytesIO(base64.b64decode(detection['preview_png']))).verify()
+
+
+def test_gallery_retry_is_bounded_when_both_views_miss(model):
+    model.return_value = []
+    detection, reason = service._detect(photo())
+    assert reason is None
+    assert model.call_count == 2
+    assert detection['trunk_detected'] is False
+    assert detection['target_source'] == 'ai_visual'
 
 
 def test_route_requires_authentication():
