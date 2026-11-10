@@ -1,9 +1,25 @@
 import api from "./client";
+import { preparePredictionPhoto } from "@/lib/predictionPhoto";
 
 export const aiApi = {
+  predictGallerySize: async (file, { treetopFile, signal } = {}) => {
+    const form = new FormData();
+    form.append('file', await preparePredictionPhoto(file));
+    if (treetopFile) form.append('treetop_file', await preparePredictionPhoto(treetopFile));
+    const { data } = await api.post('/ai/gallery-size-prediction', form, {
+      headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000, signal,
+    });
+    return data;
+  },
+
+  estimateAge: async (payload, { signal } = {}) => {
+    const { data } = await api.post('/ai/estimate-age', payload, { signal, timeout: 60000 });
+    return data;
+  },
+
   identifyFromFile: async (file) => {
     const form = new FormData();
-    form.append("file", file);
+    form.append("file", await preparePredictionPhoto(file));
     const { data } = await api.post("/ai/identify", form, {
       headers: { "Content-Type": "multipart/form-data" },
     });

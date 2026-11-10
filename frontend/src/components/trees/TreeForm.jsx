@@ -13,6 +13,7 @@ import { storageApi } from "@/api/storage";
 import { aiApi } from "@/api/ai";
 import { toast } from "sonner";
 import TreeHeightCalculator from "@/components/trees/TreeHeightCalculator";
+import GalleryTreePredictions from "@/components/trees/GalleryTreePredictions";
 
 function calcBiomassCarbon(dbh_cm, height_m) {
   if (!dbh_cm || !height_m) return { biomass: null, carbon: null };
@@ -94,6 +95,9 @@ export default function TreeForm({
 }) {
   const navigate = useNavigate();
   const fileRef = useRef(null);
+  const identificationRequest = useRef(0);
+  const currentPhoto = useRef(null);
+  const [identifiedSpecies, setIdentifiedSpecies] = useState("");
   const [form, setForm] = useState({
     common_name: "",
     scientific_name: "",
@@ -132,6 +136,14 @@ export default function TreeForm({
     dbh_cm: null,
     height_m: null,
   });
+
+  useEffect(() => {
+    return () => { identificationRequest.current++; };
+  }, []);
+
+  useEffect(() => () => {
+    if (photoPreview?.startsWith('blob:')) URL.revokeObjectURL(photoPreview);
+  }, [photoPreview]);
 
   useEffect(() => {
     const { biomass, carbon } = calcBiomassCarbon(
@@ -231,6 +243,8 @@ export default function TreeForm({
   const handlePhotoSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    currentPhoto.current = file;
+    setIdentifiedSpecies("");
     setPhotoFile(file);
     setPhotoPreview(URL.createObjectURL(file));
     set("photo_url", "");
@@ -239,11 +253,13 @@ export default function TreeForm({
     setAiError(null);
     setDbhResult(null);
     setAiConservation(null);
-    // ← ADD THIS LINE:
-    setTimeout(() => handleAIIdentify(file), 100);
+    void handleAIIdentify(file);
   };
 
   const removePhoto = () => {
+    identificationRequest.current++;
+    currentPhoto.current = null;
+    setIdentifiedSpecies("");
     setPhotoFile(null);
     setPhotoPreview(null);
     set("photo_url", "");
@@ -262,10 +278,13 @@ export default function TreeForm({
       return;
     }
     setAiStatus("identifying");
+    const request = ++identificationRequest.current;
     setRoboflowCandidate(null);
     setAiError(null);
     try {
       const result = await aiApi.identifyFromFile(target);
+      if (request !== identificationRequest.current || target !== currentPhoto.current) return;
+      setIdentifiedSpecies(result.not_identified ? "" : result.scientific_name || "");
       setRoboflowCandidate(
         result.roboflow_candidate?.source === "roboflow_efficientnet"
           ? result.roboflow_candidate
@@ -280,17 +299,7 @@ export default function TreeForm({
         : null;
       setAiConservation(conservation);
 
-      // Always fill measurements — backend guarantees numeric values
-      const dbh = result.estimated_dbh_cm ? String(result.estimated_dbh_cm) : "";
-      const height = result.estimated_height_m ? String(result.estimated_height_m) : "";
-
       if (result.not_identified) {
-        // Species unknown — still apply any measurements we got
-        setForm((prev) => ({
-          ...prev,
-          dbh_cm: dbh || prev.dbh_cm,
-          height_m: height || prev.height_m,
-        }));
         setAiStatus("partial");
         setAiError(
           result.possible_candidates?.length
@@ -302,14 +311,13 @@ export default function TreeForm({
           ...prev,
           common_name: result.common_name || prev.common_name,
           scientific_name: result.scientific_name || prev.scientific_name,
-          dbh_cm: dbh || prev.dbh_cm,
-          height_m: height || prev.height_m,
           notes: usefulAiNote(result.description) || prev.notes,
         }));
         setAiStatus("done");
         toast.success(`Identified: ${result.common_name}`);
       }
     } catch (error) {
+      if (request !== identificationRequest.current || target !== currentPhoto.current) return;
       if (error?.response?.status === 402) {
         toast.error(error.response.data?.detail || "Free AI limit reached. Upgrade to Pro for unlimited AI identification.", {
           action: {
@@ -516,7 +524,7 @@ export default function TreeForm({
             type="button"
             size="sm"
             variant="outline"
-            onClick={handleAIIdentify}
+            onClick={() => handleAIIdentify()}
             disabled={!photoFile || isAiLoading}
             className="flex items-center gap-1.5 text-xs border-primary/30 text-primary hover:bg-primary/5"
           >
@@ -532,6 +540,7 @@ export default function TreeForm({
               <img src={photoPreview} alt="" className="w-full h-full object-cover" />
               <button
                 type="button"
+                aria-label="Remove tree photo"
                 onClick={removePhoto}
                 className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center"
               >
@@ -548,7 +557,8 @@ export default function TreeForm({
               <input
                 ref={fileRef}
                 type="file"
-                accept="image/*"
+                aria-label="Tree photo"
+                accept="image/jpeg,image/png,image/webp"
                 className="hidden"
                 onChange={handlePhotoSelect}
               />
@@ -611,7 +621,7 @@ export default function TreeForm({
         {aiStatus === "done" && !aiError && (
           <div className="flex items-center gap-2 text-sm text-emerald-600 bg-emerald-50 rounded-lg px-3 py-2">
             <span>✓</span>
-            <p>Fields filled from AI analysis. Edit values as needed.</p>
+            <p>Species suggestion filled. Review it before saving.</p>
           </div>
         )}
       </div>
@@ -670,6 +680,8 @@ export default function TreeForm({
       </div>
 
       {/* ── Measurements ── */}
+      {photoFile && <GalleryTreePredictions key={photoPreview} file={photoFile}
+        scientificName={identifiedSpecies ? form.scientific_name : ''} />}
       <div className="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
         <div className="flex flex-col gap-1">
           <Label htmlFor="circumference_cm">Manual DBH Calculator</Label>
@@ -698,7 +710,8 @@ export default function TreeForm({
         </div>
       </div>
 
-      <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+      <details className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+        <summary className="cursor-pointer text-sm font-medium">Advanced photo measurement tools</summary>
         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <Label>AI Photo DBH Estimate</Label>
@@ -765,7 +778,7 @@ export default function TreeForm({
             {dbhResult.accuracy_note ? ` - ${dbhResult.accuracy_note}` : ""}
           </div>
         )}
-      </div>
+      </details>
 
       {form.dbh_cm && (
         <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">

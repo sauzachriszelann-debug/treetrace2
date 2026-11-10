@@ -2,23 +2,23 @@
   "rewrites": [
     {
       "source": "/api/tree-submissions/",
-      "destination": "https://treetrace2backend.vercel.app/api/tree-submissions/"
+      "destination": "https://treetrace2-backend-3rwyf5f9x-sauzachriszelann-debugs-projects.vercel.app/api/tree-submissions/"
     },
     {
       "source": "/api/health-logs/",
-      "destination": "https://treetrace2backend.vercel.app/api/health-logs/"
+      "destination": "https://treetrace2-backend-3rwyf5f9x-sauzachriszelann-debugs-projects.vercel.app/api/health-logs/"
     },
     {
       "source": "/api/trees/",
-      "destination": "https://treetrace2backend.vercel.app/api/trees/"
+      "destination": "https://treetrace2-backend-3rwyf5f9x-sauzachriszelann-debugs-projects.vercel.app/api/trees/"
     },
     {
       "source": "/api/trees",
-      "destination": "https://treetrace2backend.vercel.app/api/trees/"
+      "destination": "https://treetrace2-backend-3rwyf5f9x-sauzachriszelann-debugs-projects.vercel.app/api/trees/"
     },
     {
       "source": "/api/:path*",
-      "destination": "https://treetrace2backend.vercel.app/api/:path*"
+      "destination": "https://treetrace2-backend-3rwyf5f9x-sauzachriszelann-debugs-projects.vercel.app/api/:path*"
     },
     {
       "source": "/((?!api/).*)",
