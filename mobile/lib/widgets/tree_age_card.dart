@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:dio/dio.dart';
 
 import '../services/api_service.dart';
 
@@ -29,6 +30,7 @@ class _TreeAgeCardState extends State<TreeAgeCard> {
   Map<String, dynamic>? _result;
   bool _loading = false;
   bool _failed = false;
+  String _failureMessage = 'Age estimate unavailable. Check your connection.';
   int _request = 0;
 
   @override
@@ -62,8 +64,19 @@ class _TreeAgeCardState extends State<TreeAgeCard> {
           widget.heightM,
           widget.dimensionsSource);
       if (mounted && request == _request) setState(() => _result = result);
-    } catch (_) {
-      if (mounted && request == _request) setState(() => _failed = true);
+    } catch (error) {
+      if (mounted && request == _request) {
+        setState(() {
+          _failed = true;
+          _failureMessage = error is DioException &&
+                  (error.response?.statusCode == 402 ||
+                      error.response?.statusCode == 429)
+              ? 'AI age estimate limit reached. Try again later.'
+              : error is DioException && error.response?.statusCode == 401
+                  ? 'Sign in again to estimate age.'
+                  : 'Age estimate unavailable. Check your connection.';
+        });
+      }
     } finally {
       if (mounted && request == _request) setState(() => _loading = false);
     }
@@ -73,6 +86,8 @@ class _TreeAgeCardState extends State<TreeAgeCard> {
   Widget build(BuildContext context) {
     final estimated = _result?['status'] == 'estimated';
     final source = _result?['source'];
+    final aiGrowth = _result?['estimation_basis'] == 'ai_growth_guess';
+    final rates = _result?['growth_rates'];
     return Card(
       key: const Key('tree-age-card'),
       child: Padding(
@@ -83,12 +98,19 @@ class _TreeAgeCardState extends State<TreeAgeCard> {
               const Text('Estimated age',
                   style: TextStyle(fontWeight: FontWeight.bold)),
               if (_loading)
-                const Text('Checking published growth data…')
+                const Text('Checking growth data and estimating age…')
               else if (_failed) ...[
-                const Text('Age estimate unavailable. Check your connection.'),
+                Text(_failureMessage),
                 TextButton(
                     onPressed: _load, child: const Text('Retry age estimate')),
               ] else ...[
+                Text(
+                    aiGrowth
+                        ? 'AI growth estimate — source unverified'
+                        : source is Map
+                            ? 'Published growth data'
+                            : 'Growth data unavailable',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
                 Text(estimated
                     ? 'Approximately ${_result!['min_years']}–${_result!['max_years']} years'
                     : 'Age unknown'),
@@ -99,6 +121,20 @@ class _TreeAgeCardState extends State<TreeAgeCard> {
                       'From height: about ${_result!['height_age_years']} years'),
                 Text(_result?['reason']?.toString() ??
                     'No growth data available.'),
+                if (rates is Map) ...[
+                  if (rates['dbh_cm_per_year'] is List)
+                    Text(
+                        'Diameter growth: ${_rate(rates['dbh_cm_per_year'])} cm/year'),
+                  if (rates['height_m_per_year'] is List)
+                    Text(
+                        'Height growth: ${_rate(rates['height_m_per_year'])} m/year'),
+                ],
+                if (_result?['assumptions'] is String)
+                  Text(_result!['assumptions'] as String),
+                if (aiGrowth && !estimated)
+                  TextButton(
+                      onPressed: _load,
+                      child: const Text('Retry age estimate')),
                 if (source is Map) ...[
                   const SizedBox(height: 8),
                   Text('Source: ${source['citation']}'),
@@ -125,6 +161,15 @@ class _TreeAgeCardState extends State<TreeAgeCard> {
             ],
           )),
     );
+  }
+
+  String _rate(List values) {
+    if (values.length != 3 || values.any((v) => v is! num)) {
+      return 'Unavailable';
+    }
+    final low = (values.first as num).toStringAsFixed(2);
+    final high = (values.last as num).toStringAsFixed(2);
+    return low == high ? low : '$low–$high';
   }
 }
 

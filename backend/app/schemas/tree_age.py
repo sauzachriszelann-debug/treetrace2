@@ -15,9 +15,16 @@ class GrowthSource(BaseModel):
     url: str
     citation: str
     context: str
-    reference_age_years: float
-    dbh_cm: list[float]
-    height_m: list[float]
+    reference_age_years: float | None = None
+    dbh_cm: list[float] = Field(default_factory=list)
+    height_m: list[float] = Field(default_factory=list)
+    sample_size: int | None = None
+    dbh_measurement_height_m: float | None = None
+
+
+class GrowthRates(BaseModel):
+    dbh_cm_per_year: list[float] | None = None
+    height_m_per_year: list[float] | None = None
 
 
 class TreeAgeResponse(BaseModel):
@@ -31,5 +38,8 @@ class TreeAgeResponse(BaseModel):
     dimensions_disagree: bool = False
     method: str = "linear_growth_scenario"
     validated: bool = False
+    estimation_basis: Literal["published_growth", "ai_growth_guess"] = "published_growth"
+    growth_rates: GrowthRates | None = None
+    assumptions: str | None = None
     reason: str
     source: GrowthSource | None = None

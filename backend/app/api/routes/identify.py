@@ -44,9 +44,21 @@ router = APIRouter()
 
 
 @router.post("/estimate-age", response_model=TreeAgeResponse)
-def estimate_age(payload: TreeAgeRequest, _: User = Depends(get_current_user)):
-    from app.services.tree_age import estimate_tree_age
-    return estimate_tree_age(payload)
+async def estimate_age(payload: TreeAgeRequest, _: User = Depends(get_current_user),
+                       db: Session = Depends(get_db)):
+    from app.services.tree_age import estimate_tree_age, estimate_ai_tree_age
+    result = estimate_tree_age(payload)
+    if result.status == "estimated" or (payload.dbh_cm is None and payload.height_m is None):
+        return result
+    # Published profiles are free calculations. Only the provider fallback
+    # consumes an AI request; use the same authenticated plan limit as identify.
+    enforce_ai_limit(_, db)
+    try:
+        return await estimate_ai_tree_age(payload)
+    except Exception:
+        return TreeAgeResponse(status="unavailable", scientific_name=payload.scientific_name,
+            dimensions_source=payload.dimensions_source, estimation_basis="ai_growth_guess",
+            reason="AI growth estimate could not complete. Check AI access or try again later.")
 
 
 @router.get("/dbh-trunk-status")

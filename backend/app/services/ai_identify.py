@@ -1117,6 +1117,33 @@ def _parse_gallery_vision_response(body):
     return result
 
 
+async def species_growth_prediction(prompt: str):
+    """Text-only growth guess through the configured Gemini provider, not browsing."""
+    if not GEMINI_API_KEY:
+        raise GalleryVisionError("missing_key")
+    payload = {"contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0, "maxOutputTokens": 1024,
+                             "responseMimeType": "application/json"}}
+    last_code = "provider_error"
+    try:
+        async with httpx.AsyncClient(timeout=25) as client:
+            for model in _gemini_candidate_models():
+                response = await client.post(
+                    f"{_gemini_endpoint(model)}?key={GEMINI_API_KEY}", json=payload)
+                if response.status_code == 200:
+                    return _parse_gallery_vision_response(response.json())
+                last_code = ("quota_exceeded" if response.status_code == 429 else
+                             "access_denied" if response.status_code in (401, 403) else
+                             "model_unavailable" if response.status_code in (400, 404) else "provider_error")
+                if response.status_code not in (400, 404):
+                    break
+    except httpx.TimeoutException:
+        raise GalleryVisionError("timeout") from None
+    except httpx.HTTPError:
+        raise GalleryVisionError("connection_error") from None
+    raise GalleryVisionError(last_code)
+
+
 async def gallery_vision_prediction(image_b64: str, content_type: str, prompt: str):
     """Separate gallery request, with safe diagnostics and no numeric defaults."""
     from app.schemas.gallery_size import GALLERY_VISION_RESPONSE_SCHEMA

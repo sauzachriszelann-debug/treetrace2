@@ -68,6 +68,35 @@ void main() {
     ))));
     await tester.pumpAndSettle();
     expect(find.text('Retry age estimate'), findsOneWidget);
-    expect(find.text('Checking published growth data…'), findsNothing);
+    expect(find.text('Checking growth data and estimating age…'), findsNothing);
+  });
+
+  testWidgets('AI fallback is distinct from a sourced estimate and shows rates',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: TreeAgeCard(
+      scientificName: 'Annona muricata',
+      dbhCm: 12,
+      heightM: 6,
+      lookup: (s, d, h, source) async => {
+        'status': 'estimated',
+        'estimation_basis': 'ai_growth_guess',
+        'min_years': 6,
+        'max_years': 30,
+        'source': null,
+        'reason': 'AI rates are unverified.',
+        'growth_rates': {
+          'dbh_cm_per_year': [0.4, 0.8, 1.2],
+          'height_m_per_year': [0.3, 0.65, 1.0]
+        },
+        'assumptions': 'Urban tropical tree.',
+      },
+    ))));
+    await tester.pumpAndSettle();
+    expect(find.text('AI growth estimate — source unverified'), findsOneWidget);
+    expect(find.text('Diameter growth: 0.40–1.20 cm/year'), findsOneWidget);
+    expect(find.text('Urban tropical tree.'), findsOneWidget);
+    expect(find.text('Copy growth study link'), findsNothing);
   });
 }

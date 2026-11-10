@@ -2,10 +2,39 @@
 
 The scanner and gallery review show display-only age scenarios from species,
 DBH and/or total height. POST `/api/ai/estimate-age` requires authentication and
-does not call AI, consume an AI identification, or write database records.
+uses published data first, then an unverified AI species-growth-rate fallback.
+Published calculations do not consume an AI identification. The fallback uses
+the existing configured Gemini provider and consumes one request under the
+existing authenticated AI plan limit. It never writes database records.
 No Aiven migration is needed. Inventory dates and carbon calculations are unchanged.
 
-## Reviewed source catalog (initial coverage: one species)
+## Reviewed source catalog (60 species plus explicit synonyms)
+
+Schneider, Ashton, Montagnini & Milan, *New Forests* 45, 83–96 (2014;
+online 2013), Table 4: https://doi.org/10.1007/s11056-013-9393-5
+Author-uploaded full text:
+https://www.researchgate.net/publication/258164722_Growth_performance_of_sixty_tree_species_in_smallholder_reforestation_trials_on_Leyte_Philippines
+
+The published rates cover 60 species sampled in Leyte, with annual mean DBH
+increments in cm/year and total-height increments in m/year. DBH was measured
+at **1.4 m**, differing from TreeTrace's 1.3 m convention. Measurements in 2011
+were divided by plantation age (sites established 1995–2000). The study is not
+a validated individual-tree age predictor. Some species have only 1–4 sampled
+individuals; sample counts are retained and the UI warns for N < 20.
+
+Source Table 2 and Table 4 disagree on total-height means for Vitex parviflora,
+Terminalia microcarpa and Toona philippinensis. These three height values are
+deliberately omitted; their DBH means remain usable. Table 4 Podocarpus uses
+the spelling 'rhumbii'; Table 2 identifies the same sample as P. rumphii.
+The Appendix/Table 4 DBH mean 0.32 is used (Table 2 rounds/reports 0.31).
+Do not treat these transcription differences as measured uncertainty ranges.
+
+Catalog: `backend/app/services/published_growth_rates.py`. Exact botanical
+aliases handle historical Shorea names; never match every member of a genus.
+Unlisted synonyms can use the explicitly unverified AI fallback.
+
+The existing Gmelina profile below remains preferred to preserve its previous
+calculation and rate bounds; the Leyte Gmelina row is retained for provenance.
 
 **Gmelina arborea (Yemane):** López-Aguirre, Barrios-Trilleras & Melo-Cruz,
 *New Forests* 55, 961–978 (2024; online 2023).
@@ -32,7 +61,30 @@ from a single-age trial, **not a validated inverse growth model, prediction
 interval, or confidence interval**. Even the range may exclude the actual age.
 Pruning, mature growth, management, climate, and species errors can invalidate it.
 AI-derived sizes retain `dimensions_source=ai_prediction` and an extra warning.
-No universal growth factor or invented fallback is used for unsupported species.
+For the Leyte profiles, only means are published. Their rate triples contain the
+same mean three times, not fabricated low/high bounds. The displayed span is
+the envelope of the independent dimensional scenarios rounded outward. A
+two-fold difference between central dimensional ages triggers a display warning
+only; this is a heuristic, not a statistical agreement test.
+
+## AI fallback for other species
+
+For species without a reviewed profile, the server asks AI for species-specific
+diameter and total-height growth-rate ranges, using the supplied DBH/height as
+context. It explicitly distinguishes diameter from radius/circumference, and
+total height from merchantable height. For palms, AI must omit DBH growth when
+diameter is not an applicable age indicator. The server computes ages itself
+from those ranges, using their arithmetic midpoint for the central rate. This
+midpoint is an assumption, not a measured mean.
+
+The UI says **AI growth estimate — source unverified**, shows the rate ranges
+and assumptions, and never displays model-invented source URLs or citations.
+`estimation_basis=ai_growth_guess`, `source=null`, `validated=false`. Malformed,
+nonpositive, reversed, nonfinite, species-mismatched or implausibly extreme
+rates cannot create ages. No sizes, no applicable rates, ambiguous/non-tree
+species or provider failure can still yield age unavailable. There is no
+scientifically supportable guarantee of a numerical age for every possible tree.
+There are no hardcoded universal rates or placeholder ages.
 
 ## Expanding coverage
 
@@ -47,7 +99,8 @@ DBH measurement height, total versus merchantable height, age range, site,
 seed-grown versus coppice, and applicability. Prefer fitted age-size models
 with validation over this initial linear scenario. Do not use harvest age,
 merchantable height, collar diameter or radius growth as interchangeable rates.
-Add reviewed profiles in `backend/app/services/tree_age.py` with regression tests.
+Add reviewed profiles in `backend/app/services/published_growth_rates.py` or
+`tree_age.py` with regression tests.
 
 ## Checks
 
