@@ -127,7 +127,9 @@ class _TreeAgeCardState extends State<TreeAgeCard> {
                         fontSize: 20, fontWeight: FontWeight.bold)),
                 if (estimated && primaryAge != null)
                   Text(dbhAge != null
-                      ? 'Based on DBH and this species’ diameter growth rate. Height is a cross-check.'
+                      ? heightAge != null
+                          ? 'Based on DBH and this species’ diameter growth rate. Height is a cross-check.'
+                          : 'Based on DBH and this species’ diameter growth rate. Height is unavailable for a cross-check.'
                       : 'Based on height and this species’ height growth rate; no DBH age calculation is available.'),
                 if (estimated && disagrees)
                   const Text(

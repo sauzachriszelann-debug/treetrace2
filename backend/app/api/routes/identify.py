@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form, Response
+from starlette.datastructures import UploadFile as StarletteUploadFile
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -267,6 +268,7 @@ async def gallery_size_prediction(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    treetop_file: Optional[UploadFile] = File(None),
 ):
     # Authenticated, quota-limited, display-only predictions; never tree writes.
     if file.content_type not in ("image/jpeg", "image/png", "image/webp"):
@@ -274,8 +276,18 @@ async def gallery_size_prediction(
     contents = await file.read(2_000_001)
     if not contents or len(contents) > 2_000_000:
         raise HTTPException(status_code=413, detail="Prediction photo must be at most 2 MB.")
+    top_contents = None
+    if isinstance(treetop_file, StarletteUploadFile):
+        if treetop_file.content_type not in ("image/jpeg", "image/png", "image/webp"):
+            raise HTTPException(status_code=400, detail="Use JPEG, PNG or WebP for the treetop photo.")
+        top_contents = await treetop_file.read(2_000_001)
+        if not top_contents or len(top_contents) > 2_000_000:
+            raise HTTPException(status_code=413, detail="Treetop photo must be at most 2 MB.")
     enforce_ai_limit(current_user, db)
     from app.services.gallery_size_prediction import predict_gallery_size
+    if top_contents is not None:
+        return await predict_gallery_size(contents, file.content_type,
+            treetop_bytes=top_contents, treetop_content_type=treetop_file.content_type)
     return await predict_gallery_size(contents, file.content_type)
 
 

@@ -118,6 +118,78 @@ def test_hidden_parts_are_not_reconstructed(monkeypatch, model, base, top, dbh, 
     assert result['predicted_dbh_cm'] == dbh and result['predicted_height_m'] == height
 
 
+def test_cropped_top_requests_another_photo(monkeypatch, model):
+    monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', AsyncMock(return_value={
+        'target_identified': True, 'base_visible': True, 'top_visible': False,
+        'dbh': {'value': 45, 'evidence': 'visible trunk', **visual_support()},
+        'height': {'value': None, 'reason_code': 'top_hidden'}}))
+    result = run()
+    assert result['needs_treetop_photo'] is True
+    assert result['predicted_height_m'] is None
+    assert result['predicted_dbh_cm'] == 45
+
+
+@pytest.mark.parametrize('matched,top_visible,expected', [(True, True, 11), (False, True, None), (True, False, None)])
+def test_treetop_pair_needs_same_tree_and_visible_tip(monkeypatch, model, matched, top_visible, expected):
+    provider = AsyncMock(return_value={
+        'target_identified': True, 'same_tree_confirmed': matched,
+        'base_visible': True, 'top_visible': top_visible,
+        'dbh': {'value': 45, 'evidence': 'original lower trunk', **visual_support()},
+        'height': {'value': 11, 'reason_code': 'predicted',
+                   'evidence': 'base in first photo, tip and overlapping branches in second', **visual_support()}})
+    monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', provider)
+    result = immediate(service.predict_gallery_size(photo(), 'image/jpeg',
+        treetop_bytes=photo(), treetop_content_type='image/jpeg')).model_dump()
+    assert result['predicted_height_m'] == expected
+    assert result['treetop_photo_used'] == (expected is not None)
+    assert result['predicted_dbh_cm'] == 45
+    assert model.call_count == 1
+    assert provider.call_args.kwargs['treetop_image_b64'] == base64.b64encode(photo()).decode()
+    assert 'TWO IMAGES' in provider.call_args.args[2]
+    assert_not_measured(result)
+
+
+def test_treetop_provider_sends_two_separate_images(monkeypatch):
+    from types import SimpleNamespace
+    requests = []
+    class Client:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): return False
+        async def post(self, url, json):
+            requests.append(json)
+            return SimpleNamespace(status_code=200, json=lambda: {
+                'candidates': [{'content': {'parts': [{'text': '{}'}]}}]})
+    monkeypatch.setattr(ai_identify, 'GEMINI_API_KEY', 'test-only')
+    monkeypatch.setattr(ai_identify, '_gemini_candidate_models', lambda: ['test-model'])
+    monkeypatch.setattr(ai_identify.httpx, 'AsyncClient', lambda **kwargs: Client())
+    immediate(ai_identify.gallery_vision_prediction('original', 'image/jpeg', 'pair prompt',
+        treetop_image_b64='top', treetop_content_type='image/png'))
+    parts = requests[0]['contents'][0]['parts']
+    assert len(parts) == 3
+    assert parts[1]['inline_data']['data'] == 'original'
+    assert parts[2]['inline_data'] == {'data': 'top', 'mime_type': 'image/png'}
+
+
+def test_route_validates_secondary_upload_and_passes_both_photos(monkeypatch):
+    from app.api.routes import identify
+    calls = []
+    monkeypatch.setattr(identify, 'enforce_ai_limit', lambda *args: calls.append('quota'))
+    predict = AsyncMock(return_value={'status': 'predicted', 'reason': 'two photos'})
+    monkeypatch.setattr(service, 'predict_gallery_size', predict)
+    def upload(contents, mime):
+        return UploadFile(filename='photo', file=memory_file(contents),
+            headers=Headers({'content-type': mime}))
+    with pytest.raises(HTTPException) as error:
+        immediate(identify.gallery_size_prediction(upload(photo(), 'image/jpeg'), object(), None,
+            treetop_file=upload(b'not an image', 'text/plain')))
+    assert error.value.status_code == 400 and calls == []
+    immediate(identify.gallery_size_prediction(upload(photo(), 'image/jpeg'), object(), None,
+        treetop_file=upload(photo(), 'image/png')))
+    assert calls == ['quota']
+    assert predict.call_args.kwargs['treetop_bytes'] == photo()
+    assert predict.call_args.kwargs['treetop_content_type'] == 'image/png'
+
+
 @pytest.mark.parametrize('raw', [None, [], {}, {'base_visible': True,
     'dbh': {'value': 20, 'evidence': ''}}])
 def test_unavailable_or_unsupported_ai_never_fills_sizes(monkeypatch, model, raw):
@@ -259,7 +331,7 @@ def test_gallery_provider_uses_isolated_prompt_without_numeric_defaults(monkeypa
     assert requests[0]['contents'][0]['parts'][0]['text'] == 'isolated gallery prompt'
     assert requests[0]['generationConfig']['responseMimeType'] == 'application/json'
     schema = requests[0]['generationConfig']['responseSchema']
-    assert set(schema['required']) == {'dbh', 'height', 'base_visible', 'top_visible', 'target_identified'}
+    assert set(schema['required']) == {'dbh', 'height', 'base_visible', 'top_visible', 'target_identified', 'same_tree_confirmed'}
     for name in ('dbh', 'height'):
         metric_schema = schema['properties'][name]
         assert set(metric_schema['required']) == {'value', 'evidence', 'uncertainty', 'reason_code'}

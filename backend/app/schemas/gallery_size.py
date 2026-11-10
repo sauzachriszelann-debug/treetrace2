@@ -26,8 +26,9 @@ GALLERY_VISION_RESPONSE_SCHEMA = {
         'target_identified': {'type': 'BOOLEAN'},
         'base_visible': {'type': 'BOOLEAN'},
         'top_visible': {'type': 'BOOLEAN'},
+        'same_tree_confirmed': {'type': 'BOOLEAN'},
     },
-    'required': ['dbh', 'height', 'base_visible', 'top_visible', 'target_identified'],
+    'required': ['dbh', 'height', 'base_visible', 'top_visible', 'target_identified', 'same_tree_confirmed'],
 }
 
 
@@ -39,6 +40,8 @@ class GallerySizeResponse(BaseModel):
     validated_accuracy: Literal[False] = False
     predicted_dbh_cm: Optional[float] = Field(None, gt=0, le=300)
     predicted_height_m: Optional[float] = Field(None, gt=0, le=80)
+    needs_treetop_photo: bool = False
+    treetop_photo_used: bool = False
     target_source: Literal['yolo', 'ai_visual', 'none'] = 'none'
     target_identified: bool = False
     detection_note: Optional[str] = None

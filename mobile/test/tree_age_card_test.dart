@@ -65,6 +65,27 @@ void main() {
     expect(find.textContaining('highly uncertain'), findsNothing);
   });
 
+  testWidgets('missing height does not claim a height cross-check occurred',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: TreeAgeCard(
+      scientificName: 'Gmelina arborea',
+      dbhCm: 45,
+      lookup: (s, d, h, source) async => {
+        'status': 'estimated',
+        'dbh_age_years': 17.6,
+        'height_age_years': null,
+        'reason': 'DBH growth scenario.',
+      },
+    ))));
+    await tester.pumpAndSettle();
+    expect(find.text('About 18 years (estimated)'), findsOneWidget);
+    expect(find.textContaining('Height is unavailable for a cross-check.'),
+        findsOneWidget);
+    expect(find.textContaining('Height is a cross-check.'), findsNothing);
+  });
+
   testWidgets('old photo response cannot replace new species age',
       (tester) async {
     final old = Completer<Map<String, dynamic>>();

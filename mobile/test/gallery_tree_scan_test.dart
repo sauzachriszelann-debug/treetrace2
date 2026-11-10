@@ -26,11 +26,15 @@ void main() {
   late _EvidenceStore store;
   Map<String, dynamic>? prediction;
   Object? predictionError;
+  File? pickedTreetop;
+  Future<Map<String, dynamic>> Function(File, File)? predictPair;
   setUp(() {
     photo = File('gallery-original.png');
     store = _EvidenceStore();
     prediction = null;
     predictionError = null;
+    pickedTreetop = null;
+    predictPair = null;
   });
 
   Future<void> open(
@@ -60,6 +64,8 @@ void main() {
           home: TreeScanScreen(
         galleryPhoto: photo,
         metadataStore: store,
+        pickTreetopPhoto: () async => pickedTreetop,
+        predictWithTreetop: (original, top) => predictPair!(original, top),
         predictGallerySize: (_) async {
           if (predictionError != null) throw predictionError!;
           return prediction ??
@@ -85,6 +91,101 @@ void main() {
     expect(find.text('Rescan tree'), findsOneWidget);
     await tester.pump(const Duration(milliseconds: 300));
   }
+
+  testWidgets('cropped treetop asks for another photo without filling height',
+      (tester) async {
+    prediction = {
+      'status': 'predicted',
+      'method': 'gallery_yolo_vision_prediction',
+      'quality': 'unvalidated',
+      'prediction_basis': 'visual_appearance',
+      'validated_accuracy': false,
+      'trunk_detected': true,
+      'target_source': 'yolo',
+      'target_identified': true,
+      'predicted_dbh_cm': 45,
+      'predicted_height_m': null,
+      'needs_treetop_photo': true,
+      'height_reason_code': 'top_hidden',
+      'reason': 'Unvalidated appearance prediction.',
+    };
+    await open(tester,
+        (_, __) async => throw StateError('Must not measure unknown photo'));
+    expect(find.text('Predicted DBH (cm): 45'), findsOneWidget);
+    expect(find.text('Predicted height (m): Unavailable'), findsOneWidget);
+    expect(find.text('Add treetop photo'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('add-treetop-photo')));
+    await tester.pump();
+    expect(find.text('Predicted DBH (cm): 45'), findsOneWidget);
+    expect(find.text('Add treetop photo'), findsOneWidget);
+    expect(
+        tester
+            .widget<TextFormField>(find.byKey(const Key('scan-height')))
+            .controller!
+            .text,
+        isEmpty);
+  });
+
+  testWidgets('adding same-tree top updates predicted height only',
+      (tester) async {
+    prediction = {
+      'status': 'predicted',
+      'method': 'gallery_yolo_vision_prediction',
+      'quality': 'unvalidated',
+      'prediction_basis': 'visual_appearance',
+      'validated_accuracy': false,
+      'trunk_detected': true,
+      'target_source': 'yolo',
+      'target_identified': true,
+      'predicted_dbh_cm': 45,
+      'predicted_height_m': null,
+      'needs_treetop_photo': true,
+      'reason': 'Cropped top.',
+    };
+    pickedTreetop = File('treetop.png');
+    final image =
+        await tester.runAsync(() => createTestImage(width: 2, height: 2));
+    PaintingBinding.instance.imageCache.putIfAbsent(
+        FileImage(pickedTreetop!),
+        () => OneFrameImageStreamCompleter(
+            Future.value(ImageInfo(image: image!))));
+    var calls = 0;
+    predictPair = (original, top) async {
+      calls++;
+      expect(original.path, photo.path);
+      expect(top.path, pickedTreetop!.path);
+      return {
+        ...prediction!,
+        'predicted_dbh_cm': 99,
+        'predicted_height_m': 11,
+        'treetop_photo_used': true,
+        'needs_treetop_photo': false,
+        'height_reason': 'Both views of same tree.',
+        'height_reason_code': 'predicted'
+      };
+    };
+    await open(tester, (_, __) async => throw StateError('No metric capture'));
+    await tester.tap(find.byKey(const Key('add-treetop-photo')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(calls, 1);
+    expect(find.text('Predicted height (m): 11'), findsOneWidget);
+    expect(find.text('Predicted DBH (cm): 45'), findsOneWidget);
+    expect(find.textContaining('Height predicted using your original photo'),
+        findsOneWidget);
+    expect(
+        tester
+            .widget<TextFormField>(find.byKey(const Key('scan-height')))
+            .controller!
+            .text,
+        isEmpty);
+    expect(
+        tester
+            .widget<TextFormField>(find.byKey(const Key('scan-dbh')))
+            .controller!
+            .text,
+        isEmpty);
+  });
 
   testWidgets('unknown original identifies species without inventing scale',
       (tester) async {

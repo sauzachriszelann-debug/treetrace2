@@ -9,6 +9,7 @@ import 'dart:ui' as ui;
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../services/api_service.dart';
 import '../services/photo_capture_metadata_store.dart';
@@ -24,6 +25,8 @@ import '../services/photo_measurement_rules.dart';
 /// camera; processing and species identification run automatically afterwards.
 class TreeScanScreen extends StatefulWidget {
   final Future<Map<String, dynamic>> Function(File)? predictGallerySize;
+  final Future<Map<String, dynamic>> Function(File, File)? predictWithTreetop;
+  final Future<File?> Function()? pickTreetopPhoto;
   final File? galleryPhoto;
   final PhotoCaptureMetadataStore metadataStore;
   final Future<Map<String, dynamic>> Function(File)? identifyPhoto;
@@ -38,6 +41,8 @@ class TreeScanScreen extends StatefulWidget {
       this.autoStart = true,
       this.galleryPhoto,
       this.predictGallerySize,
+      this.predictWithTreetop,
+      this.pickTreetopPhoto,
       this.metadataStore = const PhotoCaptureMetadataStore(),
       this.identifyPhoto,
       this.measurePhoto,
@@ -50,6 +55,10 @@ class TreeScanScreen extends StatefulWidget {
 
 class _TreeScanScreenState extends State<TreeScanScreen> {
   Map<String, dynamic>? _galleryPrediction;
+  File? _treetopPhoto;
+  bool _addingTreetop = false;
+  String? _treetopError;
+  int _treetopRequest = 0;
   Uint8List? _galleryTrunkPreview;
   Map<String, dynamic>? _photoMeasurement;
   Uint8List? _preview;
@@ -124,6 +133,10 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
     final deletePrevious = _ownsPhoto;
     _photo = photo;
     _galleryPrediction = null;
+    _treetopPhoto = null;
+    _treetopError = null;
+    _addingTreetop = false;
+    _treetopRequest++;
     _galleryTrunkPreview = null;
     _ownsPhoto = owned;
     _species = null;
@@ -262,6 +275,66 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
       return 'Unavailable';
     }
     return value.toStringAsFixed(0);
+  }
+
+  Future<void> _addTreetopPhoto() async {
+    final original = _photo;
+    if (original == null || _busy || _addingTreetop) return;
+    final request = ++_treetopRequest;
+    File? top;
+    try {
+      if (widget.pickTreetopPhoto != null) {
+        top = await widget.pickTreetopPhoto!();
+      } else {
+        final source = await showModalBottomSheet<ImageSource>(context: context,
+          builder: (context) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(leading: const Icon(Icons.photo_library_outlined), title: const Text('Select treetop photo'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery)),
+            ListTile(leading: const Icon(Icons.camera_alt_outlined), title: const Text('Take treetop photo'),
+              onTap: () => Navigator.pop(context, ImageSource.camera)),
+          ])));
+        if (source == null) return;
+        final picked = await ImagePicker().pickImage(source: source, imageQuality: 85, maxWidth: 1600);
+        if (picked != null) top = File(picked.path);
+      }
+      if (top == null || !mounted || request != _treetopRequest || _photo?.path != original.path) return;
+      setState(() { _addingTreetop = true; _treetopError = null; _treetopPhoto = top; });
+      final result = await (widget.predictWithTreetop?.call(original, top) ??
+          api.predictGallerySize(original, treetopPhoto: top));
+      if (!mounted || request != _treetopRequest || _photo?.path != original.path) return;
+      final value = result['predicted_height_m'];
+      final valid = result['treetop_photo_used'] == true && result['status'] == 'predicted' &&
+          result['method'] == 'gallery_yolo_vision_prediction' && result['quality'] == 'unvalidated' &&
+          result['validated_accuracy'] == false && result['prediction_basis'] == 'visual_appearance' &&
+          result['target_identified'] == true && value is num && value.isFinite && value >= 1 && value <= 80;
+      setState(() {
+        if (valid) {
+          // Supplemental image updates height only. Keep original DBH, species,
+          // trunk overlay and measured fields, even if AI revises those numbers.
+          _galleryPrediction = {...?_galleryPrediction,
+            'status': 'predicted', 'target_identified': true,
+            'predicted_height_m': value, 'treetop_photo_used': true,
+            'needs_treetop_photo': false,
+            'height_reason': result['height_reason'],
+            'height_reason_code': result['height_reason_code'],
+            'uncertainties': [
+              ...((_galleryPrediction?['uncertainties'] as List?) ?? []).where((v) => !v.toString().startsWith('Height:')),
+              ...((result['uncertainties'] as List?) ?? []).where((v) => v.toString().startsWith('Height:')),
+            ],
+          };
+        } else {
+          _treetopError = result['height_reason']?.toString() ?? result['reason']?.toString() ??
+              'Height unavailable. Include the treetop and overlapping branches of this same tree.';
+        }
+      });
+    } catch (_) {
+      if (mounted && request == _treetopRequest) {
+        setState(() => _treetopError =
+          'Treetop photo could not be processed. Check your connection and try again.');
+      }
+    } finally {
+      if (mounted && request == _treetopRequest) setState(() => _addingTreetop = false);
+    }
   }
 
   Future<void> _scan() => widget.advancedAr ? _scanAr() : _scanLevel();
@@ -691,6 +764,21 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
                             'Predicted DBH (cm): ${_predictionValue('predicted_dbh_cm', 300)}'),
                         Text(
                             'Predicted height (m): ${_predictionValue('predicted_height_m', 80)}'),
+                        if (_galleryPrediction?['treetop_photo_used'] == true)
+                          const Text('Height predicted using your original photo and added treetop photo.'),
+                        if (_galleryPrediction?['needs_treetop_photo'] == true ||
+                            _galleryPrediction?['height_reason_code'] == 'top_hidden' ||
+                            _galleryPrediction?['treetop_photo_used'] == true) ...[
+                          const Text('Add a photo of the treetop of this same tree. Stay in the same position and include overlapping trunk or branches so the photos can be matched.'),
+                          if (_treetopPhoto != null)
+                            ExpandablePhoto(image: FileImage(_treetopPhoto!), label: 'Added treetop photo', height: 140, fit: BoxFit.contain),
+                          if (_treetopError != null) Text(_treetopError!),
+                          OutlinedButton.icon(key: const Key('add-treetop-photo'),
+                            onPressed: _busy || _addingTreetop ? null : _addTreetopPhoto,
+                            icon: const Icon(Icons.add_photo_alternate_outlined),
+                            label: Text(_addingTreetop ? 'Checking treetop photo…' :
+                              _treetopPhoto != null ? 'Replace treetop photo' : 'Add treetop photo')),
+                        ],
                         if (_galleryPrediction?['dbh_reason'] is String)
                           Text('DBH: ${_galleryPrediction!['dbh_reason']}'),
                         if (_galleryPrediction?['height_reason'] is String)

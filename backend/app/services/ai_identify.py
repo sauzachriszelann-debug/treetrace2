@@ -1144,7 +1144,9 @@ async def species_growth_prediction(prompt: str):
     raise GalleryVisionError(last_code)
 
 
-async def gallery_vision_prediction(image_b64: str, content_type: str, prompt: str):
+async def gallery_vision_prediction(image_b64: str, content_type: str, prompt: str,
+                                    treetop_image_b64: str | None = None,
+                                    treetop_content_type: str | None = None):
     """Separate gallery request, with safe diagnostics and no numeric defaults."""
     from app.schemas.gallery_size import GALLERY_VISION_RESPONSE_SCHEMA
     if not GEMINI_API_KEY:
@@ -1154,6 +1156,9 @@ async def gallery_vision_prediction(image_b64: str, content_type: str, prompt: s
         "generationConfig": {"temperature": 0, "maxOutputTokens": 2048,
                              "responseMimeType": "application/json",
                              "responseSchema": GALLERY_VISION_RESPONSE_SCHEMA}}
+    if treetop_image_b64 is not None:
+        payload["contents"][0]["parts"].append({"inline_data": {
+            "mime_type": treetop_content_type, "data": treetop_image_b64}})
     last_code = "model_unavailable"
     try:
         async with httpx.AsyncClient(timeout=30) as client:

@@ -112,6 +112,23 @@ Add reviewed profiles in `backend/app/services/published_growth_rates.py` or
 
 ## Checks
 
+### Cropped treetop in gallery
+
+Gallery review offers **Add treetop photo** when the top is hidden. The user can
+select or take a second photo of the same tree, including overlapping trunk or
+branches from the same position. Both images are sent separately to the existing
+gallery endpoint (`file` plus optional `treetop_file`), each bounded to 2 MB.
+AI must report a plausible same-tree match and a visible tip; otherwise height
+remains unavailable. This is still uncalibrated visual prediction, not two-view
+photogrammetry or sensor-based Take Photo height measurement.
+
+The client updates predicted height and the age cross-check only, preserving
+the original DBH, species, overlay and measured inventory fields. A new main
+photo clears the added top; stale supplemental responses are ignored. Canceling
+the picker keeps existing results. A failed/mismatched pair can be replaced.
+Each supplemental request uses the existing authenticated AI quota. No database
+migration or automatic inventory write is added.
+
 Backend: `python -m pytest tests/test_tree_age.py -q`
 
 Mobile: `flutter test --no-pub test/tree_age_card_test.dart test/gallery_tree_scan_test.dart test/two_capture_session_test.dart test/ai_identify_badges_test.dart`
