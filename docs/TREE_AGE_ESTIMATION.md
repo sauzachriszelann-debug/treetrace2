@@ -52,6 +52,14 @@ Family extrema imply DBH 2.1222–2.8256 cm/year and height
 
 ## Calculation and limits
 
+The mobile card headlines one rounded scenario age: DBH-based age first, with
+height-based age only when DBH age is unavailable. Height is a cross-check,
+not an equally weighted input to an average. This is an explicit display
+choice, not evidence that DBH predicts age more accurately for every species.
+Conflicting checks keep a prominent "highly uncertain" warning. Independent
+dimensional ages remain available under Calculation details. The server's
+scenario envelope is not the primary age headline when a central age exists.
+
 For each supplied dimension, scenario age = size / (published size / 9).
 The display range envelopes the independent DBH and height scenarios using the
 published family extrema, rounded outward to whole years. The central values

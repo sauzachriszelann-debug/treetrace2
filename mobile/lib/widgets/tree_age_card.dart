@@ -88,6 +88,10 @@ class _TreeAgeCardState extends State<TreeAgeCard> {
     final source = _result?['source'];
     final aiGrowth = _result?['estimation_basis'] == 'ai_growth_guess';
     final rates = _result?['growth_rates'];
+    final dbhAge = ageDimension(_result?['dbh_age_years']);
+    final heightAge = ageDimension(_result?['height_age_years']);
+    final primaryAge = dbhAge ?? heightAge;
+    final disagrees = _result?['dimensions_disagree'] == true;
     return Card(
       key: const Key('tree-age-card'),
       child: Padding(
@@ -111,14 +115,36 @@ class _TreeAgeCardState extends State<TreeAgeCard> {
                             ? 'Published growth data'
                             : 'Growth data unavailable',
                     style: const TextStyle(fontWeight: FontWeight.w600)),
-                Text(estimated
-                    ? 'Approximately ${_result!['min_years']}–${_result!['max_years']} years'
-                    : 'Age unknown'),
-                if (_result?['dbh_age_years'] != null)
-                  Text('From DBH: about ${_result!['dbh_age_years']} years'),
-                if (_result?['height_age_years'] != null)
-                  Text(
-                      'From height: about ${_result!['height_age_years']} years'),
+                Text(
+                    estimated && primaryAge != null
+                        ? primaryAge < 1
+                            ? 'Less than 1 year (estimated)'
+                            : 'About ${primaryAge.round()} ${primaryAge.round() == 1 ? 'year' : 'years'} (estimated)'
+                        : estimated
+                            ? 'Approximately ${_result!['min_years']}–${_result!['max_years']} years'
+                            : 'Age unknown',
+                    style: const TextStyle(
+                        fontSize: 20, fontWeight: FontWeight.bold)),
+                if (estimated && primaryAge != null)
+                  Text(dbhAge != null
+                      ? 'Based on DBH and this species’ diameter growth rate. Height is a cross-check.'
+                      : 'Based on height and this species’ height growth rate; no DBH age calculation is available.'),
+                if (estimated && disagrees)
+                  const Text(
+                      'Height and DBH checks disagree. This age estimate is highly uncertain.'),
+                if (dbhAge != null || heightAge != null)
+                  ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    title: const Text('Calculation details'),
+                    children: [
+                      if (dbhAge != null)
+                        Text(
+                            'From DBH: about ${_result!['dbh_age_years']} years'),
+                      if (heightAge != null)
+                        Text(
+                            'From height: about ${_result!['height_age_years']} years'),
+                    ],
+                  ),
                 Text(_result?['reason']?.toString() ??
                     'No growth data available.'),
                 if (rates is Map) ...[

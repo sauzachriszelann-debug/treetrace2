@@ -11,7 +11,8 @@ void main() {
     expect(ageDimension('45'), 45);
   });
 
-  testWidgets('shows separate age checks and study source', (tester) async {
+  testWidgets('shows one DBH age with conflicting height as a warning',
+      (tester) async {
     await tester.pumpWidget(MaterialApp(
         home: Scaffold(
             body: TreeAgeCard(
@@ -24,6 +25,7 @@ void main() {
         'max_years': 22,
         'dbh_age_years': 17.6,
         'height_age_years': 3.9,
+        'dimensions_disagree': true,
         'reason': 'Experimental growth scenario.',
         'source': {
           'citation': 'Published study',
@@ -33,9 +35,34 @@ void main() {
       },
     ))));
     await tester.pumpAndSettle();
-    expect(find.text('Approximately 3–22 years'), findsOneWidget);
+    expect(find.text('About 18 years (estimated)'), findsOneWidget);
+    expect(find.textContaining('highly uncertain'), findsOneWidget);
+    expect(find.textContaining('Approximately'), findsNothing);
+    await tester.tap(find.text('Calculation details'));
+    await tester.pumpAndSettle();
     expect(find.text('From DBH: about 17.6 years'), findsOneWidget);
     expect(find.text('Copy growth study link'), findsOneWidget);
+  });
+
+  testWidgets('height-only age is explicitly labeled and used as fallback',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: TreeAgeCard(
+      scientificName: 'Cocos nucifera',
+      heightM: 8,
+      lookup: (s, d, h, source) async => {
+        'status': 'estimated',
+        'estimation_basis': 'ai_growth_guess',
+        'height_age_years': 12.3,
+        'dbh_age_years': null,
+        'reason': 'Unverified growth scenario.',
+      },
+    ))));
+    await tester.pumpAndSettle();
+    expect(find.text('About 12 years (estimated)'), findsOneWidget);
+    expect(find.textContaining('no DBH age calculation'), findsOneWidget);
+    expect(find.textContaining('highly uncertain'), findsNothing);
   });
 
   testWidgets('old photo response cannot replace new species age',
