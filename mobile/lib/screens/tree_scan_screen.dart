@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import '../widgets/expandable_photo.dart';
 import '../widgets/photo_observations_card.dart';
+import '../widgets/tree_age_card.dart';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -709,6 +710,16 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
                             'Experimental estimates: validate DBH against tape and height against a clinometer. '
                             'Predictions are not saved as measurements or used for carbon calculations.'),
                       ])),
+            ),
+          if (_species != null && !_busy)
+            TreeAgeCard(
+              scientificName: _species?['scientific_name']?.toString() ?? '',
+              dbhCm: ageDimension(_galleryPrediction != null
+                  ? _galleryPrediction!['predicted_dbh_cm'] : _diameter.text),
+              heightM: ageDimension(_galleryPrediction != null
+                  ? _galleryPrediction!['predicted_height_m'] : _height),
+              dimensionsSource: _galleryPrediction != null
+                  ? 'ai_prediction' : 'measurement',
             ),
           if (_preview != null) ...[
             const SizedBox(height: 12),

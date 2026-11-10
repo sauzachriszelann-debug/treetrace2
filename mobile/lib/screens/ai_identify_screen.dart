@@ -14,6 +14,7 @@ import '../services/theme.dart';
 import '../widgets/widgets.dart';
 import '../widgets/expandable_photo.dart';
 import '../widgets/photo_observations_card.dart';
+import '../widgets/tree_age_card.dart';
 import 'add_tree_screen.dart';
 import 'upgrade_screen.dart';
 
@@ -695,6 +696,11 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
         ),
         const SizedBox(height: 16),
         _buildQuickInfoGrid(),
+        TreeAgeCard(
+          scientificName: _result?['scientific_name']?.toString() ?? '',
+          dbhCm: ageDimension(_result?['estimated_dbh_cm']),
+          heightM: ageDimension(_result?['estimated_height_m']),
+        ),
         const SizedBox(height: 16),
         _buildPlantProfile(
           commonName: commonName,

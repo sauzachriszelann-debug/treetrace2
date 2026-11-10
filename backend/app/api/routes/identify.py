@@ -15,6 +15,7 @@ from app.models.unknown_species import UnknownSpecies
 from app.schemas.dbh import ARDBHRequest, ARDBHResponse, PhotoDBHRequest as MeasureDBHRequest
 from app.schemas.height import HeightRequest, HeightResponse
 from app.schemas.gallery_size import GallerySizeResponse
+from app.schemas.tree_age import TreeAgeRequest, TreeAgeResponse
 from app.core.security import get_current_user, require_admin
 from app.api.routes.tree_submissions import (
     TREE_SUBMISSION_DAILY_LIMITS,
@@ -40,6 +41,12 @@ def _get_local_species_classifier():
 from app.services.species_db import get_all_protected, lookup_species, PHILIPPINE_ENDANGERED_SPECIES
 
 router = APIRouter()
+
+
+@router.post("/estimate-age", response_model=TreeAgeResponse)
+def estimate_age(payload: TreeAgeRequest, _: User = Depends(get_current_user)):
+    from app.services.tree_age import estimate_tree_age
+    return estimate_tree_age(payload)
 
 
 @router.get("/dbh-trunk-status")

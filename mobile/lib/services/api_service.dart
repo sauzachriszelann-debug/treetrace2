@@ -677,6 +677,18 @@ class ApiService {
     return Map<String, dynamic>.from(res.data);
   }
 
+  /// Display-only age scenario calculated from reviewed growth literature.
+  Future<Map<String, dynamic>> estimateTreeAge(String species, double? dbh,
+      double? height, String source) async {
+    final response = await _dio.post('/ai/estimate-age', data: {
+      'scientific_name': species,
+      'dbh_cm': dbh,
+      'height_m': height,
+      'dimensions_source': source,
+    });
+    return Map<String, dynamic>.from(response.data);
+  }
+
   /// Display-only AI prediction. A bounded derivative is permitted here:
   /// this route never supplies measured DBH/height or original EXIF geometry.
   Future<Map<String, dynamic>> predictGallerySize(File imageFile) async {
