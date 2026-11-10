@@ -44,7 +44,8 @@ function requestError(error) {
   return error?.response ? 'Prediction could not complete. Try again.' : error?.message || 'Check your connection and try again.';
 }
 
-export default function GalleryTreePredictions({ file, scientificName }) {
+export default function GalleryTreePredictions({ file, scientificName, onDimensions,
+  ageDbhCm, ageHeightM, dimensionsSource = 'ai_prediction' }) {
   const [prediction, setPrediction] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -99,26 +100,30 @@ export default function GalleryTreePredictions({ file, scientificName }) {
 
   const dbh = metric(prediction, 'predicted_dbh_cm', 300);
   const height = metric(prediction, 'predicted_height_m', 80);
+  useEffect(() => { onDimensions?.({ dbhCm: dbh, heightM: height }); }, [dbh, height, onDimensions]);
   const needsTop = prediction?.needs_treetop_photo || prediction?.height_reason_code === 'top_hidden' || prediction?.treetop_photo_used;
-  return <section aria-label="Gallery tree predictions" className="space-y-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
-    <div><h2 className="font-semibold">AI-predicted size</h2>
-      <p className="text-sm text-muted-foreground">Unvalidated appearance-based predictions. No reference object is required. These values are not saved as measurements or used for carbon calculations.</p></div>
+  return <section aria-label="Tree analysis" className="space-y-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
+    <div><h2 className="font-semibold">DBH and Height</h2>
+      <p className="text-sm text-muted-foreground">AI-estimated from photos. Review before saving; physical scale and accuracy are unvalidated.</p></div>
     <div className="flex flex-wrap gap-3">
       <Photo src={originalUrl} label="Original tree photo" />
       {prediction?.preview_png && <Photo src={`data:image/png;base64,${prediction.preview_png}`} label="Trunk detection" />}
     </div>
-    {loading ? <p role="status">Detecting trunk and predicting DBH and height…</p> : error ? <>
-      <p role="alert">{error}</p><Button type="button" variant="outline" onClick={() => setRetry(n => n + 1)}>Retry size prediction</Button>
+    {loading ? <p role="status">Detecting trunk and estimating DBH and height…</p> : error ? <>
+      <p role="alert">{error}</p><Button type="button" variant="outline" onClick={() => setRetry(n => n + 1)}>Retry analysis</Button>
     </> : <>
       <div className="grid gap-2 sm:grid-cols-2">
-        <p>Predicted DBH (cm): <strong>{dbh ?? 'Unavailable'}</strong></p>
-        <p>Predicted height (m): <strong>{height ?? 'Unavailable'}</strong></p>
+        <p>DBH (cm): <strong>{dbh ?? 'Unavailable'}</strong></p>
+        <p>Height (m): <strong>{height ?? 'Unavailable'}</strong></p>
       </div>
       {prediction?.detection_note && <p className="text-sm">{prediction.detection_note}</p>}
-      {prediction?.dbh_reason && <p className="text-sm">DBH: {prediction.dbh_reason}</p>}
-      {prediction?.height_reason && <p className="text-sm">Height: {prediction.height_reason}</p>}
-      <p className="text-sm text-muted-foreground">{prediction?.reason}</p>
-      {prediction?.treetop_photo_used && <p className="text-sm">Height predicted using your original photo and added treetop photo.</p>}
+      <details><summary className="cursor-pointer text-sm">Analysis details</summary>
+        {prediction?.dbh_reason && <p className="text-sm">DBH: {prediction.dbh_reason}</p>}
+        {prediction?.height_reason && <p className="text-sm">Height: {prediction.height_reason}</p>}
+        <p className="text-sm text-muted-foreground">{prediction?.reason}</p>
+      </details>
+      {!prediction?.trunk_detected && <Button type="button" variant="outline" onClick={() => setRetry(n => n + 1)}>Retry trunk detection</Button>}
+      {prediction?.treetop_photo_used && <p className="text-sm">Height estimated using your original photo and added treetop photo.</p>}
       {needsTop && <div className="space-y-2 border-t pt-3">
         <p className="text-sm">Add the treetop of this same tree. Stay in the same position and include overlapping trunk or branches so both photos can be matched.</p>
         <Photo src={topUrl} label="Added treetop photo" />
@@ -129,8 +134,11 @@ export default function GalleryTreePredictions({ file, scientificName }) {
         {topLoading && <p role="status">Checking treetop photo…</p>}
         {topError && <p role="alert">{topError}</p>}
       </div>}
-      <TreeAgeEstimate scientificName={scientificName} dbhCm={dbh} heightM={height} />
-      {prediction?.status !== 'predicted' && <Button type="button" variant="outline" onClick={() => setRetry(n => n + 1)}>Retry size prediction</Button>}
+      <TreeAgeEstimate scientificName={scientificName}
+        dbhCm={ageDbhCm === undefined ? dbh : ageDbhCm}
+        heightM={ageHeightM === undefined ? height : ageHeightM}
+        dimensionsSource={dimensionsSource} />
+      {prediction?.status !== 'predicted' && <Button type="button" variant="outline" onClick={() => setRetry(n => n + 1)}>Retry analysis</Button>}
     </>}
   </section>;
 }

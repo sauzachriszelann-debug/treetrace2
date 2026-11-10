@@ -228,17 +228,28 @@ def test_gallery_retry_restores_crop_mask_to_original_coordinates(monkeypatch, m
     assert detection['trunk_detected'] is True
     assert detection['target']['bbox'] == [270, 180, 369, 439]
     assert detection['trunk_width_px'] == 100
-    assert 'lower photo' in detection['detection_note']
+    assert 'closer view' in detection['detection_note']
     Image.open(io.BytesIO(base64.b64decode(detection['preview_png']))).verify()
 
 
-def test_gallery_retry_is_bounded_when_both_views_miss(model):
+def test_gallery_retry_is_bounded_when_all_views_miss(model):
     model.return_value = []
     detection, reason = service._detect(photo())
     assert reason is None
-    assert model.call_count == 2
+    assert model.call_count == 4
     assert detection['trunk_detected'] is False
     assert detection['target_source'] == 'ai_visual'
+
+
+def test_center_crop_retry_maps_both_offsets_without_inventing_mask(model):
+    mask = np.zeros((240, 512), dtype=bool)
+    mask[10:200, 100:180] = True
+    model.side_effect = [[], [], [mask]]
+    detection, reason = service._detect(photo())
+    assert reason is None
+    assert model.call_count == 3
+    assert detection['target']['bbox'] == [164, 130, 243, 319]
+    assert detection['trunk_width_px'] == 80
 
 
 def test_partial_trunk_preserves_overlay_and_independent_predictions(monkeypatch, model):

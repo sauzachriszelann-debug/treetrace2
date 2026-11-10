@@ -10,14 +10,24 @@ When the tip is cropped, **Add treetop photo** sends the same original `file`
 plus optional `treetop_file` to the gallery endpoint. The backend must match
 the same tree and see its top. The browser accepts only a validated response
 contract and updates height only, preserving original DBH/species/overlay.
-The age cross-check refreshes. Photos from separate viewpoints do not establish
+The age cross-check refreshes using the form's current DBH/height. Photos from separate viewpoints do not establish
 metric scale; these remain unvalidated visual predictions.
 
-Gallery prediction numbers never populate inventory DBH/height, carbon, draft or offline
-payloads. Species identification also no longer copies its AI size guesses into
-measurement fields. Manual circumference and height tools remain available;
-older photo measurement controls are under Advanced photo measurement tools.
-Existing manual measurements and saved records are preserved.
+On user request, gallery analysis now fills empty or previously AI-filled DBH
+and height inputs. User edits and existing manual measurements are preserved.
+Selecting/removing a photo clears only values still belonging to the prior AI
+result. On Save, dimensions are included in the normal inventory/offline payload;
+notes identify AI-filled sizes as unvalidated estimates. Carbon based on those
+sizes is labeled approximate. The Manual DBH Calculator and Advanced photo
+measurement panels are removed; inputs remain editable and the separate height
+calculator remains available. Detailed uncertainty and age disagreement are
+available under Analysis details / Calculation details rather than repeated
+beside the headline. Main dimension labels are DBH and Height.
+
+YOLO retries the lower scene and then two closer central/lower crops, at its
+existing trained confidence and input size. Only real masks are mapped back to
+original coordinates. No model detection is fabricated; a miss exposes Retry
+trunk detection and continues the explicitly AI-estimated size flow.
 
 All calls use the existing authenticated Axios client. New photo selection,
 removal and unmount discard stale results. Canceled/error supplemental uploads

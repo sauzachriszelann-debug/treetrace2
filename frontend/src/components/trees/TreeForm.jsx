@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import {
   Select, SelectContent, SelectItem,
   SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { MapPin, Loader2, Upload, X, Sparkles, Ruler } from "lucide-react";
+import { MapPin, Loader2, Upload, X, Sparkles } from "lucide-react";
 import { storageApi } from "@/api/storage";
 import { aiApi } from "@/api/ai";
 import { toast } from "sonner";
@@ -25,52 +25,6 @@ function calcBiomassCarbon(dbh_cm, height_m) {
     carbon: Math.round(carbon * 100) / 100,
   };
 }
-
-const DBH_REFERENCES = {
-  none: {
-    label: "No reference",
-    hint: "No reference object provided. Estimate using tree shape, surroundings, and visible context only.",
-  },
-  a4: {
-    label: "A4 paper",
-    hint: "A standard A4 paper is visible beside the trunk for scale. A4 size is 21.0 by 29.7 cm.",
-  },
-  phone: {
-    label: "Smartphone",
-    hint: "A typical smartphone is visible beside the trunk for scale. Estimate the phone width around 7 cm and height around 15 cm.",
-  },
-  coin: {
-    label: "Philippine coin",
-    hint: "A Philippine coin is visible beside the trunk for scale. Use it as the closest visible size reference.",
-  },
-  ruler: {
-    label: "Ruler or tape",
-    hint: "A ruler, tape measure, or marked measuring tool is visible beside the trunk. Use the visible markings as scale.",
-  },
-  person: {
-    label: "Person nearby",
-    hint: "A person is visible near the trunk. Use the person only as an approximate scale reference.",
-  },
-};
-
-const errorToMessage = (error, fallback = "Request failed. Please try again.") => {
-  const detail = error?.response?.data?.detail ?? error?.response?.data?.message ?? error?.message;
-  if (!detail) return fallback;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail)) {
-    return detail
-      .map((item) => {
-        if (typeof item === "string") return item;
-        if (item?.msg) return item.msg;
-        return JSON.stringify(item);
-      })
-      .join(" ");
-  }
-  if (typeof detail === "object") {
-    return detail.msg || detail.message || JSON.stringify(detail);
-  }
-  return String(detail);
-};
 
 const usefulAiNote = (description) => {
   const text = (description || "").trim();
@@ -97,6 +51,7 @@ export default function TreeForm({
   const fileRef = useRef(null);
   const identificationRequest = useRef(0);
   const currentPhoto = useRef(null);
+  const aiFilled = useRef({});
   const [identifiedSpecies, setIdentifiedSpecies] = useState("");
   const [form, setForm] = useState({
     common_name: "",
@@ -123,10 +78,6 @@ export default function TreeForm({
   const [aiError, setAiError] = useState(null);
   const [roboflowCandidate, setRoboflowCandidate] = useState(null);
   const [computed, setComputed] = useState({ biomass: null, carbon: null });
-  const [dbhReference, setDbhReference] = useState("none");
-  const [dbhDistance, setDbhDistance] = useState("");
-  const [dbhResult, setDbhResult] = useState(null);
-  const [circumferenceCm, setCircumferenceCm] = useState("");
   const [aiConservation, setAiConservation] = useState(null);
   const originalMeasurements = useRef({
     dbh_cm: initial.dbh_cm,
@@ -154,10 +105,34 @@ export default function TreeForm({
   }, [form.dbh_cm, form.height_m]);
 
   const set = (key, val) => {
+    if (key === 'dbh_cm' || key === 'height_m') delete aiFilled.current[key];
     setForm((f) => ({ ...f, [key]: val }));
     if (key === "dbh_cm" || key === "height_m") {
       setMeasurementErrors((errors) => ({ ...errors, [key]: null }));
     }
+  };
+
+  const fillDimensions = useCallback(({ dbhCm, heightM }) => {
+    setForm(previous => {
+      const next = { ...previous };
+      for (const [key, value] of [['dbh_cm', dbhCm], ['height_m', heightM]]) {
+        const automatic = aiFilled.current[key] !== undefined && Number(previous[key]) === aiFilled.current[key];
+        if (String(previous[key] ?? '').trim() !== '' && !automatic) continue;
+        const valid = typeof value === 'number' && Number.isFinite(value) && value > 0;
+        next[key] = valid ? String(value) : '';
+        if (valid) aiFilled.current[key] = value;
+        else delete aiFilled.current[key];
+      }
+      return next.dbh_cm === previous.dbh_cm && next.height_m === previous.height_m ? previous : next;
+    });
+  }, []);
+
+  const clearAutomaticDimensions = () => {
+    const old = { ...aiFilled.current };
+    aiFilled.current = {};
+    setForm(previous => ({ ...previous,
+      ...Object.fromEntries(Object.entries(old).filter(([key, value]) => Number(previous[key]) === value).map(([key]) => [key, ''])),
+    }));
   };
 
   const getMeasurementUpdate = (key, label) => {
@@ -187,22 +162,6 @@ export default function TreeForm({
       parsed === originalNumber;
 
     return { value: isUnchanged ? undefined : parsed, error: null };
-  };
-
-  const calculateDbhFromCircumference = (value) => {
-    setCircumferenceCm(value);
-    const circumference = parseFloat(value);
-    if (!Number.isFinite(circumference) || circumference <= 0) return;
-    const dbh = circumference / Math.PI;
-    set("dbh_cm", dbh.toFixed(2));
-    setDbhResult({
-      dbh_cm: Number(dbh.toFixed(2)),
-      confidence: "High",
-      method: "Manual circumference measurement",
-      analysis_notes: "Calculated from circumference measured at breast height using DBH = circumference / pi.",
-      distance_estimate_m: null,
-      accuracy_note: "High accuracy when circumference is measured with tape at 1.3 meters above ground.",
-    });
   };
 
   // ── Endangered species check ──────────────────────────────────────────────
@@ -244,6 +203,7 @@ export default function TreeForm({
     const file = e.target.files[0];
     if (!file) return;
     currentPhoto.current = file;
+    clearAutomaticDimensions();
     setIdentifiedSpecies("");
     setPhotoFile(file);
     setPhotoPreview(URL.createObjectURL(file));
@@ -251,12 +211,12 @@ export default function TreeForm({
     setRoboflowCandidate(null);
     setAiStatus(null);
     setAiError(null);
-    setDbhResult(null);
     setAiConservation(null);
     void handleAIIdentify(file);
   };
 
   const removePhoto = () => {
+    clearAutomaticDimensions();
     identificationRequest.current++;
     currentPhoto.current = null;
     setIdentifiedSpecies("");
@@ -266,7 +226,6 @@ export default function TreeForm({
     setAiStatus(null);
     setAiError(null);
     setRoboflowCandidate(null);
-    setDbhResult(null);
     setAiConservation(null);
   };
 
@@ -330,76 +289,6 @@ export default function TreeForm({
         setAiStatus("partial");
         setAiError("Identification request failed. Please enter the species name manually.");
       }
-    }
-  };
-
-  // ── AI DBH & Height Estimate ───────────────────────────────────────────────
-  const handleAIEstimate = async () => {
-    if (!photoFile) {
-      toast.error("Please upload a photo first.");
-      return;
-    }
-    setAiStatus("estimating");
-    setAiError(null);
-    try {
-      const reference = DBH_REFERENCES[dbhReference] || DBH_REFERENCES.none;
-      const distance = parseFloat(dbhDistance);
-      const result = await aiApi.measureDbh(photoFile, {
-        referenceHint: reference.hint,
-        method: "Web photo DBH measurement",
-        knownDistanceM: Number.isFinite(distance) && distance > 0 ? distance : null,
-      });
-      const dbh = result.dbh_cm;
-      const height = result.height_m;
-      const isDefaultEstimate = Number(dbh) === 25 && result.fallback;
-
-      if (!dbh || isDefaultEstimate) {
-        setDbhResult({
-          confidence: "Low",
-          method: result.method || "Photo DBH measurement unavailable",
-          analysis_notes: result.detail || result.analysis_notes || "The system did not return a photo-specific DBH measurement for this image.",
-          distance_estimate_m: null,
-          accuracy_note: result.accuracy_note || "Use the manual circumference calculator for accurate DBH.",
-          segmentation_used: Boolean(result.segmentation_used),
-        });
-        toast.warning("Photo DBH measurement was uncertain. Please use the manual circumference calculator.");
-        setAiStatus(null);
-        return;
-      }
-
-      setForm((prev) => ({
-        ...prev,
-        dbh_cm: dbh ? String(dbh) : prev.dbh_cm,
-        height_m: height ? String(height) : prev.height_m,
-      }));
-
-      setDbhResult({
-        dbh_cm: dbh,
-        height_m: height,
-        confidence: result.confidence || "Low",
-        method: result.method || "Photo DBH measurement",
-        analysis_notes: result.analysis_notes || result.notes || "The uploaded photo was analyzed for trunk size and scale reference.",
-        distance_estimate_m: result.distance_estimate_m || null,
-        accuracy_note: result.accuracy_note || "Use manual circumference for final field validation.",
-        segmentation_used: Boolean(result.segmentation_used),
-        fallback: Boolean(result.fallback),
-      });
-      toast.success(
-        result.segmentation_used
-          ? `DBH: ${dbh} cm - YOLO segmentation`
-          : `DBH: ${dbh} cm - photo estimate`
-      );
-      setAiStatus("done");
-    } catch (error) {
-      const status = error.response?.status;
-      if (status === 401) {
-        toast.error("Please log in again before measuring DBH.");
-      } else if (status === 413) {
-        toast.error("That photo is too large. Please use a smaller image or retake it.");
-      } else {
-        toast.error(errorToMessage(error, "AI visual estimate failed. Manual circumference is the accurate method."));
-      }
-      setAiStatus(null);
     }
   };
 
@@ -491,6 +380,12 @@ export default function TreeForm({
     }
 
     const payload = { ...form };
+    const aiSources = Object.entries(aiFilled.current)
+      .filter(([key, value]) => Number(form[key]) === value)
+      .map(([key]) => key === 'dbh_cm' ? 'DBH' : 'height');
+    if (aiSources.length) payload.notes = [form.notes,
+      `AI-estimated ${aiSources.join(' and ')} from photos; not field-validated. Carbon derived from these dimensions is also approximate.`]
+      .filter(Boolean).join('\n');
     delete payload.dbh_cm;
     delete payload.height_m;
     delete payload.biomass_kg;
@@ -681,105 +576,14 @@ export default function TreeForm({
 
       {/* ── Measurements ── */}
       {photoFile && <GalleryTreePredictions key={photoPreview} file={photoFile}
-        scientificName={identifiedSpecies ? form.scientific_name : ''} />}
-      <div className="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="circumference_cm">Manual DBH Calculator</Label>
-          <p className="text-xs text-muted-foreground">
-            Measure trunk circumference at 1.3 meters above ground. DBH is calculated automatically.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <Label htmlFor="circumference_cm" className="text-xs text-muted-foreground">
-              Circumference at breast height (cm)
-            </Label>
-            <Input
-              id="circumference_cm"
-              type="number"
-              min="0"
-              step="0.01"
-              value={circumferenceCm}
-              onChange={(e) => calculateDbhFromCircumference(e.target.value)}
-              placeholder="e.g., 94.25"
-            />
-          </div>
-          <div className="rounded-md bg-background/80 border border-border px-3 py-2 text-xs text-muted-foreground flex items-center">
-            DBH = circumference / pi. This is the recommended field method for accurate records.
-          </div>
-        </div>
-      </div>
-
-      <details className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
-        <summary className="cursor-pointer text-sm font-medium">Advanced photo measurement tools</summary>
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <Label>AI Photo DBH Estimate</Label>
-            <p className="text-xs text-muted-foreground">
-              Optional estimate. Use a ruler, A4 paper, phone, or known distance for better results.
-            </p>
-          </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={handleAIEstimate}
-            disabled={!photoFile || isAiLoading}
-            className="flex items-center gap-1.5 text-xs w-fit"
-          >
-            {aiStatus === "estimating" ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Ruler className="w-3.5 h-3.5" />
-            )}
-            Measure from Photo
-          </Button>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">Visible scale reference</Label>
-            <Select value={dbhReference} onValueChange={setDbhReference}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(DBH_REFERENCES).map(([value, option]) => (
-                  <SelectItem key={value} value={value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="dbh_distance" className="text-xs text-muted-foreground">
-              Camera distance, meters
-            </Label>
-            <Input
-              id="dbh_distance"
-              type="number"
-              min="0"
-              step="0.1"
-              value={dbhDistance}
-              onChange={(e) => setDbhDistance(e.target.value)}
-              placeholder="Optional"
-            />
-          </div>
-        </div>
-        {dbhResult && (
-          <div className="rounded-md bg-background/80 border border-border px-3 py-2 text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">
-              {dbhResult.segmentation_used ? "YOLO segmentation" : "AI-assisted estimate"}
-              {" - "}
-              {dbhResult.confidence || "AI"} confidence
-            </span>
-            {dbhResult.distance_estimate_m ? ` - estimated distance ${dbhResult.distance_estimate_m} m` : ""}
-            {dbhResult.method ? ` - ${dbhResult.method}` : ""}
-            {dbhResult.accuracy_note ? ` - ${dbhResult.accuracy_note}` : ""}
-          </div>
-        )}
-      </details>
-
+        scientificName={identifiedSpecies ? form.scientific_name : ''}
+        onDimensions={fillDimensions}
+        ageDbhCm={Number(form.dbh_cm) > 0 ? Number(form.dbh_cm) : null}
+        ageHeightM={Number(form.height_m) > 0 ? Number(form.height_m) : null}
+        dimensionsSource={Object.keys(aiFilled.current).length ? 'ai_prediction' : 'measurement'} />}
+      {Object.keys(aiFilled.current).length > 0 && <p className="text-sm text-muted-foreground">
+        AI-estimated DBH/height filled below. Review or correct before saving; these are not field-validated measurements.
+      </p>}
       {form.dbh_cm && (
         <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
           DBH field is filled. You can still edit it manually before saving.
@@ -836,7 +640,7 @@ export default function TreeForm({
             <span className="font-semibold text-primary">{computed.biomass} kg</span>
           </div>
           <div>
-            <span className="text-muted-foreground">Carbon Stock: </span>
+            <span className="text-muted-foreground">{Object.keys(aiFilled.current).length ? 'Approximate carbon (AI-estimated sizes): ' : 'Carbon Stock: '}</span>
             <span className="font-semibold text-primary">{computed.carbon} kg</span>
           </div>
         </div>
