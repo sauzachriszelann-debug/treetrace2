@@ -1094,7 +1094,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
     if (images.isEmpty && _photo == null) return const SizedBox.shrink();
     final count = images.length + (_photo != null ? 1 : 0);
     return _buildEncyclopediaSection(
-      title: 'Your scan and species reference photos',
+      title: 'Scan and reference photos',
       icon: Icons.photo_library_outlined,
       child: Column(children: [
         const Text('Reference photos show examples of the identified species, not this individual tree.'),
@@ -1211,9 +1211,9 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
             children: [
               Icon(icon, color: kPrimary, size: 19),
               const SizedBox(width: 8),
-              Text(title,
+              Expanded(child: Text(title,
                   style: GoogleFonts.inter(
-                      fontWeight: FontWeight.w800, fontSize: 15)),
+                      fontWeight: FontWeight.w800, fontSize: 15))),
             ],
           ),
           const SizedBox(height: 12),
@@ -1305,18 +1305,22 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
   }
 
   Widget _buildQuickInfoGrid() {
-    return Row(
+    return Column(children: [Row(
       children: [
-        _InfoPill(Icons.straighten, 'DBH',
+        _InfoPill(Icons.straighten, 'Predicted DBH',
             '${_result!['estimated_dbh_cm'] ?? '--'} cm'),
         const SizedBox(width: 12),
-        _InfoPill(Icons.height, 'Height',
+        _InfoPill(Icons.height, 'Predicted height',
             '${_result!['estimated_height_m'] ?? '--'} m'),
         const SizedBox(width: 12),
         _InfoPill(Icons.category_outlined, 'Family',
             _result!['family']?.split(' ').last ?? 'N/A'),
       ],
-    );
+    ),
+    const SizedBox(height: 8),
+    const Text('AI size predictions are unvalidated and may vary between scans. These are not measured values.',
+        style: TextStyle(color: kMutedFg, fontSize: 11)),
+    ]);
   }
 
   Widget _buildWelcomeState() {
