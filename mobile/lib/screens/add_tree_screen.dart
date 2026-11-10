@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import '../widgets/expandable_photo.dart';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
@@ -1595,6 +1596,9 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             // ── Photo ────────────────────────────────────────────────────
+            if (_photo != null)
+              TextButton.icon(onPressed: _identifying || _saving ? null : _showPhotoOptions,
+                icon: const Icon(Icons.photo_library_outlined), label: const Text('Change photo')),
             GestureDetector(
               onTap: _identifying || _saving ? null : _showPhotoOptions,
               child: Container(
@@ -1615,7 +1619,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
                     : _photo != null
                         ? ClipRRect(
                             borderRadius: BorderRadius.circular(14),
-                            child: Image.file(_photo!,
+                            child: ExpandablePhoto(image: FileImage(_photo!), label: 'Selected tree photo',
                                 fit: BoxFit.cover,
                                 width: double.infinity,
                                 height: 180))
@@ -2016,7 +2020,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: _photo != null
-                    ? Image.file(_photo!, fit: BoxFit.cover)
+                    ? ExpandablePhoto(image: FileImage(_photo!), label: 'Selected tree photo', fit: BoxFit.cover)
                     : const Icon(Icons.auto_awesome_rounded,
                         color: kSidebarPrimary),
               ),

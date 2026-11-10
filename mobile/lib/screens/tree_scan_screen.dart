@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import '../widgets/expandable_photo.dart';
+import '../widgets/photo_observations_card.dart';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -665,7 +667,10 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
           if (_photo != null)
             ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.file(_photo!, height: 200, fit: BoxFit.cover)),
+                child: ExpandablePhoto(image: FileImage(_photo!), label: 'Tree scan', height: 200, fit: BoxFit.cover)),
+          if (_species != null && !_busy)
+            PhotoObservationsCard(observations: _species?['photo_observations'] is Map
+                ? Map<String, dynamic>.from(_species!['photo_observations']) : null),
           if (_galleryPrediction != null)
             Card(
               key: const Key('gallery-size-prediction'),
@@ -679,7 +684,7 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
                         const Text(
                             'Unvalidated prediction; may be inaccurate.'),
                         if (_galleryTrunkPreview != null)
-                          Image.memory(_galleryTrunkPreview!,
+                          ExpandablePhoto(image: MemoryImage(_galleryTrunkPreview!), label: 'Trunk detection',
                               height: 180, fit: BoxFit.contain),
                         Text(
                             'Predicted DBH (cm): ${_predictionValue('predicted_dbh_cm', 300)}'),
@@ -707,7 +712,7 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
             ),
           if (_preview != null) ...[
             const SizedBox(height: 12),
-            Image.memory(_preview!, fit: BoxFit.contain),
+            ExpandablePhoto(image: MemoryImage(_preview!), label: 'Trunk detection', fit: BoxFit.contain),
           ],
           if (!widget.advancedAr &&
               _photoMeasurement?['needs_base_confirmation'] == true &&

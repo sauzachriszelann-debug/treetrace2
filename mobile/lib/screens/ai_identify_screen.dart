@@ -9,8 +9,11 @@ import '../services/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/identification_error.dart';
 import '../services/botanical_overview.dart';
+import '../services/photo_sources.dart';
 import '../services/theme.dart';
 import '../widgets/widgets.dart';
+import '../widgets/expandable_photo.dart';
+import '../widgets/photo_observations_card.dart';
 import 'add_tree_screen.dart';
 import 'upgrade_screen.dart';
 
@@ -462,7 +465,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(22),
-          child: Image.file(_photo!, fit: BoxFit.cover),
+          child: ExpandablePhoto(image: FileImage(_photo!), label: 'Your scan'),
         ),
         ClipRRect(
           borderRadius: BorderRadius.circular(22),
@@ -528,7 +531,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(22),
-          child: Image.file(_photo!, fit: BoxFit.cover),
+          child: ExpandablePhoto(image: FileImage(_photo!), label: 'Your scan'),
         ),
         if (_result != null && !notIdentified)
           Positioned(
@@ -893,10 +896,13 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
         if (_photo != null)
           ClipRRect(
             borderRadius: BorderRadius.circular(18),
-            child: Image.file(_photo!,
-                height: 180, fit: BoxFit.cover, width: double.infinity),
+            child: ExpandablePhoto(image: FileImage(_photo!), label: 'Your scan',
+                height: 180, width: double.infinity),
           ),
         if (_photo != null) const SizedBox(height: 12),
+        PhotoObservationsCard(observations: _result?['photo_observations'] is Map
+            ? Map<String, dynamic>.from(_result!['photo_observations']) : null),
+        const SizedBox(height: 12),
         _buildMatchGallery(),
         const SizedBox(height: 12),
         _buildEncyclopediaSection(
@@ -1084,13 +1090,16 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
   }
 
   Widget _buildMatchGallery() {
-    final images = _imageList(_result?['match_images']);
+    final images = speciesReferencePhotos(_result ?? {});
     if (images.isEmpty && _photo == null) return const SizedBox.shrink();
     final count = images.length + (_photo != null ? 1 : 0);
     return _buildEncyclopediaSection(
-      title: 'Photos of Same Tree',
+      title: 'Your scan and species reference photos',
       icon: Icons.photo_library_outlined,
-      child: SizedBox(
+      child: Column(children: [
+        const Text('Reference photos show examples of the identified species, not this individual tree.'),
+        if (images.isEmpty) const Text('No species reference photos are available for this result.'),
+        SizedBox(
         height: 190,
         child: PageView.builder(
           controller: PageController(viewportFraction: 0.88),
@@ -1099,35 +1108,20 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
             if (_photo != null && index == 0) {
               return _GalleryFrame(
                 label: 'Your scan',
-                child: Image.file(_photo!, fit: BoxFit.cover),
+                child: ExpandablePhoto(image: FileImage(_photo!), label: 'Your scan'),
               );
             }
             final imageIndex = _photo != null ? index - 1 : index;
             return _GalleryFrame(
-              label: 'Similar match ${imageIndex + 1}',
-              child: Image.network(
-                images[imageIndex],
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _GalleryFallback(
-                  icon: Icons.park_outlined,
-                  label: 'Image unavailable',
-                ),
-              ),
+              label: 'Species reference ${imageIndex + 1} — a different tree',
+              child: ExpandablePhoto(image: NetworkImage(images[imageIndex]),
+                  label: 'Species reference — ${_result?['scientific_name'] ?? ''}'),
             );
           },
         ),
       ),
+      ]),
     );
-  }
-
-  List<String> _imageList(dynamic value) {
-    if (value is List) {
-      return value
-          .map((item) => item.toString().trim())
-          .where((item) => item.startsWith('http'))
-          .toList();
-    }
-    return [];
   }
 
   String _pronunciation(String value) {
@@ -1737,61 +1731,6 @@ class _GalleryFrame extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _GalleryFallback extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String? asset;
-  const _GalleryFallback({
-    required this.icon,
-    required this.label,
-    this.asset,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (asset != null) {
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.asset(asset!, fit: BoxFit.cover),
-          Container(color: Colors.black.withOpacity(0.28)),
-          Center(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.42),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-    return Container(
-      color: kBackground,
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: kMutedFg, size: 34),
-            const SizedBox(height: 8),
-            Text(label, style: const TextStyle(color: kMutedFg, fontSize: 12)),
-          ],
-        ),
       ),
     );
   }

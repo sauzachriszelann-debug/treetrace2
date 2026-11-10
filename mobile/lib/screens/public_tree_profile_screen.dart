@@ -6,6 +6,8 @@ import '../services/api_service.dart';
 import '../services/theme.dart';
 import '../models/models.dart';
 import '../widgets/widgets.dart';
+import '../widgets/expandable_photo.dart';
+import '../services/photo_sources.dart';
 
 class PublicTreeProfileScreen extends StatefulWidget {
   final int treeId;
@@ -121,7 +123,7 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
       foregroundColor: Colors.white,
       elevation: 0,
       flexibleSpace: FlexibleSpaceBar(
-        background: Stack(
+        background: ExpandablePhoto(image: CachedNetworkImageProvider(tree.photoUrl ?? ''), label: 'Inventory photo', enabled: tree.photoUrl?.isNotEmpty == true, thumbnail: Stack(
           fit: StackFit.expand,
           children: [
             // Hero Photo
@@ -177,7 +179,7 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
               ),
             ),
           ],
-        ),
+        )),
       ),
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(48),
@@ -430,12 +432,12 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
   }
 
   Widget _buildTreePhotoGallery(TreeModel tree) {
-    final photos = _similarPhotos(tree);
+    final photos = _recordPhotos(tree);
     if (photos.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Photos of Same Tree',
+        Text('Photos of this recorded tree',
             style:
                 GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18)),
         const SizedBox(height: 12),
@@ -454,12 +456,7 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  CachedNetworkImage(
-                    imageUrl: photos[index],
-                    fit: BoxFit.cover,
-                    errorWidget: (_, __, ___) =>
-                        const Icon(Icons.park_outlined, color: kMutedFg),
-                  ),
+                  ExpandablePhoto(image: CachedNetworkImageProvider(photos[index]), label: 'Inventory photo'),
                   Positioned(
                     left: 12,
                     bottom: 12,
@@ -471,9 +468,7 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
-                          index == 0
-                              ? 'Inventory photo'
-                              : 'Similar photo $index',
+                          'Inventory photo',
                           style: const TextStyle(
                               color: Colors.white,
                               fontSize: 11,
@@ -489,35 +484,7 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
     );
   }
 
-  List<String> _similarPhotos(TreeModel tree) {
-    final photos = <String>[];
-    void add(String? url) {
-      final value = url?.trim();
-      if (value != null &&
-          value.startsWith('http') &&
-          !photos.contains(value)) {
-        photos.add(value);
-      }
-    }
-
-    add(tree.photoUrl);
-    final wikiPhotos = _wiki?['match_images'];
-    if (wikiPhotos is List) {
-      for (final item in wikiPhotos) {
-        add(item?.toString());
-      }
-    }
-    final name = (tree.scientificName?.trim().isNotEmpty == true
-            ? tree.scientificName
-            : tree.commonName)
-        ?.trim();
-    if (name != null && name.isNotEmpty) {
-      final encoded = Uri.encodeComponent(name);
-      add('https://commons.wikimedia.org/wiki/Special:FilePath/$encoded.jpg');
-      add('https://source.unsplash.com/900x600/?$encoded,tree');
-    }
-    return photos.take(5).toList();
-  }
+  List<String> _recordPhotos(TreeModel tree) => recordedTreePhotos(tree.photoUrl);
 
   double _estimateCarbonKg(double? dbhCm, double? heightM) {
     if (dbhCm == null || dbhCm <= 0) return 0;

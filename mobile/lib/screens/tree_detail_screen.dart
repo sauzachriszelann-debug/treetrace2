@@ -1,3 +1,4 @@
+import '../widgets/expandable_photo.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -106,7 +107,7 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
                     fontSize: 16,
                     fontWeight: FontWeight.w700)),
             background: tree.photoUrl != null
-                ? Stack(fit: StackFit.expand, children: [
+                ? ExpandablePhoto(image: CachedNetworkImageProvider(tree.photoUrl!), label: 'Inventory photo', thumbnail: Stack(fit: StackFit.expand, children: [
                     // Phase 12C.5 (B): graceful offline fallback instead of
                     // the framework's raw exception rendering (which showed a
                     // red X plus the SocketException text on-device).
@@ -133,7 +134,7 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
                         ],
                       ),
                     )),
-                  ])
+                  ]))
                 : Container(color: kSidebarBg),
           ),
         ),

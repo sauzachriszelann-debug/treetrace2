@@ -292,6 +292,8 @@ async def identify_tree(
             local_result = classify_species(image_bytes)
             if isinstance(local_result, dict):
                 local_result["roboflow_candidate"] = roboflow_candidate
+                from app.schemas.photo_observations import normalize_observations
+                local_result["photo_observations"] = normalize_observations(local_result.get("photo_observations"))
             return local_result
         except Exception:
           # Keep the existing online AI pipeline available if local inference fails.
@@ -301,6 +303,8 @@ async def identify_tree(
         result = await _pipeline_with_status(image_bytes, image_data, file.content_type)
         if isinstance(result, dict):
             result["roboflow_candidate"] = roboflow_candidate
+            from app.schemas.photo_observations import normalize_observations
+            result["photo_observations"] = normalize_observations(result.get("photo_observations"))
         return result
     except Exception as exc:
         return {
