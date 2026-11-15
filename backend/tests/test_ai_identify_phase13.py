@@ -138,12 +138,19 @@ def _hermetic_ai_keys(monkeypatch):
 # 13.1 — Gemini model handling
 # ─────────────────────────────────────────────────────────────────────────────
 
-def test_gemini_parses_success(monkeypatch):
+@pytest.mark.parametrize("visibility,expected_height", [
+    ({}, None),
+    ({"base_visible": True, "top_visible": False}, None),
+    ({"base_visible": False, "top_visible": True}, None),
+    ({"base_visible": True, "top_visible": True}, 12),
+])
+def test_gemini_parses_success(monkeypatch, visibility, expected_height):
     calls = []
 
     def responder(url, kwargs):
         assert "gemini-3.5-flash-lite" in url  # primary model in use
-        return FakeResponse(200, GEMINI_OK_PAYLOAD)
+        text = json.dumps({**json.loads(GEMINI_OK_TEXT), **visibility})
+        return FakeResponse(200, {"candidates": [{"content": {"parts": [{"text": text}]}}]})
 
     monkeypatch.setattr(ai_identify.httpx, "AsyncClient", fake_async_client(responder, calls))
 
@@ -152,6 +159,7 @@ def test_gemini_parses_success(monkeypatch):
     assert out["common_name"] == "Narra"
     assert out["confidence"] == "High"
     assert out["estimated_dbh_cm"] == 30
+    assert out["estimated_height_m"] == expected_height
     assert len(calls) == 1
 
 

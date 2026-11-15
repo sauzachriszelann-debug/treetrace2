@@ -121,7 +121,9 @@ Respond ONLY with a single valid JSON object — no text before or after, no mar
   "confidence": "High",
   "description": "3-4 sentences: species ecology, distribution in Philippines, importance",
   "estimated_dbh_cm": 35,
-  "estimated_height_m": 12,
+  "estimated_height_m": null,
+  "base_visible": false,
+  "top_visible": false,
   "dbh_method": "brief note on how you estimated DBH",
   "distinguishing_features": "the 3 most diagnostic visual features",
   "look_alikes": "species this could be confused with and how to tell apart",
@@ -138,8 +140,12 @@ DBH ESTIMATION:
   estimated_dbh_cm should be a positive integer 1-300 only when the image gives enough visual cues. Use null when the image does not support a photo-specific estimate.
 
 HEIGHT ESTIMATION:
-  Shrub/small 2-6m | Medium 6-15m | Large 15-30m | Emergent 30-60m
-  estimated_height_m should be a positive integer 1-80 only when the image gives enough visual cues. Use null when uncertain.
+  Set base_visible and top_visible based on the actual photo of the main tree.
+  The base is where the trunk meets the ground. The top is the highest point
+  of the same tree, not the highest visible branch in a cropped image.
+  If either endpoint is hidden, cropped, or uncertain, set estimated_height_m
+  to null. Do not infer height from typical species size. Only provide an
+  estimate (1-80 m) when both endpoints and enough scale cues are visible.
 
 PHOTO OBSERVATIONS (separate from species identity and health):
 Describe only the main target tree. If a sign cannot be assigned to that tree
@@ -288,7 +294,12 @@ async def _gemini(image_b64: str, content_type: str, hint: dict | None) -> dict:
         if result.get("not_identified"):
             return {**result, "vision_abstained": True}
         result["estimated_dbh_cm"]   = _optional_int(result.get("estimated_dbh_cm"), 1, 300)
-        result["estimated_height_m"] = _optional_int(result.get("estimated_height_m"), 1, 80)
+        result["base_visible"] = result.get("base_visible") is True
+        result["top_visible"] = result.get("top_visible") is True
+        result["estimated_height_m"] = (
+            _optional_int(result.get("estimated_height_m"), 1, 80)
+            if result["base_visible"] and result["top_visible"] else None
+        )
         result.setdefault("common_name",            "Unknown Tree")
         result.setdefault("scientific_name",         "Unknown")
         result.setdefault("family",                  "Unknown")
