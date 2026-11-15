@@ -26,6 +26,7 @@ void main() {
   late _EvidenceStore store;
   Map<String, dynamic>? prediction;
   Object? predictionError;
+  Map<String, dynamic>? identification;
   File? pickedTreetop;
   Future<Map<String, dynamic>> Function(File, File)? predictPair;
   setUp(() {
@@ -33,6 +34,7 @@ void main() {
     store = _EvidenceStore();
     prediction = null;
     predictionError = null;
+    identification = null;
     pickedTreetop = null;
     predictPair = null;
   });
@@ -72,7 +74,7 @@ void main() {
               {'status': 'cannot_estimate', 'reason': 'No visible scale.'};
         },
         measurePhoto: measure,
-        identifyPhoto: (_) async =>
+        identifyPhoto: (_) async => identification ??
             {'common_name': 'Mango', 'scientific_name': 'Mangifera indica'},
       )));
       // Always draw at least one frame AFTER post-frame scan startup. Checking
@@ -185,6 +187,32 @@ void main() {
             .controller!
             .text,
         isEmpty);
+  });
+
+  testWidgets('out-of-class scan can only continue to expert review',
+      (tester) async {
+    prediction = {
+      'status': 'predicted',
+      'method': 'gallery_yolo_vision_prediction',
+      'quality': 'unvalidated',
+      'prediction_basis': 'visual_appearance',
+      'validated_accuracy': false,
+      'trunk_detected': true,
+      'target_identified': true,
+      'predicted_dbh_cm': 45,
+      'predicted_height_m': 7,
+    };
+    identification = {
+      'not_identified': true,
+      'common_name': 'Unknown species',
+      'reason': 'This species is outside the trained classes.',
+    };
+    await open(
+        tester, (_, __) async => throw StateError('Unexpected measurement'));
+
+    expect(find.text('Submit for Expert Review'), findsOneWidget);
+    expect(find.byKey(const Key('use-tree-scan')), findsNothing);
+    expect(find.byKey(const Key('skip-result-measurement')), findsNothing);
   });
 
   testWidgets('unknown original identifies species without inventing scale',

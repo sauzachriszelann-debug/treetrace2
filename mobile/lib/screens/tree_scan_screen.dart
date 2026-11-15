@@ -17,6 +17,7 @@ import '../services/identification_error.dart';
 import '../services/ar_tree_height.dart';
 import '../services/dbh_ar_service.dart';
 import '../services/tree_scan_result.dart';
+import 'ai_identify_screen.dart';
 import 'guided_tree_camera_screen.dart';
 import 'level_dbh_camera_screen.dart';
 import '../services/photo_measurement_rules.dart';
@@ -66,6 +67,7 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
   bool _previewReady = false;
   bool _measurementSkipped = false;
   Map<String, dynamic>? _species;
+  Map<String, dynamic>? _unknownSpecies;
   Map<String, dynamic>? _dbh;
   File? _photo;
   double? _height;
@@ -91,6 +93,7 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
           .any((c) => c.text.trim().isNotEmpty);
 
   void _fillSpecies() {
+    _unknownSpecies = null;
     _common.text = _species?['common_name']?.toString() ?? '';
     _scientific.text = _species?['scientific_name']?.toString() ?? '';
   }
@@ -418,6 +421,7 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
       baseConfirmed: _baseConfirmed);
   bool get _canUse =>
       !_busy &&
+      _unknownSpecies == null &&
       (widget.advancedAr
           ? _hasReviewedValues
           : _photo != null && (_measurementSkipped || _photoAccepted));
@@ -542,7 +546,7 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
   }
 
   void _skipAndSave() {
-    if (_busy || _photo == null) return;
+    if (_busy || _photo == null || _unknownSpecies != null) return;
     setState(() {
       _measurementSkipped = true;
       _photoMeasurement = null;
@@ -598,6 +602,7 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
         _species =
             result['not_identified'] != true && name.isNotEmpty ? result : null;
         _fillSpecies();
+        _unknownSpecies = result['not_identified'] == true ? result : null;
         _message = _species == null
             ? (result['reason']?.toString() ??
                 'Species uncertain. Add a close leaf photo from this same tree.')
@@ -916,27 +921,44 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
                     child: const Text('Retry identification with this photo')),
             ],
           ],
-          if (!widget.advancedAr && _photo != null)
+          if (!widget.advancedAr && _photo != null && _unknownSpecies == null)
             TextButton(
                 key: const Key('skip-result-measurement'),
                 onPressed: _busy ? null : _skipAndSave,
                 child: const Text(
                     'Skip measurement and save without DBH or height')),
           const SizedBox(height: 12),
-          Text(widget.advancedAr
-              ? 'Use results fills the form and replaces available fields. Empty measurements keep existing form values. Save the tree on the next screen.'
-              : 'Check the species suggestion and experimental DBH estimate before using them. Skip measurement to save without DBH or height.'),
-          ElevatedButton.icon(
-              key: const Key('use-tree-scan'),
-              onPressed: _canUse
-                  ? () => _use(saveRequested: _measurementSkipped)
-                  : null,
-              icon: const Icon(Icons.check),
-              label: Text(_measurementSkipped
-                  ? (widget.onUse == null
-                      ? 'Save without measurements'
-                      : 'Skip measurement')
-                  : 'Use reviewed results')),
+          if (_unknownSpecies != null && _photo != null)
+            ElevatedButton.icon(
+              onPressed: _busy
+                  ? null
+                  : () => Navigator.of(context).push<void>(
+                        MaterialPageRoute(
+                          builder: (_) => AIIdentifyScreen(
+                            initialPhoto: _photo,
+                            initialResult: _unknownSpecies,
+                          ),
+                        ),
+                      ),
+              icon: const Icon(Icons.fact_check_outlined),
+              label: const Text('Submit for Expert Review'),
+            )
+          else ...[
+            Text(widget.advancedAr
+                ? 'Use results fills the form and replaces available fields. Empty measurements keep existing form values. Save the tree on the next screen.'
+                : 'Check the species suggestion and experimental DBH estimate before using them. Skip measurement to save without DBH or height.'),
+            ElevatedButton.icon(
+                key: const Key('use-tree-scan'),
+                onPressed: _canUse
+                    ? () => _use(saveRequested: _measurementSkipped)
+                    : null,
+                icon: const Icon(Icons.check),
+                label: Text(_measurementSkipped
+                    ? (widget.onUse == null
+                        ? 'Save without measurements'
+                        : 'Skip measurement')
+                    : 'Use reviewed results')),
+          ],
         ]),
       ));
 }

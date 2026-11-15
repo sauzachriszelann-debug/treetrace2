@@ -32,6 +32,7 @@ class AIIdentifyScreen extends StatefulWidget {
   /// Lets a widget test start with a photo already selected, since the
   /// image-picker plugin does not exist in the test environment.
   final File? initialPhoto;
+  final Map<String, dynamic>? initialResult;
 
   const AIIdentifyScreen({
     super.key,
@@ -39,6 +40,7 @@ class AIIdentifyScreen extends StatefulWidget {
     this.usageLoader,
     this.identifyFn,
     this.initialPhoto,
+    this.initialResult,
   });
   @override
   State<AIIdentifyScreen> createState() => _AIIdentifyScreenState();
@@ -60,6 +62,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
   void initState() {
     super.initState();
     _photo = widget.initialPhoto;
+    _result = widget.initialResult;
     _loadUsage();
   }
 
@@ -616,6 +619,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
       bool isProtected, String? confidence, bool isCitizen) {
     final partial =
         _result?['not_identified'] == true || _result?['partial'] == true;
+    final needsExpertReview = isCitizen || _result?['not_identified'] == true;
     final commonName = _textValue('common_name', fallback: 'Unknown Species');
     final scientificName = _textValue('scientific_name', fallback: '');
     final status = _textValue('endangered_status', fallback: 'Not Listed');
@@ -722,7 +726,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
           width: double.infinity,
           height: 56,
           child: ElevatedButton.icon(
-            onPressed: isCitizen
+            onPressed: needsExpertReview
                 ? _submitUnknown
                 : () => Navigator.push(
                       context,
@@ -733,11 +737,13 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
                         ),
                       ),
                     ),
-            icon: Icon(isCitizen
+            icon: Icon(needsExpertReview
                 ? Icons.science_outlined
                 : Icons.add_location_alt_rounded),
             label: Text(
-              isCitizen ? 'Submit for Expert Review' : 'Add to Inventory',
+              needsExpertReview
+                  ? 'Submit for Expert Review'
+                  : 'Add to Inventory',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
             style: ElevatedButton.styleFrom(
@@ -748,7 +754,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
             ),
           ),
         ),
-        if (!isCitizen) ...[
+        if (!needsExpertReview) ...[
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,

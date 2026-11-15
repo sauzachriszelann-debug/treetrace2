@@ -48,6 +48,55 @@ const String kBaseUrl = String.fromEnvironment(
   defaultValue: 'https://treetrace2backend.vercel.app/api',
 );
 
+const _supportedScanNames = {
+  'acacia-semanca',
+  'acacia semanca',
+  'acacia mangium',
+  'cassia fistula',
+  'casuarina equisetifolia',
+  'eucalyptus',
+  'ficus benjamina',
+  'gmelina arborea',
+  'mangifera indica',
+  'polyalthia longifolia',
+  'monoon longifolium',
+  'pterocarpus indicus',
+  'samanea saman',
+  'albizia saman',
+  'spathodea campanulata',
+  'swietenia macrophylla',
+  'tabebuia rosea',
+  'terminalia catappa',
+  'vitex parviflora',
+};
+
+Map<String, dynamic> _restrictSpeciesScan(Map<String, dynamic> result) {
+  if (result['not_identified'] == true) return result;
+
+  final scientificName = result['scientific_name']?.toString().trim() ?? '';
+  final label = scientificName.isEmpty &&
+          result['source'] == 'local_resnet50_tflite'
+      ? result['common_name']?.toString() ?? ''
+      : scientificName;
+  final name = label.toLowerCase().replaceAll(RegExp(r'[_\s]+'), ' ').trim();
+  if (_supportedScanNames.contains(name) || name.startsWith('eucalyptus ')) {
+    return result;
+  }
+
+  return {
+    'not_identified': true,
+    'common_name': 'Unknown species',
+    'scientific_name': '',
+    'confidence': 'Low',
+    'possible_candidates': <String>[],
+    'reason': 'This species is outside the trained classes. Submit for expert review.',
+    if (result['trunk_preview_png'] != null)
+      'trunk_preview_png': result['trunk_preview_png'],
+    if (result['trunk_preview_reason'] != null)
+      'trunk_preview_reason': result['trunk_preview_reason'],
+  };
+}
+
 @visibleForTesting
 Future<bool> checkBackendHealth(Dio client, String baseUrl) async {
   try {
@@ -740,7 +789,8 @@ class ApiService {
     if (res.data is! Map) {
       throw const FormatException('Invalid identification response');
     }
-    final result = Map<String, dynamic>.from(res.data as Map);
+    final result = _restrictSpeciesScan(
+        Map<String, dynamic>.from(res.data as Map));
     // History is optional local metadata. A storage failure must not discard
     // an otherwise successful species response in either scanner.
     try {

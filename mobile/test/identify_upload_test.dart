@@ -23,6 +23,9 @@ class _Store implements SecureStore {
 }
 
 class _ImageEndpoint implements HttpClientAdapter {
+  final String scientificName;
+  _ImageEndpoint({this.scientificName = 'Mangifera indica'});
+
   String? imageType;
   @override
   void close({bool force = false}) {}
@@ -33,7 +36,7 @@ class _ImageEndpoint implements HttpClientAdapter {
         (options.data as FormData).files.single.value.contentType.toString();
     // The real backend rejects an application/octet-stream file with HTTP 400.
     return ResponseBody.fromString(
-      '{"common_name":"Test tree","scientific_name":"Test species"}',
+      '{"common_name":"Test tree","scientific_name":"$scientificName"}',
       imageType!.startsWith('image/') ? 200 : 400,
       headers: {
         Headers.contentTypeHeader: ['application/json']
@@ -71,6 +74,20 @@ void main() {
     expect(original, before);
   });
 
+  test('an out-of-list backend match becomes unknown', () async {
+    final directory = await Directory.systemTemp.createTemp('treetrace_ai_class_');
+    addTearDown(() => directory.delete(recursive: true));
+    final photo = await File('${directory.path}/tree.jpg').writeAsBytes([1, 2, 3]);
+    final dio = Dio(BaseOptions(baseUrl: 'https://example.invalid/api'))
+      ..httpClientAdapter = _ImageEndpoint(scientificName: 'Nephelium lappaceum');
+
+    final result = await ApiService.forTest(storage: _Store(), dio: dio)
+        .identifyTree(photo);
+
+    expect(result['not_identified'], isTrue);
+    expect(result['scientific_name'], isEmpty);
+  });
+
   for (final failRead in [true, false]) {
     test('successful AI survives history read/write failure: $failRead',
         () async {
@@ -84,7 +101,7 @@ void main() {
       final result = await ApiService.forTest(
               storage: _FailingHistoryStore(failRead: failRead), dio: dio)
           .identifyTree(photo);
-      expect(result['scientific_name'], 'Test species');
+      expect(result['scientific_name'], 'Mangifera indica');
     });
   }
   test(
@@ -149,7 +166,7 @@ void main() {
       final client = ApiService.forTest(storage: _Store(), dio: dio);
       final result = await client.identifyTree(photo);
       expect(adapter.imageType, entry.value);
-      expect(result['scientific_name'], 'Test species');
+      expect(result['scientific_name'], 'Mangifera indica');
     });
   }
 }
