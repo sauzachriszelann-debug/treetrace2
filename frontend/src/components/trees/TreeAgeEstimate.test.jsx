@@ -12,7 +12,9 @@ test('uses DBH as headline, labels unverified rates and flags disagreement', asy
   render(<TreeAgeEstimate scientificName="Gmelina arborea" dbhCm={45} heightM={11} />);
   expect(await screen.findByText('About 18 years (estimated)')).toBeInTheDocument();
   expect(screen.getByText('AI growth estimate — source unverified')).toBeInTheDocument();
-  expect(screen.getByText(/highly uncertain/)).toBeInTheDocument();
+  expect(screen.getByText(/Estimated from trunk diameter/)).toBeVisible();
+  fireEvent.click(screen.getByText('Calculation details and source'));
+  expect(screen.getByText(/DBH and height suggest different ages/)).toBeVisible();
   expect(screen.queryByRole('link')).not.toBeInTheDocument();
 });
 
@@ -22,7 +24,7 @@ test('height-only estimate is labeled and failure can retry', async () => {
   render(<TreeAgeEstimate scientificName="Cocos nucifera" heightM={8} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Retry age estimate' }));
   expect(await screen.findByText('About 12 years (estimated)')).toBeInTheDocument();
-  expect(screen.getByText(/no DBH age calculation/)).toBeInTheDocument();
+  expect(screen.getByText(/Estimated from tree height/)).toBeInTheDocument();
 });
 
 test('species changes discard late old age results', async () => {
