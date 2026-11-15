@@ -36,7 +36,7 @@ void main() {
     ))));
     await tester.pumpAndSettle();
     expect(find.text('About 18 years (estimated)'), findsOneWidget);
-    expect(find.textContaining('highly uncertain'), findsOneWidget);
+    expect(find.textContaining('Height suggests a very different age'), findsOneWidget);
     expect(find.textContaining('Approximately'), findsNothing);
     await tester.tap(find.text('Calculation details'));
     await tester.pumpAndSettle();
@@ -61,8 +61,8 @@ void main() {
     ))));
     await tester.pumpAndSettle();
     expect(find.text('About 12 years (estimated)'), findsOneWidget);
-    expect(find.textContaining('no DBH age calculation'), findsOneWidget);
-    expect(find.textContaining('highly uncertain'), findsNothing);
+    expect(find.textContaining('Estimated from tree height.'), findsOneWidget);
+    expect(find.textContaining('Height suggests a very different age'), findsNothing);
   });
 
   testWidgets('missing height does not claim a height cross-check occurred',
@@ -81,9 +81,9 @@ void main() {
     ))));
     await tester.pumpAndSettle();
     expect(find.text('About 18 years (estimated)'), findsOneWidget);
-    expect(find.textContaining('Height is unavailable for a cross-check.'),
+    expect(find.textContaining('Estimated from trunk diameter (DBH).'),
         findsOneWidget);
-    expect(find.textContaining('Height is a cross-check.'), findsNothing);
+    expect(find.textContaining('Height suggests a very different age'), findsNothing);
   });
 
   testWidgets('old photo response cannot replace new species age',
@@ -142,8 +142,11 @@ void main() {
       },
     ))));
     await tester.pumpAndSettle();
-    expect(find.text('AI growth estimate — source unverified'), findsOneWidget);
+    expect(find.text('AI growth estimate'), findsOneWidget);
     expect(find.text('Diameter growth: 0.40–1.20 cm/year'), findsOneWidget);
+    expect(find.text('Urban tropical tree.'), findsNothing);
+    await tester.tap(find.text('Calculation details'));
+    await tester.pumpAndSettle();
     expect(find.text('Urban tropical tree.'), findsOneWidget);
     expect(find.text('Copy growth study link'), findsNothing);
   });

@@ -68,13 +68,12 @@ class _TreeAgeCardState extends State<TreeAgeCard> {
       if (mounted && request == _request) {
         setState(() {
           _failed = true;
-          _failureMessage = error is DioException &&
-                  (error.response?.statusCode == 402 ||
-                      error.response?.statusCode == 429)
-              ? 'AI age estimate limit reached. Try again later.'
-              : error is DioException && error.response?.statusCode == 401
-                  ? 'Sign in again to estimate age.'
-                  : 'Age estimate unavailable. Check your connection.';
+          _failureMessage =
+              error is DioException && error.response?.statusCode == 429
+                  ? 'AI age estimation is temporarily busy. Try again later.'
+                  : error is DioException && error.response?.statusCode == 401
+                      ? 'Sign in again to estimate age.'
+                      : 'Age estimate unavailable. Check your connection.';
         });
       }
     } finally {
@@ -86,6 +85,8 @@ class _TreeAgeCardState extends State<TreeAgeCard> {
   Widget build(BuildContext context) {
     final estimated = _result?['status'] == 'estimated';
     final source = _result?['source'];
+    final studyUri =
+        source is Map ? Uri.tryParse(source['url']?.toString() ?? '') : null;
     final aiGrowth = _result?['estimation_basis'] == 'ai_growth_guess';
     final rates = _result?['growth_rates'];
     final dbhAge = ageDimension(_result?['dbh_age_years']);
@@ -110,7 +111,7 @@ class _TreeAgeCardState extends State<TreeAgeCard> {
               ] else ...[
                 Text(
                     aiGrowth
-                        ? 'AI growth estimate — source unverified'
+                        ? 'AI growth estimate'
                         : source is Map
                             ? 'Published growth data'
                             : 'Growth data unavailable',
@@ -127,13 +128,11 @@ class _TreeAgeCardState extends State<TreeAgeCard> {
                         fontSize: 20, fontWeight: FontWeight.bold)),
                 if (estimated && primaryAge != null)
                   Text(dbhAge != null
-                      ? heightAge != null
-                          ? 'Based on DBH and this species’ diameter growth rate. Height is a cross-check.'
-                          : 'Based on DBH and this species’ diameter growth rate. Height is unavailable for a cross-check.'
-                      : 'Based on height and this species’ height growth rate; no DBH age calculation is available.'),
+                      ? 'Estimated from trunk diameter (DBH).'
+                      : 'Estimated from tree height.'),
                 if (estimated && disagrees)
                   const Text(
-                      'Height and DBH checks disagree. This age estimate is highly uncertain.'),
+                      'Height suggests a very different age. Treat this as a rough estimate.'),
                 if (dbhAge != null || heightAge != null)
                   ExpansionTile(
                     tilePadding: EdgeInsets.zero,
@@ -145,10 +144,19 @@ class _TreeAgeCardState extends State<TreeAgeCard> {
                       if (heightAge != null)
                         Text(
                             'From height: about ${_result!['height_age_years']} years'),
+                      if (source is Map)
+                        const Text(
+                            'Uses average growth rates from the study. Individual trees can grow at different rates.'),
+                      if (_result?['assumptions'] is String)
+                        Text(_result!['assumptions'] as String),
                     ],
                   ),
-                Text(_result?['reason']?.toString() ??
-                    'No growth data available.'),
+                if (aiGrowth && estimated)
+                  const Text(
+                      'Uses AI-estimated growth rates. Growth varies with site and age.')
+                else if (!estimated)
+                  Text(_result?['reason']?.toString() ??
+                      'No growth data available.'),
                 if (rates is Map) ...[
                   if (rates['dbh_cm_per_year'] is List)
                     Text(
@@ -157,8 +165,6 @@ class _TreeAgeCardState extends State<TreeAgeCard> {
                     Text(
                         'Height growth: ${_rate(rates['height_m_per_year'])} m/year'),
                 ],
-                if (_result?['assumptions'] is String)
-                  Text(_result!['assumptions'] as String),
                 if (aiGrowth && !estimated)
                   TextButton(
                       onPressed: _load,
@@ -167,23 +173,23 @@ class _TreeAgeCardState extends State<TreeAgeCard> {
                   const SizedBox(height: 8),
                   Text('Source: ${source['citation']}'),
                   Text(source['context']?.toString() ?? ''),
-                  TextButton(
-                      onPressed: () async {
-                        final uri =
-                            Uri.tryParse(source['url']?.toString() ?? '');
-                        if (uri != null && uri.scheme == 'https') {
+                  if (studyUri != null &&
+                      studyUri.scheme == 'https' &&
+                      studyUri.hasAuthority) ...[
+                    TextButton(
+                        onPressed: () async {
                           await Clipboard.setData(
-                              ClipboardData(text: uri.toString()));
+                              ClipboardData(text: studyUri.toString()));
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                     content: Text(
                                         'Study link copied. Open it in your browser.')));
                           }
-                        }
-                      },
-                      child: const Text('Copy growth study link')),
-                  SelectableText(source['url']?.toString() ?? ''),
+                        },
+                        child: const Text('Copy growth study link')),
+                    SelectableText(studyUri.toString()),
+                  ],
                 ],
               ],
             ],

@@ -791,6 +791,9 @@ class ApiService {
     }
     final result = _restrictSpeciesScan(
         Map<String, dynamic>.from(res.data as Map));
+    if (result['base_visible'] != true || result['top_visible'] != true) {
+      result['estimated_height_m'] = null;
+    }
     // History is optional local metadata. A storage failure must not discard
     // an otherwise successful species response in either scanner.
     try {

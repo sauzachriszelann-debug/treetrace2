@@ -1239,7 +1239,11 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
     final code = _result?['status_code'] ?? '';
     final status = _result?['endangered_status'] ?? 'Protected';
     final strictlyProhibited = _result?['cutting_allowed'] != true;
-    final color = code == 'CR' ? Colors.red : Colors.orange;
+    final isCritical = code == 'CR';
+    final color =
+        isCritical ? const Color(0xFF991B1B) : const Color(0xFF78350F);
+    final background =
+        isCritical ? const Color(0xFFFEF2F2) : const Color(0xFFFFFBEB);
     final title = code == 'CR'
         ? 'DO NOT CUT - Critically Endangered'
         : code == 'EN'
@@ -1249,7 +1253,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: background,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: color.withOpacity(0.35)),
       ),
@@ -1263,13 +1267,13 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(title,
                   style: TextStyle(
-                      color: color, fontWeight: FontWeight.w800, fontSize: 13)),
+                      color: color, fontWeight: FontWeight.w800, fontSize: 14)),
               const SizedBox(height: 4),
               Text(
                 'Listed as $status under DENR DAO 2017-11. Cutting or transporting is '
                 '${strictlyProhibited ? 'strictly prohibited' : 'allowed only with proper permit'}.',
                 style: const TextStyle(
-                    fontSize: 12, height: 1.35, color: kForeground),
+                    fontSize: 14, height: 1.4, color: Color(0xFF292524)),
               ),
             ]),
           ),
@@ -1317,21 +1321,30 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
   }
 
   Widget _buildQuickInfoGrid() {
-    return Column(children: [Row(
-      children: [
-        _InfoPill(Icons.straighten, 'Predicted DBH',
-            '${_result!['estimated_dbh_cm'] ?? '--'} cm'),
-        const SizedBox(width: 12),
-        _InfoPill(Icons.height, 'Predicted height',
-            '${_result!['estimated_height_m'] ?? '--'} m'),
-        const SizedBox(width: 12),
-        _InfoPill(Icons.category_outlined, 'Family',
-            _result!['family']?.split(' ').last ?? 'N/A'),
-      ],
-    ),
-    const SizedBox(height: 8),
-    const Text('AI size predictions are unvalidated and may vary between scans. These are not measured values.',
-        style: TextStyle(color: kMutedFg, fontSize: 11)),
+    final height = _result?['estimated_height_m'];
+    return Column(children: [
+      IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _InfoPill(Icons.straighten, 'Predicted DBH',
+                '${_result!['estimated_dbh_cm'] ?? '--'} cm'),
+            const SizedBox(width: 8),
+            _InfoPill(Icons.height, 'Predicted height',
+                height == null ? 'Unavailable' : '$height m'),
+            const SizedBox(width: 8),
+            _InfoPill(Icons.category_outlined, 'Family',
+                _textValue('family', fallback: 'N/A')),
+          ],
+        ),
+      ),
+      const SizedBox(height: 8),
+      if (height == null)
+        const Text(
+          'For a height estimate, use a photo showing the tree from ground to top.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: kMutedFg, fontSize: 11),
+        ),
     ]);
   }
 
@@ -1802,19 +1815,26 @@ class _InfoPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
         decoration: BoxDecoration(
             color: kBackground,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: kBorder)),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, size: 16, color: kPrimary),
             const SizedBox(height: 6),
-            Text(value,
-                style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w700, fontSize: 13)),
-            Text(label, style: TextStyle(color: kMutedFg, fontSize: 10)),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(value,
+                  maxLines: 1,
+                  style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w700, fontSize: 13)),
+            ),
+            Text(label,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: kMutedFg, fontSize: 10)),
           ],
         ),
       ),
