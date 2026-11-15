@@ -24,7 +24,8 @@ class _Store implements SecureStore {
 
 class _ImageEndpoint implements HttpClientAdapter {
   final String scientificName;
-  _ImageEndpoint({this.scientificName = 'Mangifera indica'});
+  final Map<String, dynamic>? galleryResult;
+  _ImageEndpoint({this.scientificName = 'Mangifera indica', this.galleryResult});
 
   String? imageType;
   @override
@@ -34,6 +35,11 @@ class _ImageEndpoint implements HttpClientAdapter {
       Future<void>? cancelFuture) async {
     imageType =
         (options.data as FormData).files.single.value.contentType.toString();
+    if (options.path == '/ai/gallery-size-prediction') {
+      return ResponseBody.fromString(jsonEncode(galleryResult), 200, headers: {
+        Headers.contentTypeHeader: ['application/json']
+      });
+    }
     // The real backend rejects an application/octet-stream file with HTTP 400.
     return ResponseBody.fromString(
       '{"common_name":"Test tree","scientific_name":"$scientificName"}',
@@ -86,6 +92,29 @@ void main() {
 
     expect(result['not_identified'], isTrue);
     expect(result['scientific_name'], isEmpty);
+  });
+
+  test('AI Scan checks gallery height when identification has no height',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('treetrace_height_');
+    addTearDown(() => directory.delete(recursive: true));
+    final photo = await File('${directory.path}/tree.jpg').writeAsBytes([1, 2, 3]);
+    final dio = Dio(BaseOptions(baseUrl: 'https://example.invalid/api'))
+      ..httpClientAdapter = _ImageEndpoint(galleryResult: {
+        'status': 'predicted',
+        'method': 'gallery_yolo_vision_prediction',
+        'quality': 'unvalidated',
+        'prediction_basis': 'visual_appearance',
+        'validated_accuracy': false,
+        'trunk_detected': true,
+        'predicted_height_m': 12,
+      });
+
+    final result = await ApiService.forTest(storage: _Store(), dio: dio)
+        .identifyTree(photo, checkGalleryHeight: true);
+
+    expect(result['scientific_name'], 'Mangifera indica');
+    expect(result['estimated_height_m'], 12);
   });
 
   for (final failRead in [true, false]) {

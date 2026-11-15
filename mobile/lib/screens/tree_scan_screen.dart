@@ -259,26 +259,9 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
     }
   }
 
-  String _predictionValue(String key, double maximum) {
-    final p = _galleryPrediction;
-    final value = p?[key];
-    if (p?['status'] != 'predicted' ||
-        p?['method'] != 'gallery_yolo_vision_prediction' ||
-        p?['quality'] != 'unvalidated' ||
-        p?['prediction_basis'] != 'visual_appearance' ||
-        p?['validated_accuracy'] != false ||
-        (p?['trunk_detected'] != true &&
-            !(p?['target_source'] == 'ai_visual' &&
-                p?['target_identified'] == true)) ||
-        p?['fallback'] == true ||
-        value is! num ||
-        !value.isFinite ||
-        value < 1 ||
-        value > maximum) {
-      return 'Unavailable';
-    }
-    return value.toStringAsFixed(0);
-  }
+  String _predictionValue(String key, double maximum) =>
+      acceptedGalleryValue(_galleryPrediction, key, maximum)?.toStringAsFixed(0) ??
+      'Unavailable';
 
   Future<void> _addTreetopPhoto() async {
     final original = _photo;

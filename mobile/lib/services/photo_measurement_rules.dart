@@ -169,3 +169,24 @@ bool heightMeasurementAccepted(Map<String, dynamic>? result) {
       distance.isFinite &&
       distance > 0;
 }
+
+double? acceptedGalleryValue(
+    Map<String, dynamic>? p, String key, double maximum) {
+  final value = p?[key];
+  if (p?['status'] != 'predicted' ||
+      p?['method'] != 'gallery_yolo_vision_prediction' ||
+      p?['quality'] != 'unvalidated' ||
+      p?['prediction_basis'] != 'visual_appearance' ||
+      p?['validated_accuracy'] != false ||
+      (p?['trunk_detected'] != true &&
+          !(p?['target_source'] == 'ai_visual' &&
+              p?['target_identified'] == true)) ||
+      p?['fallback'] == true ||
+      value is! num ||
+      !value.isFinite ||
+      value < 1 ||
+      value > maximum) {
+    return null;
+  }
+  return value.toDouble();
+}

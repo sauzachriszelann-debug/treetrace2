@@ -138,7 +138,8 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
       });
     }
     try {
-      final r = await (widget.identifyFn ?? api.identifyTree)(f);
+      final r = await (widget.identifyFn?.call(f) ??
+          api.identifyTree(f, checkGalleryHeight: true));
       if (!mounted) return;
       _incrementUsage('ai');
       setState(() => _result = r);
@@ -1322,6 +1323,15 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
 
   Widget _buildQuickInfoGrid() {
     final height = _result?['estimated_height_m'];
+    final heightMessage =
+        switch ((_result?['base_visible'], _result?['top_visible'])) {
+      (true, true) =>
+        'The base and top were detected, but AI Scan could not estimate a height from this photo.',
+      (true, false) => 'AI Scan could not confirm the highest point of the tree.',
+      (false, true) => 'AI Scan could not confirm where the trunk meets the ground.',
+      (false, false) => 'AI Scan could not confirm the trunk base or the highest point.',
+      _ => 'AI Scan did not receive a visibility check for the trunk base and highest point.',
+    };
     return Column(children: [
       IntrinsicHeight(
         child: Row(
@@ -1340,10 +1350,10 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
       ),
       const SizedBox(height: 8),
       if (height == null)
-        const Text(
-          'For a height estimate, use a photo showing the tree from ground to top.',
+        Text(
+          _result?['height_unavailable_reason']?.toString() ?? heightMessage,
           textAlign: TextAlign.center,
-          style: TextStyle(color: kMutedFg, fontSize: 11),
+          style: const TextStyle(color: kMutedFg, fontSize: 11),
         ),
     ]);
   }

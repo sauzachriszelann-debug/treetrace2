@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'offline_queue.dart';
 import 'identification_photo.dart';
+import 'photo_measurement_rules.dart';
 
 /// Narrow secure-storage surface. G6 safeguard: authentication cleanup must
 /// NEVER wipe unrelated keys (the legacy code called deleteAll() on error,
@@ -764,7 +765,8 @@ class ApiService {
     return Map<String, dynamic>.from(response.data as Map);
   }
 
-  Future<Map<String, dynamic>> identifyTree(File imageFile) async {
+  Future<Map<String, dynamic>> identifyTree(File imageFile,
+      {bool checkGalleryHeight = false}) async {
     final photo = await prepareIdentificationPhoto(
         await imageFile.readAsBytes(), _imageContentType(imageFile).toString());
     final formData = FormData.fromMap({
@@ -793,6 +795,22 @@ class ApiService {
         Map<String, dynamic>.from(res.data as Map));
     if (result['base_visible'] != true || result['top_visible'] != true) {
       result['estimated_height_m'] = null;
+    }
+    if (checkGalleryHeight &&
+        result['not_identified'] != true &&
+        result['estimated_height_m'] == null) {
+      try {
+        final estimate = await predictGallerySize(imageFile);
+        result['estimated_height_m'] =
+            acceptedGalleryValue(estimate, 'predicted_height_m', 80);
+        if (result['estimated_height_m'] == null) {
+          result['height_unavailable_reason'] =
+              estimate['height_reason'] ?? estimate['reason'];
+        }
+      } catch (_) {
+        result['height_unavailable_reason'] =
+            'The gallery height check could not complete. Try scanning again.';
+      }
     }
     // History is optional local metadata. A storage failure must not discard
     // an otherwise successful species response in either scanner.
