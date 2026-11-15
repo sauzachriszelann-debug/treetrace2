@@ -100,11 +100,16 @@ export default function GalleryTreePredictions({ file, scientificName, onDimensi
 
   const dbh = metric(prediction, 'predicted_dbh_cm', 300);
   const height = metric(prediction, 'predicted_height_m', 80);
+  const dbhIssue = dbh === null ? prediction?.dbh_reason : null;
+  const heightIssue = height === null ? prediction?.height_reason : null;
+  const analysisIssue = prediction?.status !== 'predicted' && !dbhIssue && !heightIssue
+    ? prediction?.reason
+    : null;
   useEffect(() => { onDimensions?.({ dbhCm: dbh, heightM: height }); }, [dbh, height, onDimensions]);
   const needsTop = prediction?.needs_treetop_photo || prediction?.height_reason_code === 'top_hidden' || prediction?.treetop_photo_used;
   return <section aria-label="Tree analysis" className="space-y-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
     <div><h2 className="font-semibold">DBH and Height</h2>
-      <p className="text-sm text-muted-foreground">AI-estimated from photos. Review before saving; physical scale and accuracy are unvalidated.</p></div>
+      <p className="text-sm text-muted-foreground">Photo estimates. Review before saving.</p></div>
     <div className="flex flex-wrap gap-3">
       <Photo src={originalUrl} label="Original tree photo" />
       {prediction?.preview_png && <Photo src={`data:image/png;base64,${prediction.preview_png}`} label="Trunk detection" />}
@@ -117,11 +122,14 @@ export default function GalleryTreePredictions({ file, scientificName, onDimensi
         <p>Height (m): <strong>{height ?? 'Unavailable'}</strong></p>
       </div>
       {prediction?.detection_note && <p className="text-sm">{prediction.detection_note}</p>}
-      <details><summary className="cursor-pointer text-sm">Analysis details</summary>
-        {prediction?.dbh_reason && <p className="text-sm">DBH: {prediction.dbh_reason}</p>}
-        {prediction?.height_reason && <p className="text-sm">Height: {prediction.height_reason}</p>}
-        <p className="text-sm text-muted-foreground">{prediction?.reason}</p>
-      </details>
+      {(dbhIssue || heightIssue || analysisIssue) && (
+        <details>
+          <summary className="cursor-pointer text-sm">Analysis details</summary>
+          {dbhIssue && <p className="text-sm">DBH: {dbhIssue}</p>}
+          {heightIssue && <p className="text-sm">Height: {heightIssue}</p>}
+          {analysisIssue && <p className="text-sm text-muted-foreground">{analysisIssue}</p>}
+        </details>
+      )}
       {!prediction?.trunk_detected && <Button type="button" variant="outline" onClick={() => setRetry(n => n + 1)}>Retry trunk detection</Button>}
       {prediction?.treetop_photo_used && <p className="text-sm">Height estimated using your original photo and added treetop photo.</p>}
       {needsTop && <div className="space-y-2 border-t pt-3">
