@@ -23,6 +23,7 @@ from app.api.routes.tree_submissions import (
     require_staff,
     submission_out,
 )
+from app.services.scan_species_classes import restrict_scan_result
 from app.services.ai_identify import identify_tree_from_url, _pipeline_with_status, measure_dbh_from_base64, get_dbh_runtime_status
 # from app.services.local_species_classifier import (
 #     classify_species_from_image,
@@ -322,6 +323,7 @@ async def identify_tree(
         try:
             local_result = classify_species(image_bytes)
             if isinstance(local_result, dict):
+                local_result = restrict_scan_result(local_result)
                 local_result["roboflow_candidate"] = roboflow_candidate
                 from app.schemas.photo_observations import normalize_observations
                 local_result["photo_observations"] = normalize_observations(local_result.get("photo_observations"))
