@@ -141,8 +141,11 @@ DBH ESTIMATION:
 
 HEIGHT ESTIMATION:
   Set base_visible and top_visible based on the actual photo of the main tree.
-  The base is where the trunk meets the ground. The top is the highest point
-  of the same tree, not the highest visible branch in a cropped image.
+  The base is where the trunk meets the ground. For a rounded or spreading
+  crown, use the highest visible edge of that tree's foliage. A distinct
+  pointed tip is not required. Confirm the upper outline belongs to the
+  target tree and is in frame. Do not use the highest visible branch when
+  the crown continues outside the image or is hidden behind another tree.
   If either endpoint is hidden, cropped, or uncertain, set estimated_height_m
   to null. Do not infer height from typical species size. Only provide an
   estimate (1-80 m) when both endpoints and enough scale cues are visible.
