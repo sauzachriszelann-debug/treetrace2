@@ -15,7 +15,19 @@ MODEL_DIR = Path(__file__).resolve().parents[2] / "models"
 TFLITE_MODEL_PATH = MODEL_DIR / "best_model.tflite"
 LABELS_PATH = MODEL_DIR / "labels.txt"
 TRIAL_MODEL_PATH = MODEL_DIR / "treetrace_final.pt"
-TRIAL_COMMON_NAMES = {"Ficus benjamina": "Weeping fig"}
+TRIAL_COMMON_NAMES = {"Ficus benjamina": "Weeping fig", "Tabebuia rosea": "Pink poui"}
+
+# Verified species reference facts, separate from observations of an individual.
+SPECIES_REFERENCE = {
+    "Tabebuia rosea": {
+        "family": "Bignoniaceae",
+        "description": "Pink poui is an ornamental tree native to Central and South America, with showy pink or white trumpet-shaped flowers.",
+        "distinguishing_features": "Showy pink or white trumpet-shaped flowers; confirm identification using botanical features and expert review.",
+        "look_alikes": "Compare with Tabebuia heterophylla (whitewood), another tree with pale pink tubular flowers. T. heterophylla can have 1, 3 or 5 leaflets; T. rosea has five leaflets. Leaf count alone is insufficient: compare mature leaves and flowers and ask an expert to confirm. This is a botanical comparison, not a second AI prediction.",
+        "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/1/3171",
+        "look_alikes_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/1/3170",
+    },
+}
 
 _INTERPRETER: Any | None = None
 _INPUT_DETAILS: list[dict[str, Any]] | None = None
@@ -145,6 +157,7 @@ def classify_species_from_image(image_bytes: bytes) -> dict:
         common_name = TRIAL_COMMON_NAMES.get(label) or common_name_for_scientific_name(label or "")
         return {
             **result,
+            **SPECIES_REFERENCE.get(label, {}),
             "scientific_name": label or "",
             "common_name": common_name or label or result["common_name"],
             "confidence": _confidence_label(result["confidence_score"], allow_medium=False),
