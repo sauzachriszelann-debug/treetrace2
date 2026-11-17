@@ -14,7 +14,8 @@
     "YOLO_CONFIG_DIR": "/tmp/treetrace-yolo",
     "MPLCONFIGDIR": "/tmp/treetrace-matplotlib",
     "OMP_NUM_THREADS": "2",
-    "MKL_NUM_THREADS": "2"
+    "MKL_NUM_THREADS": "2",
+    "TREETRACE_SPECIES_TRIAL": "1"
   },
   "routes": [
     {
