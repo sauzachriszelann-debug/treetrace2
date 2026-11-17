@@ -1,6 +1,11 @@
 import api from "./client";
 
 export const treesApi = {
+  barangayLocation: async (params) => {
+    const { data } = await api.get("/trees/barangay-location", { params, timeout: 6000 });
+    return data;
+  },
+
   list: async (params = {}) => {
     const { data } = await api.get("/trees/", { params });
     return data;

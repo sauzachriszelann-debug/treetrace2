@@ -3,7 +3,7 @@
 // All API calls are MOCKED - no real requests, no submission is altered.
 
 import { describe, expect, test, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 vi.mock("@/api/treeSubmissions", () => ({
@@ -98,6 +98,7 @@ beforeEach(() => {
   authState.isLoadingAuth = false;
   treeSubmissionsApi.list.mockResolvedValue([pendingSubmission]);
   treeSubmissionsApi.approve.mockResolvedValue({ tree: { id: 99 } });
+  treeSubmissionsApi.convertUnknownSpecies.mockReset();
   treeSubmissionsApi.reject.mockResolvedValue({ status: "rejected" });
   aiApi.listUnknown.mockResolvedValue([]);
   aiApi.reviewUnknown.mockResolvedValue({});
@@ -111,11 +112,11 @@ describe("staff-only access guard (task 10)", () => {
     expect(screen.queryByRole("button", { name: /Tree Submissions/i })).toBeNull();
   });
 
-  test("an admin sees the page and both tabs", async () => {
+  test("an admin sees one queue with status filters", async () => {
     renderPage();
     expect(screen.getByText("Tree Reviews")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Tree Submissions/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Unknown Species/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pending" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Unknown Species" })).toBeNull();
   });
 
   test("a field worker (staff) also sees the page", async () => {
@@ -140,7 +141,7 @@ describe("Tree Submissions tab", () => {
     expect(screen.getByText("Acacia mangium")).toBeInTheDocument();
     expect(screen.getByText(/Panabo/)).toBeInTheDocument();
     expect(screen.getByText(/Citizen Tester/)).toBeInTheDocument();
-    expect(treeSubmissionsApi.list).toHaveBeenCalledWith("pending");
+    expect(treeSubmissionsApi.list).toHaveBeenCalledWith("all");
   });
 
   test("shows a loading skeleton first, then the data", async () => {
@@ -154,7 +155,7 @@ describe("Tree Submissions tab", () => {
     treeSubmissionsApi.list.mockResolvedValue([]);
     renderPage();
     await waitFor(() => {
-      expect(screen.getByText(/No pending submissions/i)).toBeInTheDocument();
+      expect(screen.getByText(/No submissions in this view/i)).toBeInTheDocument();
     });
   });
 
@@ -169,12 +170,12 @@ describe("Tree Submissions tab", () => {
     expect(screen.getByRole("button", { name: /Try again/i })).toBeInTheDocument();
   });
 
-  test("status filter buttons re-query with the chosen status", async () => {
+  test("the Approved filter hides pending records", async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText("Black wattle")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Approved" }));
     await waitFor(() => {
-      expect(treeSubmissionsApi.list).toHaveBeenCalledWith("approved");
+      expect(screen.queryByText("Black wattle")).toBeNull();
     });
   });
 });
@@ -187,12 +188,26 @@ describe("approve flow (mocked - no real status change)", () => {
     fireEvent.click(approveBtn());
     // Confirmation gate appears before any API call.
     expect(treeSubmissionsApi.approve).not.toHaveBeenCalled();
-    expect(screen.getByText(/becomes an official tree record/i)).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Approve tree submission" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Yes, approve" }));
     await waitFor(() => {
       expect(treeSubmissionsApi.approve).toHaveBeenCalledWith(1, {});
     });
+  });
+
+  test("approves using the corrected species names", async () => {
+    renderPage();
+    await screen.findByText("Black wattle");
+    fireEvent.click(approveBtn());
+    fireEvent.change(screen.getByLabelText(/Common name for inventory/), { target: { value: " Molave " } });
+    fireEvent.change(screen.getByLabelText("Scientific name for inventory"), { target: { value: "Vitex parviflora" } });
+    fireEvent.click(screen.getByRole("button", { name: "Yes, approve" }));
+
+    await waitFor(() => expect(treeSubmissionsApi.approve).toHaveBeenCalledWith(1, {
+      common_name: "Molave",
+      scientific_name: "Vitex parviflora",
+    }));
   });
 
   test("cancel on the confirmation does not call the API", async () => {
@@ -262,6 +277,7 @@ describe("reject flow (mocked - reason required)", () => {
       { ...pendingSubmission, status: "approved", approved_tree_id: 99, reviewed_by_name: "Admin" },
     ]);
     renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "Approved" }));
     await waitFor(() => expect(screen.getByText("Black wattle")).toBeInTheDocument());
     expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Reject" })).toBeNull();
@@ -269,27 +285,55 @@ describe("reject flow (mocked - reason required)", () => {
   });
 });
 
-describe("Unknown Species tab (task 5 - preserved functionality)", () => {
-  test("switching to the tab renders the existing unknown-species review", async () => {
-    renderPage();
-    await waitFor(() => expect(screen.getByText("Black wattle")).toBeInTheDocument());
+describe("species identification in the unified queue", () => {
+  const unknown = {
+    id: 17,
+    review_status: "pending",
+    photo_url: "https://example.test/photo.jpg",
+  };
 
-    fireEvent.click(screen.getByRole("button", { name: /Unknown Species/i }));
-    // The reused component's own heading proves it is intact.
-    await waitFor(() => {
-      expect(screen.getByText("Unknown Species Review")).toBeInTheDocument();
+  test("confirmation moves the source record to inventory approval without a duplicate card", async () => {
+    aiApi.listUnknown.mockResolvedValue([{
+      ...unknown,
+      ai_candidates: [{ common_name: "Narra", scientific_name: "Pterocarpus indicus", confidence_percent: 64.45 }],
+    }]);
+    treeSubmissionsApi.convertUnknownSpecies.mockImplementation(async () => {
+      treeSubmissionsApi.list.mockResolvedValue([
+        pendingSubmission,
+        { ...pendingSubmission, id: 88, common_name: "Molave", scientific_name: "Vitex parviflora", source_unknown_species_id: 17 },
+      ]);
+      return { id: 88, status: "pending", common_name: "Molave", scientific_name: "Vitex parviflora" };
     });
-    expect(aiApi.listUnknown).toHaveBeenCalled();
+
+    renderPage();
+    expect(await screen.findByText("Needs Species ID")).toBeInTheDocument();
+    expect(screen.getByText("Black wattle")).toBeInTheDocument();
+    expect(screen.queryByText("User Guess")).toBeNull();
+    expect(screen.getByLabelText("Common name")).toHaveValue("Narra");
+    expect(screen.getByLabelText("Scientific name")).toHaveValue("Pterocarpus indicus");
+    fireEvent.change(screen.getByLabelText("Common name"), { target: { value: "Molave" } });
+    fireEvent.change(screen.getByLabelText("Scientific name"), { target: { value: "Vitex parviflora" } });
+    expect(aiApi.reviewUnknown).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Species" }));
+
+    expect(await screen.findByText("Molave")).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Approve tree submission" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Common name for inventory *")).toHaveValue("Molave");
+    expect(screen.getByLabelText("Scientific name for inventory")).toHaveValue("Vitex parviflora");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getAllByText("Species submission #17")).toHaveLength(1);
+    expect(screen.queryByText("Needs Species ID")).toBeNull();
+    expect(aiApi.reviewUnknown).toHaveBeenCalledWith(17, expect.objectContaining({ identified_as: "Molave", identified_scientific_name: "Vitex parviflora" }));
+    expect(treeSubmissionsApi.convertUnknownSpecies).toHaveBeenCalledWith(17);
+    expect(treeSubmissionsApi.approve).not.toHaveBeenCalled();
   });
 
-  test("the two tabs use separate endpoints (submissions vs unknown-species)", async () => {
+  test("field workers use inventory approval without querying the admin identification queue", async () => {
+    authState.user = { role: "field_worker", full_name: "FW" };
     renderPage();
-    await waitFor(() => expect(treeSubmissionsApi.list).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole("button", { name: /Unknown Species/i }));
-    await waitFor(() => expect(aiApi.listUnknown).toHaveBeenCalled());
-    // Both endpoints were hit; the workflows are separate (task 6).
-    expect(treeSubmissionsApi.list).toHaveBeenCalledWith("pending");
-    expect(aiApi.listUnknown).toHaveBeenCalled();
+    expect(await screen.findByText("Ready for Approval")).toBeInTheDocument();
+    expect(aiApi.listUnknown).not.toHaveBeenCalled();
   });
 });
 

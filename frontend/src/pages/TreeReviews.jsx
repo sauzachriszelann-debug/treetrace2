@@ -1,24 +1,19 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { treeSubmissionsApi } from "@/api/treeSubmissions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  CheckCircle2, Leaf, Loader2, Mail, MapPin, Ruler, ShieldAlert,
+  CheckCircle2, Loader2, Mail, MapPin, Ruler, ShieldAlert,
   ClipboardList, TreePine, XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/AuthContext";
 import UnknownSpeciesReview from "@/pages/UnknownSpeciesReview";
-
-// Phase 10C: ONE staff-only "Tree Reviews" surface with two tabs. The two
-// workflows stay intentionally separate (approved G4 design):
-//   * Tree Submissions -> /api/tree-submissions  (table tree_submissions)
-//   * Unknown Species  -> /api/ai/unknown-species (table unknown_species)
-// Only the PRESENTATION is combined; no data or business logic is merged.
 
 const STAFF_ROLES = ["admin", "field_worker"];
 
@@ -29,7 +24,6 @@ function isStaff(roleValue) {
 
 export default function TreeReviews() {
   const { user, isLoadingAuth } = useAuth();
-  const [tab, setTab] = useState("submissions");
 
   // Task 10: protect against unauthorized citizen access. The backend also
   // enforces this (require_staff / require_admin); this is the UI guard.
@@ -65,71 +59,54 @@ export default function TreeReviews() {
       <div className="mb-6">
         <h1 className="font-fraunces text-3xl font-semibold">Tree Reviews</h1>
         <p className="text-muted-foreground mt-1">
-          Review citizen-submitted trees and unidentified species photos in one
-          place. The two queues are tracked separately.
+          Identify submitted photos and approve tree records for the inventory.
         </p>
       </div>
-
-      <div className="flex items-center gap-1 bg-muted rounded-lg p-1 mb-6 w-fit">
-        <button
-          type="button"
-          onClick={() => setTab("submissions")}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-            tab === "submissions"
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <ClipboardList className="w-4 h-4" />
-          Tree Submissions
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("unknown")}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-            tab === "unknown"
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Leaf className="w-4 h-4" />
-          Unknown Species
-        </button>
-      </div>
-
-      {/* Each tab keeps its OWN data source, endpoint and table. */}
-      {tab === "submissions" ? <SubmissionsTab /> : <UnknownSpeciesReview />}
+      <ReviewQueue canIdentify={isAdmin(user.role)} reviewerId={user.id} />
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Tab 1: citizen tree submissions (GET /api/tree-submissions)
-// ─────────────────────────────────────────────────────────────────────────────
+function isAdmin(role) {
+  return role === "admin" || String(role).endsWith(".admin");
+}
 
-function SubmissionsTab() {
+function ReviewQueue({ canIdentify, reviewerId }) {
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState("pending");
   const [busyId, setBusyId] = useState(null);
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
   const [confirmApproveId, setConfirmApproveId] = useState(null);
+  const [reviewSpecies, setReviewSpecies] = useState({ common_name: "", scientific_name: "" });
+
+  const beginApproval = (submission) => {
+    setReviewSpecies({
+      common_name: submission.common_name || "",
+      scientific_name: submission.scientific_name || "",
+    });
+    setConfirmApproveId(submission.id);
+  };
 
   const {
-    data: submissions = [],
+    data: allSubmissions = [],
     isLoading,
     isError,
     error,
     refetch,
   } = useQuery({
-    queryKey: ["submissions", statusFilter],
-    queryFn: () => treeSubmissionsApi.list(statusFilter),
+    queryKey: ["submissions", "all"],
+    queryFn: () => treeSubmissionsApi.list("all"),
   });
 
-  const counts = useMemo(() => {
-    // Only accurate when viewing "all"; otherwise show filtered length.
-    return { shown: submissions.length };
-  }, [submissions]);
+  const approvalSubmission = allSubmissions.find((entry) =>
+    entry.id === confirmApproveId && entry.status === "pending" && (reviewerId == null || entry.submitted_by_id !== reviewerId),
+  );
+  const submissions = allSubmissions.filter((entry) =>
+    statusFilter === "all" || entry.status === statusFilter,
+  );
+  const showSpeciesReview = canIdentify && ["pending", "all"].includes(statusFilter);
+  const convertedIds = new Set(allSubmissions.map((entry) => entry.source_unknown_species_id));
 
   const afterAction = () => {
     qc.invalidateQueries({ queryKey: ["submissions"] });
@@ -137,9 +114,17 @@ function SubmissionsTab() {
   };
 
   const approve = async (submission) => {
+    const commonName = reviewSpecies.common_name.trim();
+    const scientificName = reviewSpecies.scientific_name.trim();
+    if (!commonName) return;
+    const overrides = {};
+    if (commonName !== (submission.common_name || "")) overrides.common_name = commonName;
+    if (scientificName !== (submission.scientific_name || "")) {
+      overrides.scientific_name = scientificName || null;
+    }
     setBusyId(submission.id);
     try {
-      const result = await treeSubmissionsApi.approve(submission.id, {});
+      const result = await treeSubmissionsApi.approve(submission.id, overrides);
       const treeId = result?.tree?.id;
       toast.success(
         treeId
@@ -195,9 +180,6 @@ function SubmissionsTab() {
             {label}
           </Button>
         ))}
-        <span className="ml-auto text-sm text-muted-foreground">
-          {counts.shown} shown
-        </span>
       </div>
 
       {isLoading ? (
@@ -219,7 +201,7 @@ function SubmissionsTab() {
             </Button>
           </CardContent>
         </Card>
-      ) : submissions.length === 0 ? (
+      ) : !showSpeciesReview && submissions.length === 0 ? (
         <Card>
           <CardContent className="p-10 text-center text-muted-foreground">
             <TreePine className="w-10 h-10 mx-auto mb-3 opacity-40" />
@@ -227,7 +209,7 @@ function SubmissionsTab() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
+        <div className="flex flex-col gap-4">
           {submissions.map((s) => (
             <Card key={s.id}>
               <CardContent className="p-4 space-y-4">
@@ -238,7 +220,9 @@ function SubmissionsTab() {
                         {s.common_name || "Unnamed submission"}
                       </h2>
                       <StatusBadge status={s.status} />
-                      {s.source && <Badge variant="outline">{s.source}</Badge>}
+                      {s.source_unknown_species_id && (
+                        <Badge variant="outline">Species submission #{s.source_unknown_species_id}</Badge>
+                      )}
                     </div>
                     {s.scientific_name && (
                       <p className="text-xs italic text-muted-foreground mt-0.5">
@@ -280,9 +264,10 @@ function SubmissionsTab() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 text-sm">
                   <Measure label="DBH" value={s.dbh_cm ? `${s.dbh_cm} cm` : "—"} />
                   <Measure label="Height" value={s.height_m ? `${s.height_m} m` : "—"} />
+                  <Measure label="Carbon stock" value={s.carbon_kg != null ? `${s.carbon_kg} kg` : "Unavailable"} />
                   <Measure label="Health" value={s.health_status || "—"} />
                   <Measure
                     label="Recorded"
@@ -310,36 +295,13 @@ function SubmissionsTab() {
                 )}
 
                 {/* Actions: only for pending rows. */}
-                {s.status === "pending" && (
+                {s.status === "pending" && (reviewerId != null && s.submitted_by_id === reviewerId ? (
+                  <p className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
+                    You submitted this entry. Another admin or field worker can approve it.
+                  </p>
+                ) : (
                   <>
-                    {confirmApproveId === s.id ? (
-                      <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 space-y-2">
-                        <p className="text-sm font-medium text-emerald-900">
-                          Approve this submission? It becomes an official tree
-                          record. This cannot be undone from here.
-                        </p>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            onClick={() => approve(s)}
-                            disabled={busyId === s.id}
-                          >
-                            {busyId === s.id && (
-                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            )}
-                            Yes, approve
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setConfirmApproveId(null)}
-                            disabled={busyId === s.id}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    ) : rejectingId === s.id ? (
+                    {rejectingId === s.id ? (
                       <div className="rounded-lg border border-red-300 bg-red-50 p-3 space-y-2">
                         <p className="text-sm font-medium text-red-900">
                           Rejection reason (required)
@@ -378,7 +340,7 @@ function SubmissionsTab() {
                       <div className="flex flex-wrap gap-2">
                         <Button
                           size="sm"
-                          onClick={() => setConfirmApproveId(s.id)}
+                          onClick={() => beginApproval(s)}
                           disabled={busyId === s.id}
                         >
                           <CheckCircle2 className="w-4 h-4 mr-2" />
@@ -396,11 +358,77 @@ function SubmissionsTab() {
                       </div>
                     )}
                   </>
-                )}
+                ))}
               </CardContent>
             </Card>
           ))}
+          {showSpeciesReview && (
+            <UnknownSpeciesReview
+              inQueue
+              onReadyForApproval={beginApproval}
+              pendingOnly={statusFilter === "pending"}
+              convertedIds={convertedIds}
+              showEmpty={submissions.length === 0}
+            />
+          )}
         </div>
+      )}
+      {approvalSubmission && (
+        <Dialog open onOpenChange={(open) => {
+          if (!open && busyId !== approvalSubmission.id) setConfirmApproveId(null);
+        }}>
+          <DialogContent className="sm:max-w-xl">
+            <DialogTitle>Approve tree submission</DialogTitle>
+            <DialogDescription>
+              Approving adds this tree to the official inventory.
+            </DialogDescription>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1 text-sm">
+                <span>Common name for inventory *</span>
+                <Input
+                  value={reviewSpecies.common_name}
+                  onChange={(event) => setReviewSpecies({
+                    ...reviewSpecies,
+                    common_name: event.target.value,
+                  })}
+                  disabled={busyId === approvalSubmission.id}
+                  required
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span>Scientific name for inventory</span>
+                <Input
+                  value={reviewSpecies.scientific_name}
+                  onChange={(event) => setReviewSpecies({
+                    ...reviewSpecies,
+                    scientific_name: event.target.value,
+                  })}
+                  disabled={busyId === approvalSubmission.id}
+                />
+              </label>
+            </div>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                size="sm"
+                onClick={() => approve(approvalSubmission)}
+                disabled={busyId === approvalSubmission.id || !reviewSpecies.common_name.trim()}
+              >
+                {busyId === approvalSubmission.id && (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                )}
+                Yes, approve
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setConfirmApproveId(null)}
+                disabled={busyId === approvalSubmission.id}
+              >
+                Cancel
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
@@ -410,7 +438,7 @@ function StatusBadge({ status }) {
   if (status === "approved") return <Badge className="bg-emerald-600">Approved</Badge>;
   if (status === "rejected") return <Badge variant="destructive">Rejected</Badge>;
   if (status === "linked") return <Badge className="bg-blue-600">Linked</Badge>;
-  return <Badge variant="outline">Pending</Badge>;
+  return <Badge variant="outline">Ready for Approval</Badge>;
 }
 
 function Measure({ label, value }) {

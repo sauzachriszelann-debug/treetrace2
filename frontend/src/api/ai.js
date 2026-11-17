@@ -2,10 +2,26 @@ import api from "./client";
 import { preparePredictionPhoto } from "@/lib/predictionPhoto";
 
 export const aiApi = {
-  predictGallerySize: async (file, { treetopFile, signal } = {}) => {
+  speciesModelStatus: async () => {
+    const { data } = await api.get("/ai/species-model-status");
+    return data;
+  },
+
+  compareSpeciesModels: async (file) => {
+    const form = new FormData();
+    form.append("file", await preparePredictionPhoto(file));
+    const { data } = await api.post("/ai/compare-species-models", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 120000,
+    });
+    return data;
+  },
+
+  predictGallerySize: async (file, { treetopFile, treebaseFile, signal } = {}) => {
     const form = new FormData();
     form.append('file', await preparePredictionPhoto(file));
     if (treetopFile) form.append('treetop_file', await preparePredictionPhoto(treetopFile));
+    if (treebaseFile) form.append('treebase_file', await preparePredictionPhoto(treebaseFile));
     const { data } = await api.post('/ai/gallery-size-prediction', form, {
       headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000, signal,
     });

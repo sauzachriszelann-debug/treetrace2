@@ -1,4 +1,5 @@
 import { useState } from "react";
+import TreePhotoPreview from "@/components/trees/TreePhotoPreview";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { treesApi } from "@/api/trees";
@@ -13,15 +14,23 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowLeft, MapPin, Ruler, Leaf, Calendar,
-  Edit, Trash2, Activity, Plus, AlertTriangle, ShieldAlert,
+  Edit, Trash2, Activity, Plus, AlertTriangle, ShieldAlert, ImageOff,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { splitMeasurementNote } from "@/lib/measurementNotes";
 import { formatCarbonKg } from "@/lib/format";
 import { useOfflineSyncStore } from "@/offline/OfflineSyncProvider";
 
-export default function TreeDetail() {
-  const { id }      = useParams();
+const recorderLabels = {
+  admin: "Admin",
+  field_worker: "Field Worker",
+  citizen: "Citizen",
+};
+
+export default function TreeDetail({ previewId } = {}) {
+  const params      = useParams();
+  const id          = previewId ?? params.id;
   const navigate    = useNavigate();
   const { user }    = useAuth();
   const qc          = useQueryClient();
@@ -29,7 +38,7 @@ export default function TreeDetail() {
   const [editing, setEditing]         = useState(false);
   const [showLogForm, setShowLogForm] = useState(false);
   const [saving, setSaving]           = useState(false);
-  const canManageOfficialTree = user?.role !== "citizen";
+  const canManageOfficialTree = !previewId && user?.role !== "citizen";
 
   const { data: tree, isLoading } = useQuery({
     queryKey: ["tree", id],
@@ -142,18 +151,23 @@ export default function TreeDetail() {
     return <div className="p-4 text-center text-muted-foreground sm:p-6 lg:p-8">Tree not found.</div>;
   }
 
+  const { notes } = splitMeasurementNote(tree.notes);
+  const recorderRole = tree.recorded_by_role ?? (tree.recorded_by_id === user?.id ? user?.role : null);
+
   return (
-    <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
-      <Link
-        to="/trees"
-        className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm mb-6 transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Back to Inventory
-      </Link>
+    <div className={previewId ? "min-w-0" : "p-4 sm:p-6 lg:p-8"}>
+      {!previewId && (
+        <Link
+          to="/trees"
+          className="mb-4 flex w-fit items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Inventory
+        </Link>
+      )}
 
       {/* Header */}
-      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="mb-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
             <h1 className="break-words font-fraunces text-2xl font-semibold sm:text-3xl">{tree.common_name}</h1>
@@ -162,7 +176,15 @@ export default function TreeDetail() {
           {tree.scientific_name && (
             <p className="text-muted-foreground italic">{tree.scientific_name}</p>
           )}
-          <p className="text-muted-foreground text-sm mt-1">ID: {tree.id}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+            <span>ID: {tree.id}</span>
+            {!tree.photo_url && (
+              <span className="inline-flex items-center gap-1.5">
+                <ImageOff className="h-3.5 w-3.5" aria-hidden="true" />
+                No photo
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Endangered Warning */}
@@ -190,7 +212,7 @@ export default function TreeDetail() {
                     </div>
                   )}
 
-        <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="flex flex-wrap gap-2">
           {canManageOfficialTree && (
             <Button
               variant="outline"
@@ -202,7 +224,7 @@ export default function TreeDetail() {
               {editing ? "Cancel" : "Edit"}
             </Button>
           )}
-          {user?.role === "admin" && (
+          {canManageOfficialTree && user?.role === "admin" && (
             <Button
               variant="destructive"
               size="sm"
@@ -217,9 +239,9 @@ export default function TreeDetail() {
       </div>
 
       {editing ? (
-      <div className="mb-6 rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
+        <div className="mb-6">
           <h2 className="font-fraunces text-xl mb-4">Edit Tree Record</h2>
-          <TreeForm initial={tree} onSubmit={handleUpdate} loading={saving} />
+          <TreeForm initial={tree} onSubmit={handleUpdate} loading={saving} editLayout submitLabel="Save Changes" />
         </div>
       ) : (
         <Tabs defaultValue="details">
@@ -230,72 +252,58 @@ export default function TreeDetail() {
           </TabsList>
 
           {/* Details Tab */}
-          <TabsContent value="details">
+          <TabsContent value="details" className="mt-0">
             {isProtectedTree && <ConservationWarning tree={tree} />}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Photo */}
-              <div className="lg:col-span-1">
-                <div className="rounded-xl overflow-hidden border border-border bg-muted h-64 lg:h-80">
-                  {tree.photo_url ? (
-                    <img
-                      src={tree.photo_url}
-                      alt={tree.common_name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                      <div className="text-center">
-                        <div className="text-4xl mb-2">🌳</div>
-                        <p className="text-sm">No photo</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+            <div className={`grid items-start gap-4 ${tree.photo_url ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]" : ""}`}>
+              {tree.photo_url && (
+                <TreePhotoPreview
+                  src={tree.photo_url}
+                  alt={tree.common_name}
+                  className="w-full overflow-hidden rounded-xl border border-border bg-muted"
+                  thumbnailClassName="aspect-[4/3] max-h-96 w-full object-cover"
+                />
+              )}
 
-              {/* Info */}
-              <div className="lg:col-span-2 space-y-4">
+              <div className={`grid min-w-0 gap-4 ${previewId ? "sm:grid-cols-2" : tree.photo_url ? "xl:grid-cols-2" : "lg:grid-cols-3"}`}>
                 <Card>
-                  <CardHeader>
+                  <CardHeader className="px-4 pb-3 pt-4 sm:px-5">
                     <CardTitle className="font-fraunces text-base">Measurements</CardTitle>
                   </CardHeader>
-                  <CardContent className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
-                    <Info label="DBH"          value={tree.dbh_cm    ? `${tree.dbh_cm} cm`    : "—"} icon={Ruler} />
-                    <Info label="Height"       value={tree.height_m  ? `${tree.height_m} m`   : "—"} icon={Ruler} />
-                    <Info label="Biomass"      value={tree.biomass_kg ? `${tree.biomass_kg} kg` : "—"} icon={Leaf} />
-                    <Info label="Carbon Stock" value={tree.carbon_kg ? formatCarbonKg(tree.carbon_kg) : "—"} icon={Leaf} />
+                  <CardContent className={`grid gap-x-4 gap-y-3 px-4 pb-4 text-sm sm:px-5 ${previewId ? "min-[420px]:grid-cols-2" : "grid-cols-2"}`}>
+                    <Info label="DBH" value={tree.dbh_cm ? `${tree.dbh_cm} cm` : "-"} icon={Ruler} />
+                    <Info label="Height" value={tree.height_m ? `${tree.height_m} m` : "-"} icon={Ruler} />
+                    <Info label="Biomass" value={tree.biomass_kg ? `${tree.biomass_kg} kg` : "-"} icon={Leaf} />
+                    <Info label="Carbon Stock" value={tree.carbon_kg ? formatCarbonKg(tree.carbon_kg) : "-"} icon={Leaf} />
                   </CardContent>
                 </Card>
 
                 <Card>
-                  <CardHeader>
+                  <CardHeader className="px-4 pb-3 pt-4 sm:px-5">
                     <CardTitle className="font-fraunces text-base">Location</CardTitle>
                   </CardHeader>
-                  <CardContent className="text-sm space-y-2">
-                    <Info label="Barangay" value={tree.barangay || "—"} icon={MapPin} />
-                    <Info label="City"     value={tree.city     || "—"} icon={MapPin} />
-                    {tree.lat && tree.lng && (
+                  <CardContent className={`grid gap-x-4 gap-y-3 px-4 pb-4 text-sm sm:px-5 ${previewId ? "min-[420px]:grid-cols-2" : "grid-cols-2"}`}>
+                    <Info label="Barangay" value={tree.barangay || "-"} icon={MapPin} />
+                    <Info label="City" value={tree.city || "-"} icon={MapPin} />
+                    {tree.lat != null && tree.lng != null && (
                       <Info
                         label="GPS Coordinates"
-                        value={`${tree.lat?.toFixed(6)}, ${tree.lng?.toFixed(6)}`}
+                        value={`${tree.lat.toFixed(6)}, ${tree.lng.toFixed(6)}`}
                         icon={MapPin}
+                        className="col-span-full"
                       />
                     )}
                   </CardContent>
                 </Card>
-
-                <Card>
-                  <CardContent className="pt-4 text-sm space-y-2">
-                    <Info label="Recorded By"   value={tree.recorded_by_id   ? `User #${tree.recorded_by_id}` : "—"} icon={Activity} />
+                <Card className={previewId ? "sm:col-span-2" : tree.photo_url ? "xl:col-span-2" : ""}>
+                  <CardContent className="flex flex-wrap items-start gap-x-10 gap-y-3 px-4 py-3 text-sm sm:px-5">
+                    <Info label="Recorded By" value={recorderLabels[recorderRole] ?? "Unknown"} icon={Activity} />
                     <Info
                       label="Date Recorded"
-                      value={tree.date_recorded
-                        ? format(new Date(tree.date_recorded), "MMM d, yyyy")
-                        : "—"}
+                      value={tree.date_recorded ? format(new Date(tree.date_recorded), "MMM d, yyyy") : "-"}
                       icon={Calendar}
                     />
-                    {tree.notes && (
-                      <div className="pt-2 text-muted-foreground">{tree.notes}</div>
+                    {notes && (
+                      <p className="w-full whitespace-pre-wrap break-words border-t pt-2 text-muted-foreground">{notes}</p>
                     )}
                   </CardContent>
                 </Card>
@@ -376,13 +384,13 @@ export default function TreeDetail() {
   );
 }
 
-function Info({ label, value, icon: Icon }) {
+function Info({ label, value, icon: Icon, className = "" }) {
   return (
-    <div className="flex items-start gap-2">
-      {Icon && <Icon className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />}
-      <div>
-        <span className="text-muted-foreground">{label}: </span>
-        <span className="font-medium">{value}</span>
+    <div className={`flex min-w-0 items-start gap-2 ${className}`}>
+      {Icon && <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
+      <div className="min-w-0">
+        <span className="block text-xs text-muted-foreground">{label}</span>
+        <span className="mt-0.5 block break-words font-medium tabular-nums">{value}</span>
       </div>
     </div>
   );

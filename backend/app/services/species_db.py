@@ -611,6 +611,15 @@ async def auto_check_species(common_name: str, scientific_name: str = "") -> dic
 
 
 # ── Sync wrapper (for non-async code) ────────────────────────────────────────
+def common_name_for_scientific_name(scientific_name: str) -> str | None:
+    """Find a common name by exact scientific name in the local catalog."""
+    key = _normalize_name(scientific_name)
+    for common_name, data in PHILIPPINE_ENDANGERED_SPECIES.items():
+        if key == _normalize_name(data["scientific_name"]):
+            return common_name.capitalize()
+    return None
+
+
 def lookup_species(common_name: str) -> dict | None:
     """Fast local lookup only — no API calls."""
     key = _normalize_name(common_name)

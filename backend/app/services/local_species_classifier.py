@@ -3,15 +3,19 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 import io
+import os
 
 import numpy as np
 
-from app.services.species_db import lookup_species
+from app.services.species_db import common_name_for_scientific_name, lookup_species
+from app.services.scan_species_classes import scan_class
 
 
 MODEL_DIR = Path(__file__).resolve().parents[2] / "models"
 TFLITE_MODEL_PATH = MODEL_DIR / "best_model.tflite"
 LABELS_PATH = MODEL_DIR / "labels.txt"
+TRIAL_MODEL_PATH = MODEL_DIR / "treetrace_final.pt"
+TRIAL_COMMON_NAMES = {"Ficus benjamina": "Weeping fig"}
 
 _INTERPRETER: Any | None = None
 _INPUT_DETAILS: list[dict[str, Any]] | None = None
@@ -60,7 +64,23 @@ def _ensure_loaded():
     _OUTPUT_DETAILS = _INTERPRETER.get_output_details()
 
 
+def species_trial_enabled():
+    return os.getenv("TREETRACE_SPECIES_TRIAL") == "1"
+
+
 def local_species_model_status() -> dict:
+    if species_trial_enabled():
+        try:
+            from app.services.roboflow_classifier import classify_roboflow_image
+        except ImportError:
+            return {"ready": False, "trial": True, "reason": "PyTorch and TorchVision are required."}
+        return {
+            "ready": TRIAL_MODEL_PATH.is_file(),
+            "trial": True,
+            "model_name": "EfficientNet-B0",
+            "model_found": TRIAL_MODEL_PATH.is_file(),
+        }
+
     dependencies = {}
     for package, module_name in (
         ("Pillow", "PIL"),
@@ -100,10 +120,10 @@ def local_species_model_status() -> dict:
     }
 
 
-def _confidence_label(score: float) -> str:
+def _confidence_label(score: float, *, allow_medium: bool = True) -> str:
     if score >= 0.75:
         return "High"
-    if score >= 0.45:
+    if allow_medium and score >= 0.45:
         return "Medium"
     return "Low"
 
@@ -117,6 +137,22 @@ def _preprocess_image(image_bytes: bytes) -> np.ndarray:
 
 
 def classify_species_from_image(image_bytes: bytes) -> dict:
+    if species_trial_enabled():
+        from app.services.roboflow_classifier import classify_roboflow_image
+
+        result = classify_roboflow_image(image_bytes, model_path=TRIAL_MODEL_PATH)
+        label = scan_class(result["common_name"])
+        common_name = TRIAL_COMMON_NAMES.get(label) or common_name_for_scientific_name(label or "")
+        return {
+            **result,
+            "scientific_name": label or "",
+            "common_name": common_name or label or result["common_name"],
+            "confidence": _confidence_label(result["confidence_score"], allow_medium=False),
+            "source": "local_efficientnet_b0_trial",
+            "is_tree": True,
+            "not_identified": False,
+        }
+
     _ensure_loaded()
     assert _INTERPRETER is not None
     assert _INPUT_DETAILS is not None

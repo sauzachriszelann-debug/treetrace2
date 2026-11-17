@@ -31,6 +31,7 @@ from app.core.security import get_current_user
 from app.db.database import get_db
 from app.models.tree import Tree
 from app.models.tree_submission import TreeSubmission
+from app.models.unknown_species import UnknownSpecies
 from app.models.user import User, UserRole
 from app.schemas.tree import TreeCreate
 from app.schemas.tree_submission import (
@@ -93,6 +94,10 @@ def _parse_json(value: Optional[str], fallback):
 
 
 def submission_out(submission: TreeSubmission) -> dict:
+    _, carbon = _estimate_tree_carbon(
+        submission.dbh_cm, submission.height_m,
+        require_height=submission.source_unknown_species_id is not None,
+    )
     return {
         "id": submission.id,
         "client_uuid": submission.client_uuid,
@@ -103,6 +108,7 @@ def submission_out(submission: TreeSubmission) -> dict:
         "scientific_name": submission.scientific_name,
         "dbh_cm": submission.dbh_cm,
         "height_m": submission.height_m,
+        "carbon_kg": carbon,
         "health_status": submission.health_status,
         "barangay": submission.barangay,
         "city": submission.city,
@@ -386,6 +392,37 @@ def list_my_submissions(
     return [submission_out(entry) for entry in entries]
 
 
+@router.delete("/{submission_id}", status_code=204)
+def delete_my_submission(
+    submission_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    submission = _submission_or_404(db, submission_id)
+    if submission.submitted_by_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the submitter can delete this entry.")
+
+    # Use the same lock order as conversion to keep both records consistent.
+    source = None
+    if submission.source_unknown_species_id is not None:
+        source = (
+            db.query(UnknownSpecies)
+            .filter(UnknownSpecies.id == submission.source_unknown_species_id)
+            .with_for_update()
+            .first()
+        )
+    deleted = (
+        db.query(TreeSubmission)
+        .filter(TreeSubmission.id == submission_id, TreeSubmission.status == "pending")
+        .delete(synchronize_session=False)
+    )
+    if not deleted:
+        raise HTTPException(status_code=409, detail="Only pending submissions can be deleted.")
+    if source is not None:
+        db.delete(source)
+    db.commit()
+
+
 # ---------------------------------------------------------------------------
 # Review actions (staff; never self-review)
 # ---------------------------------------------------------------------------
@@ -456,7 +493,8 @@ def approve_submission(
         )
 
     biomass, carbon = _estimate_tree_carbon(
-        tree_payload.dbh_cm, tree_payload.height_m
+        tree_payload.dbh_cm, tree_payload.height_m,
+        require_height=submission.source_unknown_species_id is not None,
     )
     tree = Tree(
         **tree_payload.model_dump(exclude={"client_uuid"}),

@@ -18,7 +18,7 @@ const plans = [
     badge: "Citizens",
     icon: Sprout,
     tone: "border-emerald-200",
-    features: ["Unlimited public map and QR scanning", "10 AI identifications per day", "15 unknown species submissions per day"],
+    features: ["Unlimited public map and QR scanning", "Unlimited AI identification", "15 unknown species submissions per day"],
     note: "Ideal for citizens and community contributors.",
   },
   {
@@ -28,7 +28,7 @@ const plans = [
     badge: "Most Popular",
     icon: Crown,
     featured: true,
-    features: ["50 AI identifications per day", "100 unknown species submissions per day", "Reports, health history, and priority review"],
+    features: ["Unlimited AI identification", "100 unknown species submissions per day", "Reports, health history, and priority review"],
     note: "For researchers, schools, NGOs, and active field teams.",
   },
   {

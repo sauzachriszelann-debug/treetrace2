@@ -4,7 +4,7 @@ from app.core.security import get_current_user
 
 
 def test_public_tree_response_uses_limited_schema(client: TestClient, create_tree):
-    tree = create_tree(notes="Internal only")
+    tree = create_tree(notes="Internal only", scientific_name="Gmelina arborea")
     client.app.dependency_overrides.pop(get_current_user, None)
 
     response = client.get(f"/api/public/tree/{tree['id']}")
@@ -15,6 +15,7 @@ def test_public_tree_response_uses_limited_schema(client: TestClient, create_tre
     assert data["common_name"] == "Narra"
     assert data["dbh_cm"] == 24.0
     assert data["height_m"] == 9.0
+    assert data["estimated_age_years"] == 9.4
     assert "notes" not in data
     assert "recorded_by_id" not in data
 

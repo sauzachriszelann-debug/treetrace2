@@ -125,11 +125,11 @@ def test_nearby_returns_only_trees_within_radius_sorted_by_distance(
     assert data[1]["distance_m"] == pytest.approx(50.0, abs=0.5)
 
 
-def test_nearby_default_radius_is_fifteen_meters(
+def test_nearby_default_radius_is_five_meters(
     client: TestClient, admin_user, db_session
 ):
-    insert_tree(db_session, common_name="Inside", **_coords(10))
-    insert_tree(db_session, common_name="Outside", **_coords(30))
+    insert_tree(db_session, common_name="Inside", **_coords(3))
+    insert_tree(db_session, common_name="Outside", **_coords(7))
 
     response = nearby(client)
 
@@ -331,11 +331,11 @@ def test_nearby_includes_just_inside_and_excludes_just_outside_radius(
     """Radius boundary is exact: 1 mm inside counts at both the default and
     the maximum radius, 1 mm outside does not, including on the diagonal
     where the bounding box is widest."""
-    insert_tree(db_session, common_name="In15", **_coords(14.999))
-    insert_tree(db_session, common_name="Out15", **_coords(15.001))
+    insert_tree(db_session, common_name="In5", **_coords(4.999))
+    insert_tree(db_session, common_name="Out5", **_coords(5.001))
 
-    default_data = nearby(client).json()  # default radius = 15 m
-    assert [item["common_name"] for item in default_data] == ["In15"]
+    default_data = nearby(client).json()
+    assert [item["common_name"] for item in default_data] == ["In5"]
 
     in_diag_lat, in_diag_lng = (
         BASE_LAT + 99.999 * math.cos(math.radians(45)) / METERS_PER_DEGREE,
@@ -348,13 +348,13 @@ def test_nearby_includes_just_inside_and_excludes_just_outside_radius(
     insert_tree(db_session, common_name="Out100East", lat=east_lat, lng=east_lng)
 
     max_data = nearby(client, radius_m=100, limit=10).json()
-    # In15 and Out15 (15 m pair) both fall inside the 100 m radius, plus the
+    # In5 and Out5 both fall inside the 100 m radius, plus the
     # two 100 m pair members that are inside; only Out100East is excluded.
     assert sorted(item["common_name"] for item in max_data) == [
         "In100",
-        "In15",
+        "In5",
         "InDiag",
-        "Out15",
+        "Out5",
     ]
 
 
@@ -396,7 +396,7 @@ def test_nearby_requires_coordinates(client: TestClient, admin_user):
 def test_nearby_species_match_exact_is_normalized(
     client: TestClient, admin_user, db_session
 ):
-    insert_tree(db_session, common_name="Narra", **_coords(5))
+    insert_tree(db_session, common_name="Narra", **_coords(3))
 
     response = nearby(client, common_name="  narra  ")
 
@@ -410,7 +410,7 @@ def test_nearby_species_match_scientific_name_counts_as_exact(
         db_session,
         common_name="Narra",
         scientific_name="Pterocarpus indicus",
-        **_coords(5),
+        **_coords(3),
     )
 
     response = nearby(
@@ -425,7 +425,7 @@ def test_nearby_species_match_scientific_name_counts_as_exact(
 def test_nearby_species_match_different(
     client: TestClient, admin_user, db_session
 ):
-    insert_tree(db_session, common_name="Narra", **_coords(5))
+    insert_tree(db_session, common_name="Narra", **_coords(3))
 
     response = nearby(client, common_name="Molave")
 
@@ -435,7 +435,7 @@ def test_nearby_species_match_different(
 def test_nearby_species_unknown_when_no_species_submitted(
     client: TestClient, admin_user, db_session
 ):
-    insert_tree(db_session, common_name="Narra", **_coords(5))
+    insert_tree(db_session, common_name="Narra", **_coords(3))
 
     response = nearby(client)
 

@@ -15,7 +15,7 @@ Covered (Phase 13.6 checklist):
   * Local classifier: not-ready status without model files, route short-circuit
     when ready, graceful fallthrough when classification raises (13.2)
   * API responses: /api/ai/usage shape for citizen vs staff, auth required,
-    non-image rejection, daily-limit 402, identify happy path + route-level
+    non-image rejection, unlimited citizen scans, identify happy path + route-level
     error capture
 """
 
@@ -400,9 +400,9 @@ def test_usage_endpoint_citizen_shape(ai_client):
     assert res.status_code == 200
     body = res.json()
     assert set(body) >= {"ai", "unknown", "tree_submissions", "qr_scan", "public_map"}
-    assert body["ai"]["unlimited"] is False
-    assert body["ai"]["daily_limit"] == 10
-    assert body["ai"]["remaining"] == 10
+    assert body["ai"]["unlimited"] is True
+    assert body["ai"]["daily_limit"] is None
+    assert body["ai"]["remaining"] is None
     # The Flutter parser reads these exact keys.
     assert set(body["ai"]) >= {"used_today", "daily_limit", "remaining", "unlimited", "plan"}
 
@@ -445,7 +445,7 @@ def test_identify_rejects_non_image(ai_client):
     assert "image" in res.json()["detail"].lower()
 
 
-def test_identify_enforces_daily_limit_for_citizen(ai_client):
+def test_identify_allows_citizen_at_former_daily_limit(ai_client, monkeypatch):
     client, app, db = ai_client
     user = _make_user(
         db,
@@ -455,12 +455,20 @@ def test_identify_enforces_daily_limit_for_citizen(ai_client):
     )
     _auth_override(app, user)
 
+    from app.api.routes import identify
+
+    async def fake_pipeline(*args):
+        return {"common_name": "Synthetic Fir"}
+
+    monkeypatch.setattr(identify, "_pipeline_with_status", fake_pipeline)
+    monkeypatch.setattr(identify, "_get_local_species_classifier", lambda: (None, None))
     res = client.post(
         "/api/ai/identify",
         files={"file": ("leaf.png", b"\x89PNG fake", "image/png")},
     )
-    assert res.status_code == 402
-    assert "10" in res.json()["detail"]
+    assert res.status_code == 200
+    assert res.json()["common_name"] == "Synthetic Fir"
+    assert user.ai_identifications_today == 10
 
 
 def test_identify_happy_path_uses_pipeline(ai_client, monkeypatch):
@@ -469,8 +477,8 @@ def test_identify_happy_path_uses_pipeline(ai_client, monkeypatch):
     _auth_override(app, user)
 
     fixture = {
-        "common_name": "Synthetic Fir",
-        "scientific_name": "Picea ficta",
+        "common_name": "Mango",
+        "scientific_name": "Mangifera indica",
         "confidence": "High",
         "not_identified": False,
         "source": "unit-test",
@@ -488,7 +496,7 @@ def test_identify_happy_path_uses_pipeline(ai_client, monkeypatch):
         files={"file": ("leaf.png", b"\x89PNG fake", "image/png")},
     )
     assert res.status_code == 200
-    assert res.json() == fixture
+    assert {key: res.json()[key] for key in fixture} == fixture
     assert len(called) == 1
 
 
@@ -519,7 +527,8 @@ def test_identify_uses_local_classifier_when_ready(ai_client, monkeypatch):
     user = _make_user(db, UserRole.field_worker)
     _auth_override(app, user)
 
-    local_result = {"common_name": "Local Class", "not_identified": False, "source": "local"}
+    local_result = {"common_name": "Mango", "scientific_name": "Mangifera indica",
+                    "confidence": "High", "not_identified": False, "source": "local"}
     pipeline_called = []
 
     async def fake_pipeline(*args, **kwargs):

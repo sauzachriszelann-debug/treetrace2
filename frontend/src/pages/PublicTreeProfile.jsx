@@ -443,6 +443,12 @@ export default function PublicTreeProfile() {
                 <InfoRow label="Scientific Name" value={tree.scientific_name} />
                 <InfoRow label="Health Status" value={tree.health_status} />
                 <InfoRow label="DBH" value={tree.dbh_cm ? `${tree.dbh_cm} cm` : null} />
+                <InfoRow
+                  label="Estimated Age"
+                  value={tree.estimated_age_years > 0
+                    ? tree.estimated_age_years < 1 ? "Less than 1 year" : `About ${Math.round(tree.estimated_age_years)} yr`
+                    : "Unavailable"}
+                />
                 <InfoRow label="Height" value={tree.height_m ? `${tree.height_m} m` : null} />
                 <InfoRow label="Biomass" value={tree.biomass_kg ? `${tree.biomass_kg.toFixed(2)} kg` : null} />
                 <InfoRow label="Carbon Stock" value={tree.carbon_kg ? `${tree.carbon_kg.toFixed(2)} kg CO₂` : null} />

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.database import Base
@@ -14,9 +14,13 @@ class UnknownSpecies(Base):
     submitter_notes = Column(Text, nullable=True)
     possible_name = Column(String(150), nullable=True)   # user's guess
     ai_candidates = Column(Text, nullable=True)           # JSON list from AI
+    dbh_cm = Column(Float, nullable=True)
+    height_m = Column(Float, nullable=True)
     reviewed = Column(Boolean, default=False)
     review_notes = Column(Text, nullable=True)
     identified_as = Column(String(150), nullable=True)    # admin fills after review
+
+    identified_scientific_name = Column(String(150), nullable=True)
 
     submitted_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     submitted_by = relationship("User", foreign_keys=[submitted_by_id])

@@ -771,21 +771,42 @@ def test_convert_unknown_entry_is_404(g4_client, g4_auth_as):
     assert response.status_code == 404
 
 
+@pytest.mark.parametrize("height", [12, None])
 def test_converted_submission_flows_through_approval(
-    g4_client, g4_auth_as, db_session
+    g4_client, g4_auth_as, height
 ):
-    citizen = g4_auth_as(UserRole.citizen)
-    entry = _make_unknown_entry(
-        db_session, citizen, location_description="not parseable"
-    )
+    g4_auth_as(UserRole.field_worker)
+    created = g4_client.post("/api/ai/unknown-species", json={
+        "photo_url": "https://example.test/tree.jpg",
+        "location_description": "not parseable",
+        "dbh_cm": 20,
+        "height_m": height,
+    })
+    assert created.status_code == 200, created.text
+    entry_id = created.json()["id"]
     g4_auth_as(UserRole.admin)
-    g4_client.put(
-        f"/api/ai/unknown-species/{entry.id}/review",
-        json={"reviewed": True, "identified_as": "Narra"},
+    reviewed = g4_client.put(
+        f"/api/ai/unknown-species/{entry_id}/review",
+        json={
+            "reviewed": True,
+            "identified_as": "Narra",
+            "identified_scientific_name": "Pterocarpus indicus",
+        },
     )
+    assert reviewed.status_code == 200, reviewed.text
+    assert reviewed.json()["identified_scientific_name"] == "Pterocarpus indicus"
+    entry = reviewed.json()
+    assert entry["dbh_cm"] == 20
+    assert entry["height_m"] == height
+    expected_carbon = None if height is None else round(0.0673 * (0.6 * 20**2 * height)**0.976 * 0.47, 2)
+    assert entry["carbon_kg"] == expected_carbon
     submission = g4_client.post(
-        f"/api/ai/unknown-species/{entry.id}/convert"
+        f"/api/ai/unknown-species/{entry_id}/convert"
     ).json()
+
+    assert submission["dbh_cm"] == 20
+    assert submission["height_m"] == height
+    assert submission["carbon_kg"] == expected_carbon
 
     # Approving from a second, different reviewer (not the submitter).
     g4_auth_as(UserRole.field_worker)
@@ -795,6 +816,10 @@ def test_converted_submission_flows_through_approval(
     assert approved.status_code == 200, approved.text
     tree = approved.json()["tree"]
     assert tree["common_name"] == "Narra"
+    assert tree["scientific_name"] == "Pterocarpus indicus"
+    assert tree["dbh_cm"] == 20
+    assert tree["height_m"] == height
+    assert tree["carbon_kg"] == expected_carbon
     # Unparseable coordinates stay NULL - never guessed.
     assert tree["lat"] is None
     assert tree["lng"] is None
@@ -957,3 +982,41 @@ def test_concurrent_approve_only_one_wins(g4_concurrency):
         assert session.query(func.count(Tree.id)).scalar() == 1
     finally:
         session.close()
+
+
+def test_owner_can_delete_species_before_or_after_conversion(
+    g4_client, g4_auth_as, g4_app, db_session
+):
+    owner = g4_auth_as(UserRole.field_worker)
+    unconverted = _make_unknown_entry(db_session, owner)
+    converted = _make_unknown_entry(db_session, owner, reviewed=True, identified_as="Narra")
+    unconverted_path = f"/api/ai/unknown-species/{unconverted.id}"
+    converted_path = f"/api/ai/unknown-species/{converted.id}"
+
+    g4_auth_as(UserRole.admin)
+    assert g4_client.delete(unconverted_path).status_code == 403
+    response = g4_client.post(f"{converted_path}/convert")
+    assert response.status_code == 201
+    official_path = f"/api/tree-submissions/{response.json()['id']}"
+    assert g4_client.delete(official_path).status_code == 403
+
+    g4_app.g4_user_holder["user"] = owner
+    assert g4_client.delete(converted_path).status_code == 409
+    assert g4_client.delete(unconverted_path).status_code == 204
+    assert g4_client.delete(official_path).status_code == 204
+    assert g4_client.get("/api/tree-submissions/my").json() == []
+    assert g4_client.get("/api/ai/my-unknown-species").json() == []
+    assert db_session.query(Tree).count() == 0
+
+
+def test_owner_cannot_delete_an_approved_submission(g4_client, g4_auth_as, g4_app):
+    owner = g4_auth_as(UserRole.admin)
+    created = _create(g4_client)
+    assert created.status_code == 201
+    path = f"/api/tree-submissions/{created.json()['id']}"
+    g4_auth_as(UserRole.admin)
+    assert g4_client.post(f"{path}/approve", json={}).status_code == 200
+
+    g4_app.g4_user_holder["user"] = owner
+    assert g4_client.delete(path).status_code == 409
+    assert g4_client.get("/api/tree-submissions/my").json()[0]["status"] == "approved"

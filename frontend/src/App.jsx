@@ -23,7 +23,6 @@ import PublicPortal      from "@/pages/PublicPortal";
 import AIIdentify        from "@/pages/AIIdentify";
 import CommunityStructure from "@/pages/CommunityStructure";
 import Upgrade           from "@/pages/Upgrade";
-import UnknownSpeciesReview from "@/pages/UnknownSpeciesReview";
 import TreeReviews from "@/pages/TreeReviews";
 import MySubmissions from "@/pages/MySubmissions";
 import ReportsAndTools from "@/pages/ReportsAndTools";
@@ -72,7 +71,7 @@ export default function App() {
           <Route path="tree-reviews" element={<TreeReviews />} />
           {/* Legacy links keep working: Unknown Species is now tab 2 of Tree
               Reviews. The standalone page stays reachable for deep links. */}
-          <Route path="unknown-species" element={<UnknownSpeciesReview />} />
+          <Route path="unknown-species" element={<Navigate to="/tree-reviews" replace />} />
           <Route path="my-submissions" element={<MySubmissions />} />
           <Route path="reports"     element={<ReportsAndTools />} />
           <Route path="evaluation"  element={<ProjectEvaluation />} />

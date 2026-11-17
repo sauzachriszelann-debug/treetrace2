@@ -15,7 +15,6 @@ import {
 
 export default function TreeHeightCalculator({ onAccept }) {
   const [open, setOpen] = useState(false);
-  const [distance, setDistance] = useState("");
   const [topAngle, setTopAngle] = useState("");
   const [baseAngle, setBaseAngle] = useState("");
   const [estimatedHeight, setEstimatedHeight] = useState(null);
@@ -28,11 +27,10 @@ export default function TreeHeightCalculator({ onAccept }) {
     setError("");
   };
 
-  const calculate = (event) => {
-    event.preventDefault();
+  const calculate = () => {
     try {
       const height = calculateTreeHeightMeters({
-        horizontalDistanceMeters: distance,
+        horizontalDistanceMeters: 10,
         topAngleDegrees: topAngle,
         baseAngleDegrees: baseAngle,
       });
@@ -77,30 +75,27 @@ export default function TreeHeightCalculator({ onAccept }) {
           <DialogHeader>
             <DialogTitle>Calculate Tree Height</DialogTitle>
             <DialogDescription>
-              Enter horizontal distance and signed sight angles. Use a negative
-              base angle when the tree base is below your horizontal line of
-              sight. This is an estimate; verify it before using it.
+              Stand 10 m horizontally from the tree base. Take two clinometer
+              readings in degrees, one sighting the highest visible point of the
+              crown and one sighting the trunk at ground level. Use a negative
+              reading below horizontal. If either point is hidden, reposition
+              before measuring.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={calculate} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="height-distance">Horizontal distance (m)</Label>
-              <Input
-                id="height-distance"
-                type="number"
-                min="0"
-                step="any"
-                value={distance}
-                onChange={(event) => {
-                  setDistance(event.target.value);
-                  resetResult();
-                }}
-                required
-              />
-            </div>
+          <div
+            className="space-y-4"
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && event.target.tagName === "INPUT") {
+                event.preventDefault();
+                event.stopPropagation();
+                if (event.target.id !== "height-correction") calculate();
+              }
+            }}
+          >
+            <p className="text-sm font-medium">Horizontal distance: 10 m</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="height-top-angle">Angle to tree top (°)</Label>
+                <Label htmlFor="height-top-angle">Upper clinometer reading (°)</Label>
                 <Input
                   id="height-top-angle"
                   type="number"
@@ -114,7 +109,7 @@ export default function TreeHeightCalculator({ onAccept }) {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="height-base-angle">Angle to tree base (°)</Label>
+                <Label htmlFor="height-base-angle">Base clinometer reading (°)</Label>
                 <Input
                   id="height-base-angle"
                   type="number"
@@ -128,7 +123,7 @@ export default function TreeHeightCalculator({ onAccept }) {
                 />
               </div>
             </div>
-            <Button type="submit" variant="outline">
+            <Button type="button" variant="outline" onClick={calculate}>
               Calculate Estimate
             </Button>
             {error && (
@@ -177,7 +172,7 @@ export default function TreeHeightCalculator({ onAccept }) {
                 </Button>
               </DialogFooter>
             )}
-          </form>
+          </div>
         </DialogContent>
       </Dialog>
     </>

@@ -9,15 +9,30 @@ import math
 from app.db.database import get_db
 from app.models.tree import Tree
 from app.models.user import User
-from app.schemas.tree import TreeCreate, TreeCreateOut, TreeUpdate, TreeOut
+from app.schemas.tree import TreeCreate, TreeCreateOut, TreeDetailOut, TreeUpdate, TreeOut
 from app.core.security import get_current_user, require_admin
+from app.services.barangay_location import resolve_barangay
 from app.services.species_db import lookup_species
 
 router = APIRouter()
 
 
-def _estimate_tree_carbon(dbh_cm: Optional[float], height_m: Optional[float]) -> tuple[Optional[float], Optional[float]]:
+@router.get("/barangay-location")
+def get_barangay_location(
+    lat: float = Query(..., ge=-90, le=90),
+    lng: float = Query(..., ge=-180, le=180),
+    accuracy_m: float = Query(..., gt=0, allow_inf_nan=False),
+    user: User = Depends(get_current_user),
+):
+    return resolve_barangay(lat, lng, accuracy_m)
+
+
+def _estimate_tree_carbon(
+    dbh_cm: Optional[float], height_m: Optional[float], *, require_height: bool = False
+) -> tuple[Optional[float], Optional[float]]:
     if not dbh_cm or dbh_cm <= 0:
+        return None, None
+    if require_height and (not height_m or height_m <= 0):
         return None, None
     height = height_m if height_m and height_m > 0 else 10.0
     wood_density = 0.6
@@ -423,7 +438,7 @@ def create_tree(
 
 
 # ── Nearby matching suggestions (G3) ─────────────────────────────────────
-_NEARBY_DEFAULT_RADIUS_M = 15.0
+_NEARBY_DEFAULT_RADIUS_M = 5.0
 _NEARBY_MAX_RADIUS_M = 100.0
 _NEARBY_DEFAULT_LIMIT = 5
 _NEARBY_MAX_LIMIT = 10
@@ -571,7 +586,7 @@ def nearby_trees(
     return [payload for _, _, payload in measured[:limit]]
 
 
-@router.get("/{tree_id}", response_model=TreeOut)
+@router.get("/{tree_id}", response_model=TreeDetailOut)
 def get_tree(
     tree_id: int,
     db: Session = Depends(get_db),

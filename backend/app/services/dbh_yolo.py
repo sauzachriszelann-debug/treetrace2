@@ -104,7 +104,7 @@ def _original_mask(mask, width, height):
     return mask > 0.5
 
 
-def _predict_masks(image):
+def _predict_masks(image, *, confidence=0.4):
     import numpy as np
     from ultralytics import YOLO
     global _model
@@ -112,7 +112,7 @@ def _predict_masks(image):
     with _lock:
         if _model is None:
             _model = YOLO(str(MODEL_PATH))
-        prediction = _model.predict(np.asarray(image)[:, :, ::-1].copy(), imgsz=640, conf=0.4,
+        prediction = _model.predict(np.asarray(image)[:, :, ::-1].copy(), imgsz=640, conf=confidence,
                                     retina_masks=True, verbose=False, device="cpu", save=False, save_txt=False, save_crop=False)[0]
     if prediction.masks is None or prediction.boxes is None:
         return []

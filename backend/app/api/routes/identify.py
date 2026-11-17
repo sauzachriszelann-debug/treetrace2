@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form, R
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import date, datetime, timezone
 import base64
@@ -16,8 +16,11 @@ from app.models.unknown_species import UnknownSpecies
 from app.schemas.dbh import ARDBHRequest, ARDBHResponse, PhotoDBHRequest as MeasureDBHRequest
 from app.schemas.height import HeightRequest, HeightResponse
 from app.schemas.gallery_size import GallerySizeResponse
+from app.schemas.tree import TreeMeasurementInput
 from app.schemas.tree_age import TreeAgeRequest, TreeAgeResponse
+from app.schemas.species_comparison import SpeciesComparisonResponse
 from app.core.security import get_current_user, require_admin
+from app.api.routes.trees import _estimate_tree_carbon
 from app.api.routes.tree_submissions import (
     TREE_SUBMISSION_DAILY_LIMITS,
     require_staff,
@@ -46,15 +49,11 @@ router = APIRouter()
 
 
 @router.post("/estimate-age", response_model=TreeAgeResponse)
-async def estimate_age(payload: TreeAgeRequest, _: User = Depends(get_current_user),
-                       db: Session = Depends(get_db)):
+async def estimate_age(payload: TreeAgeRequest, _: User = Depends(get_current_user)):
     from app.services.tree_age import estimate_tree_age, estimate_ai_tree_age
     result = estimate_tree_age(payload)
     if result.status == "estimated" or (payload.dbh_cm is None and payload.height_m is None):
         return result
-    # Published profiles are free calculations. Only the provider fallback
-    # consumes an AI request; use the same authenticated plan limit as identify.
-    enforce_ai_limit(_, db)
     try:
         return await estimate_ai_tree_age(payload)
     except Exception:
@@ -128,9 +127,9 @@ async def species_model_status():
 
 
 AI_DAILY_LIMITS = {
-    "free": 10,
-    "pro": 50,
-    "professional": 50,
+    "free": None,
+    "pro": None,
+    "professional": None,
     "enterprise": None,
 }
 
@@ -226,16 +225,6 @@ def _enforce_limit(
     db.commit()
 
 
-def enforce_ai_limit(user: User, db: Session):
-    _enforce_limit(
-        user,
-        db,
-        limits=AI_DAILY_LIMITS,
-        counter_attr="ai_identifications_today",
-        feature_name="AI identifications",
-    )
-
-
 def enforce_unknown_limit(user: User, db: Session):
     _enforce_limit(
         user,
@@ -268,37 +257,64 @@ def ai_usage(
 async def gallery_size_prediction(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
     treetop_file: Optional[UploadFile] = File(None),
+    treebase_file: Optional[UploadFile] = File(None),
 ):
-    # Authenticated, quota-limited, display-only predictions; never tree writes.
+    # Authenticated, display-only predictions.
     if file.content_type not in ("image/jpeg", "image/png", "image/webp"):
         raise HTTPException(status_code=400, detail="Use JPEG, PNG or WebP.")
     contents = await file.read(2_000_001)
     if not contents or len(contents) > 2_000_000:
         raise HTTPException(status_code=413, detail="Prediction photo must be at most 2 MB.")
-    top_contents = None
-    if isinstance(treetop_file, StarletteUploadFile):
-        if treetop_file.content_type not in ("image/jpeg", "image/png", "image/webp"):
-            raise HTTPException(status_code=400, detail="Use JPEG, PNG or WebP for the treetop photo.")
-        top_contents = await treetop_file.read(2_000_001)
-        if not top_contents or len(top_contents) > 2_000_000:
-            raise HTTPException(status_code=413, detail="Treetop photo must be at most 2 MB.")
-    enforce_ai_limit(current_user, db)
+    supplements = {}
+    for name, photo in (("treetop", treetop_file), ("treebase", treebase_file)):
+        if not isinstance(photo, StarletteUploadFile):
+            continue
+        if photo.content_type not in ("image/jpeg", "image/png", "image/webp"):
+            raise HTTPException(status_code=400, detail=f"Use JPEG, PNG or WebP for the {name} photo.")
+        extra_contents = await photo.read(2_000_001)
+        if not extra_contents or len(extra_contents) > 2_000_000:
+            raise HTTPException(status_code=413, detail=f"The {name} photo must be at most 2 MB.")
+        supplements[f"{name}_bytes"] = extra_contents
+        supplements[f"{name}_content_type"] = photo.content_type
     from app.services.gallery_size_prediction import predict_gallery_size
-    if top_contents is not None:
-        return await predict_gallery_size(contents, file.content_type,
-            treetop_bytes=top_contents, treetop_content_type=treetop_file.content_type)
-    return await predict_gallery_size(contents, file.content_type)
+    return await predict_gallery_size(contents, file.content_type, **supplements)
+
+
+@router.post("/compare-species-models", response_model=SpeciesComparisonResponse)
+async def compare_species_model_predictions(
+    file: UploadFile = File(...),
+    _current_user: User = Depends(get_current_user),
+):
+    from app.services.local_species_classifier import (
+        TRIAL_MODEL_PATH, local_species_model_status, species_trial_enabled,
+    )
+
+    if not species_trial_enabled():
+        raise HTTPException(status_code=404, detail="Local model comparison is disabled.")
+    if not (file.content_type or "").startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image.")
+    if not local_species_model_status()["ready"]:
+        raise HTTPException(status_code=503, detail="Local species models are unavailable.")
+
+    from PIL import UnidentifiedImageError
+    from app.services.roboflow_classifier import compare_species_models
+
+    try:
+        results = await asyncio.to_thread(compare_species_models, await file.read(), TRIAL_MODEL_PATH)
+    except UnidentifiedImageError:
+        raise HTTPException(status_code=400, detail="The photo could not be opened.") from None
+    except (OSError, RuntimeError, ValueError, KeyError):
+        raise HTTPException(status_code=503, detail="Local species models could not run.") from None
+    return {"selected_model": "EfficientNet-B0", "results": results}
 
 
 @router.post("/identify")
 async def identify_tree(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    include_trunk_preview: bool = False,
 ):
-    enforce_ai_limit(current_user, db)
     if not (file.content_type or "").startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image.")
     contents = await file.read()
@@ -323,11 +339,27 @@ async def identify_tree(
         try:
             local_result = classify_species(image_bytes)
             if isinstance(local_result, dict):
-                local_result = restrict_scan_result(local_result)
+                checked_result = restrict_scan_result(local_result)
+                if (
+                    checked_result.get("not_identified")
+                    and local_result.get("source") == "local_efficientnet_b0_trial"
+                ):
+                    checked_result["source"] = local_result["source"]
+                    checked_result["confidence_percent"] = local_result["confidence_percent"]
+                    checked_result["below_confidence_threshold"] = (
+                        local_result.get("confidence") == "Low"
+                    )
+                    if checked_result["below_confidence_threshold"]:
+                        checked_result["suggested_species"] = {
+                            "common_name": local_result.get("common_name"),
+                            "scientific_name": local_result.get("scientific_name"),
+                            "confidence_percent": local_result["confidence_percent"],
+                        }
+                local_result = checked_result
                 local_result["roboflow_candidate"] = roboflow_candidate
                 from app.schemas.photo_observations import normalize_observations
                 local_result["photo_observations"] = normalize_observations(local_result.get("photo_observations"))
-            return local_result
+            return await _with_trunk_preview(local_result, image_bytes, include_trunk_preview)
         except Exception:
           # Keep the existing online AI pipeline available if local inference fails.
             pass
@@ -338,9 +370,9 @@ async def identify_tree(
             result["roboflow_candidate"] = roboflow_candidate
             from app.schemas.photo_observations import normalize_observations
             result["photo_observations"] = normalize_observations(result.get("photo_observations"))
-        return result
+        return await _with_trunk_preview(result, image_bytes, include_trunk_preview)
     except Exception as exc:
-        return {
+        result = {
             "not_identified": True,
             "roboflow_candidate": roboflow_candidate,
             "common_name": "Unknown species",
@@ -353,6 +385,22 @@ async def identify_tree(
             ),
             "debug_detail": str(exc),
         }
+        return await _with_trunk_preview(result, image_bytes, include_trunk_preview)
+
+
+async def _with_trunk_preview(result, image_bytes, requested):
+    if not requested or not isinstance(result, dict):
+        return result
+    try:
+        from app.services.gallery_size_prediction import _detect
+        detection, reason = await asyncio.to_thread(_detect, image_bytes)
+        if detection and detection.get("target_source") == "yolo":
+            result["trunk_preview_png"] = detection.get("preview_png")
+        else:
+            result["trunk_preview_reason"] = reason or "No trunk detected in this photo."
+    except Exception:
+        result["trunk_preview_reason"] = "Trunk preview could not be generated."
+    return result
 
 class IdentifyFromURLRequest(BaseModel):
     image_url: str
@@ -377,9 +425,7 @@ def _safe_dbh_estimate(reason: str, reference_hint: str, known_distance_m: Optio
 async def identify_from_url(
     payload: IdentifyFromURLRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
-    enforce_ai_limit(current_user, db)
     result = await identify_tree_from_url(payload.image_url)
     return result
 
@@ -559,8 +605,10 @@ def community_structure(
         "endangered_trees": endangered_list,
     }
 
-class UnknownSpeciesSubmit(BaseModel):
+class UnknownSpeciesSubmit(TreeMeasurementInput):
     photo_url: str
+    dbh_cm: Optional[float] = None
+    height_m: Optional[float] = None
     barangay: Optional[str] = None
     location_description: Optional[str] = None
     possible_name: Optional[str] = None
@@ -571,6 +619,7 @@ class UnknownSpeciesSubmit(BaseModel):
 class UnknownSpeciesReview(BaseModel):
     reviewed: bool = True
     identified_as: Optional[str] = None
+    identified_scientific_name: Optional[str] = Field(default=None, max_length=150)
     review_notes: Optional[str] = None
 
 
@@ -580,8 +629,12 @@ def _unknown_species_out(entry: UnknownSpecies):
     except json.JSONDecodeError:
         candidates = []
 
+    _, carbon = _estimate_tree_carbon(entry.dbh_cm, entry.height_m, require_height=True)
     return {
         "id": entry.id,
+        "dbh_cm": entry.dbh_cm,
+        "height_m": entry.height_m,
+        "carbon_kg": carbon,
         "photo_url": entry.photo_url,
         "location_description": entry.location_description,
         "barangay": entry.barangay,
@@ -591,6 +644,7 @@ def _unknown_species_out(entry: UnknownSpecies):
         "reviewed": entry.reviewed,
         "review_notes": entry.review_notes,
         "identified_as": entry.identified_as,
+        "identified_scientific_name": entry.identified_scientific_name,
         "submitted_by_id": entry.submitted_by_id,
         "submitted_by_name": entry.submitted_by.full_name if entry.submitted_by else None,
         "submitted_by_email": entry.submitted_by.email if entry.submitted_by else None,
@@ -618,6 +672,8 @@ def submit_unknown_species(
         location_description=payload.location_description,
         possible_name=payload.possible_name,
         submitter_notes=payload.submitter_notes,
+        dbh_cm=payload.dbh_cm,
+        height_m=payload.height_m,
         ai_candidates=json.dumps(payload.ai_candidates or []),
         submitted_by_id=current_user.id,
     )
@@ -649,18 +705,51 @@ def list_my_unknown_species(
     return [_unknown_species_out(entry) for entry in entries]
 
 
+@router.delete("/unknown-species/{entry_id}", status_code=204)
+def delete_my_unknown_species(
+    entry_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    entry = db.query(UnknownSpecies).filter(UnknownSpecies.id == entry_id).with_for_update().first()
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Unknown species submission not found")
+    if entry.submitted_by_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the submitter can delete this entry.")
+    converted = (
+        db.query(TreeSubmission.id)
+        .filter(TreeSubmission.source_unknown_species_id == entry.id)
+        .first()
+    )
+    if converted is not None or (entry.reviewed and not entry.identified_as):
+        raise HTTPException(status_code=409, detail="Refresh My Submissions to check the current status.")
+    db.delete(entry)
+    db.commit()
+
+
 @router.put("/unknown-species/{entry_id}/review")
 def review_unknown_species(
     entry_id: int,
     payload: UnknownSpeciesReview,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    current_user: User = Depends(require_admin),
 ):
-    entry = db.query(UnknownSpecies).filter(UnknownSpecies.id == entry_id).first()
+    entry = db.query(UnknownSpecies).filter(UnknownSpecies.id == entry_id).with_for_update().first()
     if not entry:
         raise HTTPException(status_code=404, detail="Unknown species submission not found")
 
+    if entry.submitted_by_id == current_user.id:
+        raise HTTPException(status_code=403, detail="You cannot review your own submission.")
+
     entry.reviewed = payload.reviewed
+    if "identified_scientific_name" in payload.model_fields_set:
+        entry.identified_scientific_name = (
+            (payload.identified_scientific_name or "").strip() or None
+            if payload.reviewed and payload.identified_as
+            else None
+        )
+    elif not payload.reviewed or payload.identified_as != entry.identified_as:
+        entry.identified_scientific_name = None
     entry.identified_as = payload.identified_as
     entry.review_notes = payload.review_notes
     db.commit()
@@ -708,7 +797,7 @@ def convert_unknown_species_to_submission(
       replay check return the already-created submission with HTTP 200 and
       Idempotent-Replay: true.
     """
-    entry = db.query(UnknownSpecies).filter(UnknownSpecies.id == entry_id).first()
+    entry = db.query(UnknownSpecies).filter(UnknownSpecies.id == entry_id).with_for_update().first()
     if entry is None:
         raise HTTPException(
             status_code=404, detail="Unknown species submission not found"
@@ -760,6 +849,9 @@ def convert_unknown_species_to_submission(
         try:
             submission = TreeSubmission(
                 common_name=(entry.identified_as or "").strip(),
+                scientific_name=entry.identified_scientific_name,
+                dbh_cm=entry.dbh_cm,
+                height_m=entry.height_m,
                 photo_url=entry.photo_url,
                 barangay=entry.barangay,
                 lat=lat,

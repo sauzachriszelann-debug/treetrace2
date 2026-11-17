@@ -1,7 +1,10 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { treeSubmissionsApi } from "@/api/treeSubmissions";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +22,7 @@ import {
 const PREFILL_KEY = "treetrace_submission_prefill";
 
 const STATUS_META = {
+  closed: { label: "Closed as Unresolved", className: "bg-slate-500", icon: XCircle },
   pending: { label: "Pending Review", className: "bg-amber-600", icon: Clock3 },
   approved: { label: "Approved", className: "bg-emerald-600", icon: CheckCircle2 },
   rejected: { label: "Rejected", className: "bg-slate-500", icon: XCircle },
@@ -27,9 +31,41 @@ const STATUS_META = {
 
 export default function MySubmissions() {
   const navigate = useNavigate();
-  const { data: submissions = [], isLoading } = useQuery({
+  const qc = useQueryClient();
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const { data: treeSubmissions = [], isLoading: loadingTrees, isError: treesError } = useQuery({
     queryKey: ["my-submissions"],
     queryFn: treeSubmissionsApi.my,
+  });
+
+  const { data: speciesSubmissions = [], isLoading: loadingSpecies, isError: speciesError } = useQuery({
+    queryKey: ["my-species-submissions"],
+    queryFn: treeSubmissionsApi.mySpecies,
+  });
+  const converted = new Set(treeSubmissions.map((entry) => entry.source_unknown_species_id));
+  const submissions = [
+    ...treeSubmissions,
+    ...speciesSubmissions.filter((entry) => !converted.has(entry.id)).map((entry) => ({
+      ...entry,
+      isSpeciesSubmission: true,
+      common_name: entry.identified_as || entry.ai_candidates?.[0]?.common_name || "Unknown species",
+      status: entry.review_status === "closed" ? "closed" : "pending",
+    })),
+  ].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+
+  const remove = useMutation({
+    mutationFn: (entry) => treeSubmissionsApi.deleteMine(entry.id, entry.isSpeciesSubmission),
+    onSuccess: () => {
+      setDeleteTarget(null);
+      toast.success("Submission deleted.");
+    },
+    onError: (error) => {
+      toast.error(error?.response?.data?.detail || "Could not delete the submission.");
+    },
+    onSettled: () => Promise.all(
+      [["my-submissions"], ["my-species-submissions"], ["submissions"], ["unknown-species"]]
+        .map((queryKey) => qc.invalidateQueries({ queryKey })),
+    ),
   });
 
   const resubmit = (submission) => {
@@ -68,8 +104,10 @@ export default function MySubmissions() {
         </p>
       </div>
 
-      {isLoading ? (
+      {loadingTrees || loadingSpecies ? (
         <div className="h-40 bg-muted rounded-xl animate-pulse" />
+      ) : treesError || speciesError ? (
+        <p role="alert" className="text-sm text-destructive">Could not load your submissions.</p>
       ) : submissions.length === 0 ? (
         <Card>
           <CardContent className="p-10 text-center text-muted-foreground">
@@ -84,9 +122,8 @@ export default function MySubmissions() {
         <div className="space-y-4">
           {submissions.map((submission) => {
             const meta = STATUS_META[submission.status] || STATUS_META.pending;
-            const StatusIcon = meta.icon;
             return (
-              <Card key={submission.id}>
+              <Card key={`${submission.isSpeciesSubmission ? "species" : "tree"}-${submission.id}`}>
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -181,10 +218,16 @@ export default function MySubmissions() {
                   )}
 
                   {submission.status === "pending" && (
-                    <p className="text-xs text-muted-foreground">
-                      Awaiting review by an admin or field worker.
-                      <Loader2 className="w-3 h-3 inline ml-1 animate-spin opacity-50" />
-                    </p>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs text-muted-foreground">
+                        {submission.isSpeciesSubmission
+                          ? "Awaiting species review."
+                          : "Awaiting inventory approval."}
+                      </p>
+                      <Button size="sm" variant="outline" onClick={() => setDeleteTarget(submission)}>
+                        Delete submission
+                      </Button>
+                    </div>
                   )}
                 </CardContent>
               </Card>
@@ -192,6 +235,25 @@ export default function MySubmissions() {
           })}
         </div>
       )}
+      <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => {
+        if (!open && !remove.isPending) setDeleteTarget(null);
+      }}>
+        <DialogContent>
+          <DialogTitle>Delete this submission?</DialogTitle>
+          <DialogDescription>
+            {deleteTarget?.common_name || "This entry"} will be removed from My Submissions and the review queue.
+          </DialogDescription>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={remove.isPending}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => remove.mutate(deleteTarget)} disabled={remove.isPending}>
+              {remove.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              Delete submission
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

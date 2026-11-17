@@ -118,6 +118,27 @@ def test_hidden_parts_are_not_reconstructed(monkeypatch, model, base, top, dbh, 
     assert result['predicted_dbh_cm'] == dbh and result['predicted_height_m'] == height
 
 
+@pytest.mark.parametrize('matched', [True, False])
+def test_added_base_requires_same_tree_and_supports_both_metrics(monkeypatch, model, matched):
+    monkeypatch.setattr(service, '_has_trunk_overlap', lambda *_: True)
+    provider = AsyncMock(return_value={
+        'target_identified': True, 'same_tree_confirmed': matched,
+        'same_tree_evidence': 'The same fork is visible in all three views.',
+        'base_visible': True, 'top_visible': True,
+        'dbh': {'value': 45, 'evidence': 'lower trunk', **visual_support()},
+        'height': {'value': 11, 'evidence': 'base and highest point', **visual_support()},
+    })
+    monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', provider)
+    result = immediate(service.predict_gallery_size(
+        photo(), 'image/jpeg', treebase_bytes=photo(), treebase_content_type='image/jpeg',
+        treetop_bytes=photo(), treetop_content_type='image/jpeg',
+    )).model_dump()
+    assert result['treebase_photo_used'] is matched
+    assert result['predicted_dbh_cm'] == (45 if matched else None)
+    assert result['predicted_height_m'] == (11 if matched else None)
+    assert provider.call_args.kwargs['treebase_image_b64'] == base64.b64encode(photo()).decode()
+
+
 def test_cropped_top_requests_another_photo(monkeypatch, model):
     monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', AsyncMock(return_value={
         'target_identified': True, 'base_visible': True, 'top_visible': False,
@@ -129,10 +150,17 @@ def test_cropped_top_requests_another_photo(monkeypatch, model):
     assert result['predicted_dbh_cm'] == 45
 
 
-@pytest.mark.parametrize('matched,top_visible,expected', [(True, True, 11), (False, True, None), (True, False, None)])
-def test_treetop_pair_needs_same_tree_and_visible_tip(monkeypatch, model, matched, top_visible, expected):
+@pytest.mark.parametrize('matched,evidence,top_visible,expected', [
+    (True, 'Same fork and scar in both views.', True, 11),
+    (True, '', True, None),
+    (False, '', True, None),
+    (True, 'Same fork in both views.', False, None),
+])
+def test_treetop_pair_needs_same_tree_and_visible_tip(monkeypatch, model, matched, evidence, top_visible, expected):
+    monkeypatch.setattr(service, '_has_trunk_overlap', lambda *_: True)
     provider = AsyncMock(return_value={
         'target_identified': True, 'same_tree_confirmed': matched,
+        'same_tree_evidence': evidence,
         'base_visible': True, 'top_visible': top_visible,
         'dbh': {'value': 45, 'evidence': 'original lower trunk', **visual_support()},
         'height': {'value': 11, 'reason_code': 'predicted',
@@ -147,6 +175,19 @@ def test_treetop_pair_needs_same_tree_and_visible_tip(monkeypatch, model, matche
     assert provider.call_args.kwargs['treetop_image_b64'] == base64.b64encode(photo()).decode()
     assert 'TWO IMAGES' in provider.call_args.args[2]
     assert_not_measured(result)
+
+
+def test_treetop_without_trunk_overlap_never_reaches_provider(monkeypatch, model):
+    monkeypatch.setattr(service, '_has_trunk_overlap', lambda *_: False)
+    provider = AsyncMock()
+    monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', provider)
+    result = immediate(service.predict_gallery_size(
+        photo(), 'image/jpeg', treetop_bytes=photo(), treetop_content_type='image/jpeg',
+    ))
+    assert result.predicted_height_m is None
+    assert not result.treetop_photo_used
+    assert 'insufficient matching trunk detail' in result.height_reason
+    provider.assert_not_awaited()
 
 
 def test_treetop_provider_sends_two_separate_images(monkeypatch):
@@ -172,20 +213,18 @@ def test_treetop_provider_sends_two_separate_images(monkeypatch):
 
 def test_route_validates_secondary_upload_and_passes_both_photos(monkeypatch):
     from app.api.routes import identify
-    calls = []
-    monkeypatch.setattr(identify, 'enforce_ai_limit', lambda *args: calls.append('quota'))
     predict = AsyncMock(return_value={'status': 'predicted', 'reason': 'two photos'})
     monkeypatch.setattr(service, 'predict_gallery_size', predict)
     def upload(contents, mime):
         return UploadFile(filename='photo', file=memory_file(contents),
             headers=Headers({'content-type': mime}))
     with pytest.raises(HTTPException) as error:
-        immediate(identify.gallery_size_prediction(upload(photo(), 'image/jpeg'), object(), None,
+        immediate(identify.gallery_size_prediction(upload(photo(), 'image/jpeg'), object(),
             treetop_file=upload(b'not an image', 'text/plain')))
-    assert error.value.status_code == 400 and calls == []
-    immediate(identify.gallery_size_prediction(upload(photo(), 'image/jpeg'), object(), None,
+    assert error.value.status_code == 400
+    predict.assert_not_called()
+    immediate(identify.gallery_size_prediction(upload(photo(), 'image/jpeg'), object(),
         treetop_file=upload(photo(), 'image/png')))
-    assert calls == ['quota']
     assert predict.call_args.kwargs['treetop_bytes'] == photo()
     assert predict.call_args.kwargs['treetop_content_type'] == 'image/png'
 
@@ -236,9 +275,23 @@ def test_gallery_retry_is_bounded_when_all_views_miss(model):
     model.return_value = []
     detection, reason = service._detect(photo())
     assert reason is None
-    assert model.call_count == 4
+    assert model.call_count == 5
     assert detection['trunk_detected'] is False
     assert detection['target_source'] == 'ai_visual'
+
+
+def test_gallery_low_confidence_retry_prefers_centered_trunk(model):
+    centered = np.zeros((360, 320), dtype=bool)
+    centered[20:300, 145:175] = True
+    off_center = np.zeros_like(centered)
+    off_center[:, :130] = True
+    model.side_effect = [[], [], [], [], [off_center, centered]]
+
+    detection, reason = service._detect(photo())
+
+    assert reason is None
+    assert model.call_args.kwargs == {'confidence': 0.25}
+    assert detection['target']['bbox'] == [305, 140, 334, 419]
 
 
 def test_center_crop_retry_maps_both_offsets_without_inventing_mask(model):
@@ -284,26 +337,19 @@ def test_route_requires_authentication():
 
 @pytest.mark.parametrize('mime,contents,status', [('text/plain', b'bad', 400),
     ('image/jpeg', b'', 413), ('image/jpeg', b'x' * 2_000_001, 413)], ids=['bad-type', 'empty', 'too-large'])
-def test_route_rejects_bad_upload_before_spending_quota(monkeypatch, mime, contents, status):
+def test_route_rejects_bad_upload(mime, contents, status):
     from app.api.routes import identify
-    quota = Mock()
-    monkeypatch.setattr(identify, 'enforce_ai_limit', quota)
     file = UploadFile(memory_file(contents), headers=Headers({'content-type': mime}))
     with pytest.raises(HTTPException) as error:
-        immediate(identify.gallery_size_prediction(file, object(), object()))
+        immediate(identify.gallery_size_prediction(file, object()))
     assert error.value.status_code == status
-    quota.assert_not_called()
 
 
-def test_route_preserves_quota_and_prediction_contract(monkeypatch, model):
+def test_route_preserves_prediction_contract(monkeypatch, model):
     from app.api.routes import identify
-    quota = Mock()
-    monkeypatch.setattr(identify, 'enforce_ai_limit', quota)
     monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', AsyncMock(return_value=None))
     file = UploadFile(memory_file(photo()), headers=Headers({'content-type': 'image/jpeg'}))
-    user, db = object(), object()
-    result = immediate(identify.gallery_size_prediction(file, user, db))
-    quota.assert_called_once_with(user, db)
+    result = immediate(identify.gallery_size_prediction(file, object()))
     assert_not_measured(result.model_dump())
 
 

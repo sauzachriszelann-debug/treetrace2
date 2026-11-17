@@ -62,6 +62,28 @@ second photo still crops the top, height remains null with top_hidden.
 Never infer an unseen tip. Do not use a fixed species height or fallback number.
 """
 
+TREEBASE_PROMPT = """
+The last image is a supplemental tree-base photo. Confirm it shows the same
+individual tree as the original using overlapping trunk or branch features.
+If a separate top photo is also supplied, confirm all three show the same tree.
+Set same_tree_confirmed=false if any supplied view cannot be matched.
+Use the last image to determine base_visible and evaluate the trunk near breast
+height. Use the original image for top_visible unless a top photo is supplied,
+in which case use the second image for top_visible. Estimate total tree height
+only when both endpoints are visible and the views match. Unknown physical scale
+still applies. Leave any unsupported metric null.
+"""
+
+SAME_TREE_PROMPT = """
+For each supplemental photo, require a specific, visually distinctive feature
+in the overlapping part of the original tree, such as the same branching fork,
+trunk scar, or root pattern in the same relative position. Describe the feature
+for each supplemental view in same_tree_evidence. Similar species, foliage,
+bark texture, or background alone are insufficient. If overlap is missing,
+ambiguous, or inconsistent, set same_tree_confirmed=false and leave evidence
+empty. Never claim a feature that cannot be seen in both views.
+"""
+
 
 METRIC_REASONS = {
     'predicted': 'Appearance-based AI prediction; physical scale is unknown and accuracy is unvalidated.',
@@ -99,11 +121,17 @@ def _detect(image_bytes):
         w, h = image.size
         views = [(0, h // 3, w, h),
                  (w // 10, h // 4, 9 * w // 10, 3 * h // 4),
-                 (w // 10, h // 2, 9 * w // 10, h)]
-        for left, top, right, bottom in views:
+                 (w // 10, h // 2, 9 * w // 10, h),
+                 (w // 4, h // 4, w - w // 4, h)]
+        for index, (left, top, right, bottom) in enumerate(views):
             crop = image.crop((left, top, right, bottom))
-            for candidate in dbh_yolo._predict_masks(crop):
-                if not np.any(candidate):
+            # The tight center crop gets a second pass at lower confidence.
+            # Only accept a mask crossing the crop center in that pass.
+            relaxed = index == len(views) - 1
+            candidates = (dbh_yolo._predict_masks(crop, confidence=0.25)
+                          if relaxed else dbh_yolo._predict_masks(crop))
+            for candidate in candidates:
+                if not np.any(candidate) or (relaxed and not np.any(candidate[:, candidate.shape[1] // 2])):
                     continue
                 restored = np.zeros((h, w), dtype=bool)
                 restored[top:bottom, left:right] = candidate
@@ -184,16 +212,68 @@ def _metric_result(raw, name, maximum):
     return float(round(value)), 'predicted', METRIC_REASONS['predicted']
 
 
-def _validate_treetop(image_bytes):
+def _validate_supplement(image_bytes):
     from PIL import Image
     with Image.open(io.BytesIO(image_bytes)) as image:
         if image.width * image.height > 20_000_000:
-            raise ValueError('Treetop photo resolution is too large.')
+            raise ValueError('Supplemental photo resolution is too large.')
         image.verify()
 
 
+def _has_trunk_overlap(original, supplement, bbox):
+    """Require geometrically consistent photo features on the original trunk."""
+    import cv2
+    import numpy as np
+    from PIL import Image, ImageOps
+
+    if not bbox:
+        return False
+
+    def grayscale(data, crop=None):
+        with Image.open(io.BytesIO(data)) as opened:
+            image = ImageOps.exif_transpose(opened).convert("L")
+        if crop:
+            left, top, right, bottom = crop
+            inset = (right - left) // 10
+            image = image.crop((left + inset, top, right - inset + 1, bottom + 1))
+        image.thumbnail((1000, 1000))
+        return np.asarray(image)
+
+    detector = cv2.SIFT_create(nfeatures=2500)
+    source_points, source = detector.detectAndCompute(grayscale(original, bbox), None)
+    target_points, target = detector.detectAndCompute(grayscale(supplement), None)
+    if source is None or target is None or len(target) < 2:
+        return False
+
+    pairs = cv2.BFMatcher().knnMatch(source, target, k=2)
+    # A distinctive match must be substantially closer than the next candidate.
+    good = {}
+    for pair in pairs:
+        if len(pair) != 2:
+            continue
+        first, second = pair
+        if first.distance < 0.70 * second.distance:
+            previous = good.get(first.trainIdx)
+            if previous is None or first.distance < previous.distance:
+                good[first.trainIdx] = first
+    if len(good) < 12:
+        return False
+
+    matched_source = np.float32([source_points[m.queryIdx].pt for m in good.values()])
+    matched_target = np.float32([target_points[m.trainIdx].pt for m in good.values()])
+    _, mask = cv2.findHomography(matched_source, matched_target, cv2.RANSAC, 3)
+    if mask is None:
+        return False
+    inliers = matched_source[mask.ravel() == 1]
+    if len(inliers) < 12 or len(inliers) < len(good) * 0.6:
+        return False
+    # Reject matches concentrated on a single spot or a nearly straight line.
+    return cv2.contourArea(cv2.convexHull(inliers)) >= 100
+
+
 async def predict_gallery_size(image_bytes, content_type, *, treetop_bytes=None,
-                               treetop_content_type=None):
+                               treetop_content_type=None, treebase_bytes=None,
+                               treebase_content_type=None):
     from app.services.ai_identify import gallery_vision_prediction, GalleryVisionError
     try:
         detection, reason = await asyncio.to_thread(_detect, image_bytes)
@@ -203,13 +283,32 @@ async def predict_gallery_size(image_bytes, content_type, *, treetop_bytes=None,
         return GallerySizeResponse(status='cannot_estimate', reason=reason)
     target = detection.pop('target')
     try:
+        for part, supplement in (('treetop', treetop_bytes), ('tree base', treebase_bytes)):
+            if supplement is None:
+                continue
+            await asyncio.to_thread(_validate_supplement, supplement)
+            if not await asyncio.to_thread(_has_trunk_overlap, image_bytes, supplement, target.get('bbox')):
+                reason = (f'The {part} photo has insufficient matching trunk detail. '
+                          'Retake it with a clearly overlapping section of the original trunk.')
+                return GallerySizeResponse(
+                    status='cannot_estimate', **detection, reason=reason,
+                    needs_treetop_photo=part == 'treetop',
+                    needs_treebase_photo=part == 'tree base',
+                    dbh_reason=reason if part == 'tree base' else None,
+                    height_reason=reason,
+                )
         extra = {}
         prompt = PROMPT
         if treetop_bytes is not None:
-            await asyncio.to_thread(_validate_treetop, treetop_bytes)
             extra = dict(treetop_image_b64=base64.b64encode(treetop_bytes).decode(),
                          treetop_content_type=treetop_content_type)
             prompt += TREETOP_PROMPT
+        if treebase_bytes is not None:
+            extra.update(treebase_image_b64=base64.b64encode(treebase_bytes).decode(),
+                         treebase_content_type=treebase_content_type)
+            prompt += TREEBASE_PROMPT
+        if extra:
+            prompt += SAME_TREE_PROMPT
         raw = await gallery_vision_prediction(
             base64.b64encode(image_bytes).decode(), content_type,
             prompt + '\nTarget trunk diagnostics (pixels, NOT metric scale): ' + json.dumps(target), **extra)
@@ -232,13 +331,23 @@ async def predict_gallery_size(image_bytes, content_type, *, treetop_bytes=None,
             reason='AI could not identify one clear target tree. No sizes predicted.')
     dbh, dbh_code, dbh_reason = _metric_result(raw, 'dbh', 300)
     height, height_code, height_reason = _metric_result(raw, 'height', 80)
-    if treetop_bytes is not None and (raw.get('same_tree_confirmed') is not True or not identified):
+    evidence = raw.get('same_tree_evidence')
+    matched = (raw.get('same_tree_confirmed') is True and identified
+               and isinstance(evidence, str) and bool(evidence.strip()))
+    if treebase_bytes is not None and not matched:
+        return GallerySizeResponse(
+            status='cannot_estimate', **detection, needs_treebase_photo=True,
+            dbh_reason_code='ambiguous_target', height_reason_code='ambiguous_target',
+            reason='The added photos could not be matched to the original tree. Include overlapping trunk or branches.')
+    if treetop_bytes is not None and not matched:
         height, height_code, height_reason = None, 'ambiguous_target', 'The treetop photo could not be matched to the original tree. Include overlapping trunk or branches of the same tree.'
     return GallerySizeResponse(
         status='predicted' if dbh is not None or height is not None else 'cannot_estimate',
         predicted_dbh_cm=dbh, predicted_height_m=height, **detection,
-        needs_treetop_photo=height_code == 'top_hidden',
+        needs_treetop_photo=height_code == 'top_hidden' or (identified and raw.get('top_visible') is False),
         treetop_photo_used=treetop_bytes is not None and height is not None,
+        needs_treebase_photo=dbh_code == 'base_hidden' or height_code == 'base_hidden',
+        treebase_photo_used=treebase_bytes is not None and matched and raw.get('base_visible') is True,
         target_identified=identified,
         dbh_reason_code=dbh_code, dbh_reason=dbh_reason,
         height_reason_code=height_code, height_reason=height_reason,

@@ -18,6 +18,16 @@ export const treeSubmissionsApi = {
     return data;
   },
 
+  mySpecies: async () => {
+    const { data } = await api.get("/ai/my-unknown-species");
+    return data;
+  },
+
+  deleteMine: async (id, isSpeciesSubmission) => {
+    const path = isSpeciesSubmission ? "/ai/unknown-species" : "/tree-submissions";
+    await api.delete(`${path}/${id}`);
+  },
+
   approve: async (id, overrides = {}) => {
     const { data } = await api.post(`/tree-submissions/${id}/approve`, overrides);
     return data;

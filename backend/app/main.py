@@ -57,6 +57,28 @@ def sync_subscription_columns():
             conn.execute(text(statement))
 
 
+def sync_unknown_species_columns():
+    from sqlalchemy import inspect
+
+    columns = {
+        "identified_scientific_name": "VARCHAR(150)",
+        "dbh_cm": "DOUBLE PRECISION",
+        "height_m": "DOUBLE PRECISION",
+    }
+    with engine.begin() as conn:
+        if conn.dialect.name == "postgresql":
+            for name, column_type in columns.items():
+                conn.execute(text(
+                    f"ALTER TABLE unknown_species ADD COLUMN IF NOT EXISTS {name} {column_type}"
+                ))
+        else:
+            existing = {column["name"] for column in inspect(conn).get_columns("unknown_species")}
+            for name, column_type in columns.items():
+                if name not in existing:
+                    conn.execute(text(f"ALTER TABLE unknown_species ADD COLUMN {name} {column_type}"))
+
+
+
 _IDEMPOTENCY_INDEX = "ux_trees_client_uuid"
 
 
@@ -498,6 +520,7 @@ def startup_event():
     try:
         # This will create tables if they don't exist
         Base.metadata.create_all(bind=engine)
+        sync_unknown_species_columns()
         sync_subscription_columns()
         sync_postgres_sequences()
         print("Database connection successful and tables synchronized!")

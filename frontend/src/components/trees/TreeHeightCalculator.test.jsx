@@ -37,13 +37,10 @@ describe("tree height calculation", () => {
 });
 
 function enterExampleAngles() {
-  fireEvent.change(screen.getByLabelText("Horizontal distance (m)"), {
-    target: { value: "10" },
-  });
-  fireEvent.change(screen.getByLabelText("Angle to tree top (°)"), {
+  fireEvent.change(screen.getByLabelText("Upper clinometer reading (°)"), {
     target: { value: "45" },
   });
-  fireEvent.change(screen.getByLabelText("Angle to tree base (°)"), {
+  fireEvent.change(screen.getByLabelText("Base clinometer reading (°)"), {
     target: { value: "-10" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Calculate Estimate" }));
@@ -80,15 +77,18 @@ describe("tree height calculator dialog", () => {
   });
 
   test("accepted estimate fills the existing editable Add Tree height field", () => {
+    const onSubmit = vi.fn();
     render(
       <MemoryRouter>
-        <TreeForm onSubmit={vi.fn()} />
+        <TreeForm onSubmit={onSubmit} />
       </MemoryRouter>,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Calculate Tree Height" }));
     enterExampleAngles();
+    expect(onSubmit).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Accept Height" }));
+    expect(onSubmit).not.toHaveBeenCalled();
 
     const heightInput = screen.getByLabelText("Height (m)");
     expect(heightInput).toHaveValue(11.76);

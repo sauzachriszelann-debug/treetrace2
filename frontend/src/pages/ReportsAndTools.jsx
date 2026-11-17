@@ -375,7 +375,6 @@ export default function ReportsAndTools() {
             <div className="grid grid-cols-2 gap-3 text-sm">
               <Metric label="Total Users" value={analytics?.total_users ?? 0} />
               <Metric label="Active Users" value={analytics?.active_users ?? 0} />
-              <Metric label="AI Uses Today" value={analytics?.ai_identifications_today ?? 0} />
               <Metric label="Free Users" value={analytics?.by_plan?.free ?? 0} />
             </div>
           </CardContent>

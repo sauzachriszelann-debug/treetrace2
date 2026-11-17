@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 
 const positive = value => typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
 
-export default function TreeAgeEstimate({ scientificName, dbhCm, heightM, dimensionsSource = 'ai_prediction' }) {
+export default function TreeAgeEstimate({ scientificName, dbhCm, heightM, preliminarySpecies = false, dimensionsSource = 'ai_prediction' }) {
   const [state, setState] = useState({ loading: true });
   const [retry, setRetry] = useState(0);
   useEffect(() => {
@@ -17,8 +17,8 @@ export default function TreeAgeEstimate({ scientificName, dbhCm, heightM, dimens
     }, { signal: controller.signal })).then(result => {
       if (active) setState({ result });
     }).catch(error => {
-      if (active) setState({ error: [402, 429].includes(error?.response?.status)
-        ? 'AI age request limit reached. Try again later.' : 'Age estimate could not load. Try again.' });
+      if (active) setState({ error: error?.response?.status === 429
+        ? 'AI age estimation is temporarily busy. Try again later.' : 'Age estimate could not load. Try again.' });
     }), 250);
     return () => { active = false; clearTimeout(timer); controller.abort(); };
   }, [scientificName, dbhCm, heightM, dimensionsSource, retry]);
@@ -31,6 +31,7 @@ export default function TreeAgeEstimate({ scientificName, dbhCm, heightM, dimens
   try { if (new URL(age?.source?.url).protocol === 'https:') sourceUrl = age.source.url; } catch { /* No verified source URL. */ }
   return <section aria-label="Estimated age" className="rounded-xl border p-4 space-y-2">
     <h3 className="font-semibold">Estimated age</h3>
+    {preliminarySpecies && <p className="text-sm text-muted-foreground">Preliminary estimate based on the suggested species.</p>}
     {state.loading ? <p role="status">Checking growth data and estimating age…</p> : state.error ? <>
       <p role="alert">{state.error}</p>
       <Button type="button" variant="outline" onClick={() => setRetry(n => n + 1)}>Retry age estimate</Button>

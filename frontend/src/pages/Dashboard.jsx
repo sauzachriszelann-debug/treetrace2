@@ -13,13 +13,24 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { format } from "date-fns";
 import { formatCarbonKg } from "@/lib/format";
 
+const carbonNumber = new Intl.NumberFormat("en-PH", { maximumFractionDigits: 2 });
+const compactCarbonNumber = new Intl.NumberFormat("en-PH", { notation: "compact" });
+
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const { data: trees = [], isLoading } = useQuery({
-    queryKey: ["trees"],
-    queryFn: () => treesApi.list({ limit: 200 }),
+  const { data: trees = [], isLoading, isError } = useQuery({
+    queryKey: ["trees", "dashboard"],
+    queryFn: async () => {
+      const limit = 200;
+      const records = [];
+      for (let skip = 0; ; skip += limit) {
+        const page = await treesApi.list({ skip, limit });
+        records.push(...page);
+        if (page.length < limit) return records;
+      }
+    },
   });
 
   const { data: logs = [] } = useQuery({
@@ -37,13 +48,31 @@ export default function Dashboard() {
     queryFn: () => plantingApi.list(),
   });
 
+  const barangays = new Map();
+  let totalCarbon = 0;
+  for (const tree of trees) {
+    const name = tree.barangay?.trim() || "Unassigned";
+    const key = name.toLowerCase();
+    const row = barangays.get(key) ?? { name, total: 0, estimated: 0, carbonKg: 0 };
+    row.total += 1;
+    if (Number.isFinite(tree.carbon_kg) && tree.carbon_kg >= 0) {
+      row.estimated += 1;
+      row.carbonKg += tree.carbon_kg;
+      totalCarbon += tree.carbon_kg;
+    }
+    barangays.set(key, row);
+  }
+  const carbonByBarangay = [...barangays.values()]
+    .filter((row) => row.estimated > 0)
+    .sort((a, b) => b.carbonKg - a.carbonKg || a.name.localeCompare(b.name));
+
   const stats = {
     total: trees.length,
     healthy: trees.filter((t) => t.health_status === "Healthy").length,
     fair: trees.filter((t) => t.health_status === "Fair").length,
     poor: trees.filter((t) => t.health_status === "Poor").length,
     notAssessed: trees.filter((t) => !["Healthy", "Fair", "Poor"].includes(t.health_status)).length,
-    totalCarbon: trees.reduce((s, t) => s + (t.carbon_kg || 0), 0),
+    totalCarbon,
     gpsTagged: trees.filter((t) => t.lat && t.lng).length,
   };
 
@@ -95,7 +124,7 @@ export default function Dashboard() {
         <StatsCard title="Need Attention" value={stats.fair + stats.poor}
           subtitle={`${stats.fair} Fair, ${stats.poor} Poor`} icon={AlertTriangle} color="amber" onClick={() => navigate("/trees?health=attention")} />
         <StatsCard title="Carbon Stock" value={formatCarbonKg(stats.totalCarbon)}
-          subtitle="Total CO2 equivalent" icon={Activity} color="blue" onClick={() => navigate("/trees")} />
+          subtitle="Estimated carbon stored" icon={Activity} color="blue" onClick={() => navigate("/trees")} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -129,8 +158,40 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
+        <Card className="min-w-0 lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="font-fraunces text-lg">Estimated Carbon Stock per Barangay</CardTitle>
+            <p className="text-sm text-muted-foreground">Totals for recorded trees with estimates, in kilograms of carbon (kg C).</p>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <p className="text-sm text-muted-foreground">Loading carbon stock…</p>
+            ) : isError && !trees.length ? (
+              <p className="text-sm text-muted-foreground">Unable to load carbon stock data.</p>
+            ) : carbonByBarangay.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No carbon stock estimates recorded yet.</p>
+            ) : (
+              <div className="max-h-56 overflow-y-auto">
+                <ResponsiveContainer width="100%" height={Math.max(180, carbonByBarangay.length * 22 + 30)}>
+                  <BarChart data={carbonByBarangay} layout="vertical" barCategoryGap="30%" margin={{ right: 20 }}>
+                    <XAxis type="number" tick={{ fontSize: 12 }} tickFormatter={(value) => compactCarbonNumber.format(value)} />
+                    <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 12 }} interval={0} />
+                    <Tooltip
+                      formatter={(value, _name, item) => [
+                        `${carbonNumber.format(value)} kg C`,
+                        `${item.payload.estimated} of ${item.payload.total} trees with estimates`,
+                      ]}
+                    />
+                    <Bar dataKey="carbonKg" fill="#10b981" radius={[0, 6, 6, 0]} maxBarSize={16} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Recent Trees */}
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-3">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="font-fraunces text-lg">Recent Entries</CardTitle>
             <Link to="/trees" className="text-primary text-sm hover:underline">View all</Link>

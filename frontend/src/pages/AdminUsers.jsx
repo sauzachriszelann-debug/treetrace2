@@ -362,9 +362,6 @@ export default function AdminUsers() {
                           )}
                         </div>
                         <p className="text-muted-foreground text-xs">{u.email}</p>
-                        <p className="text-muted-foreground text-xs">
-                          AI today: {u.ai_identifications_today ?? 0}{u.subscription_plan === "pro" || isInstitutional ? " · unlimited" : " / 3 free"}
-                        </p>
                       </div>
                     </div>
 

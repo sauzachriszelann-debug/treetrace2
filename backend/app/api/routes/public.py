@@ -1,16 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
+from pydantic import ValidationError
 from app.db.database import get_db
 from app.models.tree import Tree
 from app.models.health_log import HealthLog
-from app.schemas.tree import PublicTreeOut
+from app.schemas.tree import PublicTreeOut, PublicTreeProfileOut
+from app.schemas.tree_age import TreeAgeRequest
+from app.services.tree_age import estimate_tree_age
 from app.schemas.health_log import PublicHealthLogOut
 
 router = APIRouter()
 
 
-@router.get("/tree/{tree_id}", response_model=PublicTreeOut)
+@router.get("/tree/{tree_id}", response_model=PublicTreeProfileOut)
 def public_get_tree(tree_id: str, db: Session = Depends(get_db)):
     """
     Public endpoint — no auth required.
@@ -27,7 +30,21 @@ def public_get_tree(tree_id: str, db: Session = Depends(get_db)):
 
     if not tree:
         raise HTTPException(status_code=404, detail="Tree not found")
-    return tree
+    profile = PublicTreeProfileOut.model_validate(tree)
+    if not tree.scientific_name or (tree.dbh_cm is None and tree.height_m is None):
+        return profile
+    try:
+        request = TreeAgeRequest(
+            scientific_name=tree.scientific_name,
+            dbh_cm=tree.dbh_cm,
+            height_m=tree.height_m,
+        )
+    except ValidationError:
+        return profile
+    age = estimate_tree_age(request)
+    if age.status == "estimated":
+        profile.estimated_age_years = age.dbh_age_years or age.height_age_years
+    return profile
 
 
 @router.get("/tree/{tree_id}/health-logs", response_model=List[PublicHealthLogOut])

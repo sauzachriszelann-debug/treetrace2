@@ -1,8 +1,15 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { treesApi } from "@/api/trees";
 import TreeForm from "@/components/trees/TreeForm";
+import TreeDetail from "./TreeDetail";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
@@ -64,10 +71,22 @@ export default function AddTree() {
   const [pendingReplacement, setPendingReplacement] = useState(null);
   // G3 nearby matching: advisory duplicate prevention before NEW submissions.
   const [nearbyCandidates, setNearbyCandidates] = useState(null);
-  const [nearbyError, setNearbyError] = useState(false);
+  const [nearbyIssue, setNearbyIssue] = useState(null);
+  const [nearbyRecordId, setNearbyRecordId] = useState(null);
   const [nearbyPendingData, setNearbyPendingData] = useState(null);
   const { user } = useAuth();
   const { enqueue } = useOfflineSyncStore();
+  const formContainer = useRef(null);
+  const reviewDialog = useRef(null);
+  const reviewTitle = useRef(null);
+  const nearbyReviewOpen = Boolean(nearbyCandidates || nearbyIssue);
+
+  useEffect(() => {
+    if (nearbyReviewOpen && reviewDialog.current) {
+      reviewDialog.current.scrollTop = 0;
+      reviewTitle.current?.focus({ preventScroll: true });
+    }
+  }, [nearbyReviewOpen, nearbyRecordId]);
 
   if (user?.role === "citizen") {
     return (
@@ -286,9 +305,8 @@ export default function AddTree() {
 
   // ── Nearby matching suggestions (G3) ─────────────────────────────────────
   // Advisory duplicate prevention: a read-only lookup before a NEW
-  // submission. G2 flows that reuse an existing key (Retry Original, edited
-  // saves of a pending submission) skip it entirely, and a failed check is
-  // never presented as "no matches".
+  // submission. If an earlier request may have reached the server, let
+  // the idempotent retry resolve it using the original submission key.
   const submitPossiblyWithNearbyCheck = async (data, draftMeta, extra = {}) => {
     // Offline: the nearby check cannot run and nothing can be sent - the
     // queue takes over directly (G7).
@@ -296,17 +314,13 @@ export default function AddTree() {
       await performSubmit(data, draftMeta, { photoFile: extra.photoFile });
       return;
     }
-    if (draftMeta?.key) {
+    if (draftMeta?.original_payload) {
       await performSubmit(data, draftMeta, { photoFile: extra.photoFile });
       return;
     }
-    if (
-      data.lat === undefined ||
-      data.lat === null ||
-      data.lng === undefined ||
-      data.lng === null
-    ) {
-      await performSubmit(data, draftMeta, { photoFile: extra.photoFile });
+    if (data.lat == null || data.lng == null) {
+      setNearbyIssue("missing-gps");
+      setNearbyPendingData({ data, draftMeta, extra });
       return;
     }
     setLoading(true);
@@ -319,13 +333,13 @@ export default function AddTree() {
       });
       if (candidates.length > 0) {
         setNearbyCandidates(candidates);
-        setNearbyPendingData({ data, extra });
+        setNearbyPendingData({ data, draftMeta, extra });
         return;
       }
       await performSubmit(data, draftMeta, { photoFile: extra.photoFile });
     } catch {
-      setNearbyError(true);
-      setNearbyPendingData({ data, extra });
+      setNearbyIssue("lookup-failed");
+      setNearbyPendingData({ data, draftMeta, extra });
     } finally {
       setLoading(false);
     }
@@ -334,26 +348,26 @@ export default function AddTree() {
   const proceedPastNearbyCheck = async () => {
     const pending = nearbyPendingData;
     setNearbyCandidates(null);
-    setNearbyError(false);
+    setNearbyIssue(null);
     setNearbyPendingData(null);
     if (pending)
-      await performSubmit(pending.data, null, {
+      await performSubmit(pending.data, pending.draftMeta, {
         photoFile: pending.extra?.photoFile,
       });
   };
 
   const cancelNearbyCheck = () => {
     setNearbyCandidates(null);
-    setNearbyError(false);
+    setNearbyIssue(null);
     setNearbyPendingData(null);
     toast.info("Registration stopped. Nothing was submitted.");
   };
 
   return (
-    <div className="p-8 max-w-2xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8">
       <Link
         to="/trees"
-        className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm mb-6 transition-colors"
+        className="mb-4 flex w-fit items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="w-4 h-4" />
         Back to Inventory
@@ -404,83 +418,6 @@ export default function AddTree() {
                 ask for confirmation first.
               </p>
             )}
-        </div>
-      )}
-
-      {nearbyCandidates && (
-        <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm">
-          <p className="font-medium text-amber-900">
-            Possible existing trees nearby
-          </p>
-          <p className="mt-1 text-amber-800">
-            {nearbyCandidates.length === 1
-              ? "An existing record is close to this location."
-              : `${nearbyCandidates.length} existing records are close to this location.`}{" "}
-            Review them before registering a new tree. Nothing will be merged,
-            overwritten, or rejected automatically.
-          </p>
-          <ul className="mt-3 space-y-2">
-            {nearbyCandidates.map((candidate) => (
-              <li
-                key={candidate.tree_id}
-                className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-white/60 p-2.5"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-medium text-foreground">
-                    {candidate.common_name}
-                    {candidate.scientific_name
-                      ? ` (${candidate.scientific_name})`
-                      : ""}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    ~{Math.round(candidate.distance_m)} m away
-                    {candidate.barangay ? ` · ${candidate.barangay}` : ""} ·{" "}
-                    {candidate.species_match === "exact"
-                      ? "same species"
-                      : candidate.species_match === "unknown"
-                        ? "species not provided"
-                        : "different species"}
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => navigate(`/trees/${candidate.tree_id}`)}
-                >
-                  View record
-                </Button>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-3 flex gap-2">
-            <Button size="sm" variant="outline" onClick={proceedPastNearbyCheck}>
-              Register as a new tree anyway
-            </Button>
-            <Button size="sm" variant="ghost" onClick={cancelNearbyCheck}>
-              Cancel
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {nearbyError && (
-        <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm">
-          <p className="font-medium text-amber-900">
-            The nearby check could not be completed
-          </p>
-          <p className="mt-1 text-amber-800">
-            Possible existing trees could not be verified (network or server
-            problem). This is NOT the same as &quot;no matches&quot; - your
-            registration is simply unchecked.
-          </p>
-          <div className="mt-3 flex gap-2">
-            <Button size="sm" variant="outline" onClick={proceedPastNearbyCheck}>
-              Continue without nearby check
-            </Button>
-            <Button size="sm" variant="ghost" onClick={cancelNearbyCheck}>
-              Cancel
-            </Button>
-          </div>
         </div>
       )}
 
@@ -576,14 +513,116 @@ export default function AddTree() {
         </div>
       )}
 
-      <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+      <div ref={formContainer} className="mx-auto max-w-4xl rounded-xl border border-border bg-card p-4 sm:p-6">
         <TreeForm
           key={formKey}
           initial={formInitial}
           onSubmit={handleSubmit}
           loading={loading}
+          compactSubmit
         />
       </div>
+
+      <Dialog
+        open={nearbyReviewOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setNearbyRecordId(null);
+            cancelNearbyCheck();
+          }
+        }}
+      >
+        <DialogContent
+          ref={reviewDialog}
+          className={
+            nearbyRecordId
+              ? "max-h-[90dvh] w-[calc(100%_-_2rem)] max-w-6xl overflow-y-auto rounded-xl p-4 sm:p-6"
+              : "max-h-[85dvh] w-[calc(100%_-_2rem)] overflow-y-auto rounded-xl sm:max-w-2xl"
+          }
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            formContainer.current?.querySelector('button[type="submit"]')?.focus({ preventScroll: true });
+          }}
+        >
+          {nearbyRecordId ? (
+            <>
+              <DialogTitle ref={reviewTitle} tabIndex={-1}>Existing tree record</DialogTitle>
+              <DialogDescription>Review this tree before saving your new entry.</DialogDescription>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-fit"
+                onClick={() => setNearbyRecordId(null)}
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to nearby trees
+              </Button>
+              <TreeDetail key={nearbyRecordId} previewId={nearbyRecordId} />
+            </>
+          ) : (
+            <>
+              <DialogTitle ref={reviewTitle} tabIndex={-1}>
+                {nearbyIssue === "missing-gps"
+                  ? "GPS coordinates needed for duplicate check"
+                  : nearbyIssue
+                    ? "The nearby check could not be completed"
+                    : "Possible existing trees nearby"}
+              </DialogTitle>
+              <DialogDescription>
+                {nearbyIssue === "missing-gps"
+                  ? "Use Capture GPS or enter latitude and longitude to check for nearby trees."
+                  : nearbyIssue
+                    ? "TreeTrace could not verify whether existing trees are near this location."
+                    : "Review the nearby records before registering a new tree."}
+              </DialogDescription>
+              {nearbyCandidates && (
+                <ul className="space-y-2">
+                  {nearbyCandidates.map((candidate) => (
+                    <li
+                      key={candidate.tree_id}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 p-2.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-foreground">
+                          {candidate.common_name}
+                          {candidate.scientific_name
+                            ? ` (${candidate.scientific_name})`
+                            : ""}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          ~{Math.round(candidate.distance_m)} m away
+                          {candidate.barangay ? ` · ${candidate.barangay}` : ""} ·{" "}
+                          {candidate.species_match === "exact"
+                            ? "same species"
+                            : candidate.species_match === "unknown"
+                              ? "species not provided"
+                              : "different species"}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setNearbyRecordId(String(candidate.tree_id))}
+                      >
+                        View record
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button type="button" size="sm" variant="ghost" onClick={cancelNearbyCheck}>
+                  Cancel
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={proceedPastNearbyCheck}>
+                  {nearbyIssue ? "Save without duplicate check" : "Register as a new tree"}
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

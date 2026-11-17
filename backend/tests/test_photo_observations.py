@@ -43,13 +43,13 @@ def test_invalid_findings_do_not_become_absence_of_symptoms():
     assert normalize_observations(raw)['no_visible_signs'] is False
 
 
-@pytest.mark.parametrize('gemini_species,expected', [('Alpha beta', True), ('Gamma delta', False)])
+@pytest.mark.parametrize('gemini_species,expected', [('Mangifera indica', True), ('Terminalia catappa', False)])
 def test_reference_photos_follow_final_species(monkeypatch, gemini_species, expected):
     monkeypatch.setattr(ai_identify, '_plantnet', AsyncMock(return_value={
-        'common_name': 'Example', 'scientific_name': 'Alpha beta',
+        'common_name': 'Example', 'scientific_name': 'Mangifera indica',
         'confidence': 'Low', 'match_images': ['https://example.test/alpha.jpg']}))
     monkeypatch.setattr(ai_identify, '_gemini', AsyncMock(return_value={
-        'common_name': 'Example', 'scientific_name': gemini_species}))
+        'common_name': 'Example', 'scientific_name': gemini_species, 'confidence': 'High'}))
     monkeypatch.setattr(ai_identify, '_gbif_match', AsyncMock(return_value=None))
     monkeypatch.setattr(ai_identify, '_enrich', lambda result: result)
     coro = ai_identify._pipeline(b'photo', 'photo', 'image/jpeg')
@@ -71,7 +71,7 @@ def test_identify_endpoint_returns_validated_observations(monkeypatch, local):
     from starlette.datastructures import Headers
     from app.api.routes import identify
     from app.models.user import UserRole
-    payload = {'common_name': 'Example', 'scientific_name': 'Alpha beta'}
+    payload = {'common_name': 'Example', 'scientific_name': 'Mangifera indica'}
     if not local:
         payload['photo_observations'] = complete()
     monkeypatch.setattr(identify, '_get_local_species_classifier',
@@ -81,7 +81,7 @@ def test_identify_endpoint_returns_validated_observations(monkeypatch, local):
     stream.write(b'photo')
     stream.seek(0)
     upload = UploadFile(file=stream, filename='tree.jpg', headers=Headers({'content-type': 'image/jpeg'}))
-    coro = identify.identify_tree(upload, current_user=SimpleNamespace(role=UserRole.field_worker), db=None)
+    coro = identify.identify_tree(upload, current_user=SimpleNamespace(role=UserRole.field_worker))
     try:
         coro.send(None)
     except StopIteration as done:
@@ -91,3 +91,24 @@ def test_identify_endpoint_returns_validated_observations(monkeypatch, local):
         stream.close()
     assert result['photo_observations']['status'] == ('not_assessed' if local else 'observed')
     assert 'health_status' not in result
+
+
+@pytest.mark.parametrize("plantnet,gemini", [
+    ({"scientific_name": "Delonix regia", "confidence": "High"}, None),
+    (None, {"scientific_name": "Delonix regia", "confidence": "High"}),
+    (None, {"scientific_name": "Mangifera indica", "confidence": "Low"}),
+    ({"scientific_name": "Mangifera indica", "confidence": "High"},
+     {"not_identified": True, "vision_abstained": True}),
+])
+def test_scan_routes_unsupported_or_uncertain_results_to_review(monkeypatch, plantnet, gemini):
+    import asyncio
+
+    monkeypatch.setattr(ai_identify, "_plantnet", AsyncMock(return_value=plantnet))
+    vision = AsyncMock(return_value=gemini)
+    monkeypatch.setattr(ai_identify, "_gemini", vision)
+    result = asyncio.run(ai_identify._pipeline(b"photo", "photo", "image/jpeg"))
+
+    assert result["not_identified"] is True
+    assert result["scientific_name"] == ""
+    if gemini is None:
+        vision.assert_not_awaited()

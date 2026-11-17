@@ -64,7 +64,7 @@ def test_route_is_authenticated_and_calculation_is_read_only():
     dependency = inspect.signature(estimate_age).parameters["_"].default
     assert isinstance(dependency, Depends)
     assert dependency.dependency is get_current_user
-    coroutine = estimate_age(TreeAgeRequest(scientific_name="Gmelina arborea", height_m=20.61), object(), None)
+    coroutine = estimate_age(TreeAgeRequest(scientific_name="Gmelina arborea", height_m=20.61), object())
     with pytest.raises(StopIteration) as completed:
         coroutine.send(None)
     assert completed.value.value.height_age_years == 9
@@ -126,7 +126,7 @@ def test_ai_species_mismatch_and_palms():
     assert result.dbh_age_years is None and result.height_age_years is not None
 
 
-def test_route_only_uses_ai_and_quota_for_missing_source(monkeypatch):
+def test_route_only_uses_ai_for_missing_source(monkeypatch):
     from app.api.routes import identify
     from app.services import tree_age
     calls = []
@@ -136,24 +136,23 @@ def test_route_only_uses_ai_and_quota_for_missing_source(monkeypatch):
         raw['scientific_name'] = payload.scientific_name
         return tree_age.parse_ai_growth(raw, payload)
     monkeypatch.setattr(tree_age, 'estimate_ai_tree_age', fake_ai)
-    monkeypatch.setattr(identify, 'enforce_ai_limit', lambda user, db: calls.append("quota"))
-    coroutine = identify.estimate_age(TreeAgeRequest(scientific_name="Annona muricata", dbh_cm=12), object(), None)
+    coroutine = identify.estimate_age(TreeAgeRequest(scientific_name="Annona muricata", dbh_cm=12), object())
     with pytest.raises(StopIteration) as completed:
         coroutine.send(None)
     assert completed.value.value.status == "estimated"
-    assert calls == ["quota", "provider"]
+    assert calls == ["provider"]
     calls.clear()
-    coroutine = identify.estimate_age(TreeAgeRequest(scientific_name="Mangifera indica", dbh_cm=12), object(), None)
+    coroutine = identify.estimate_age(TreeAgeRequest(scientific_name="Mangifera indica", dbh_cm=12), object())
     with pytest.raises(StopIteration):
         coroutine.send(None)
     assert calls == []
     # A published DBH mean must not block the AI fallback when only height
     # was supplied and its published height value was omitted as conflicting.
-    coroutine = identify.estimate_age(TreeAgeRequest(scientific_name="Vitex parviflora", height_m=7), object(), None)
+    coroutine = identify.estimate_age(TreeAgeRequest(scientific_name="Vitex parviflora", height_m=7), object())
     with pytest.raises(StopIteration) as completed:
         coroutine.send(None)
     assert completed.value.value.estimation_basis == "ai_growth_guess"
-    assert calls == ["quota", "provider"]
+    assert calls == ["provider"]
 
 
 def test_provider_failure_returns_no_age_and_no_provider_details(monkeypatch):
@@ -162,8 +161,7 @@ def test_provider_failure_returns_no_age_and_no_provider_details(monkeypatch):
     async def fail(payload):
         raise RuntimeError('private provider details')
     monkeypatch.setattr(tree_age, 'estimate_ai_tree_age', fail)
-    monkeypatch.setattr(identify, 'enforce_ai_limit', lambda user, db: None)
-    coroutine = identify.estimate_age(TreeAgeRequest(scientific_name="Annona muricata", dbh_cm=12), object(), None)
+    coroutine = identify.estimate_age(TreeAgeRequest(scientific_name="Annona muricata", dbh_cm=12), object())
     with pytest.raises(StopIteration) as completed:
         coroutine.send(None)
     result = completed.value.value
