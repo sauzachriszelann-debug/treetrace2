@@ -560,3 +560,23 @@ def test_unrelated_integrity_errors_propagate_without_client_uuid(
 
     with pytest.raises(IntegrityError):
         client.post("/api/trees/", json=tree_payload)
+
+
+def test_tree_details_do_not_load_full_recorder_profile(client, create_tree, db_session):
+    from sqlalchemy import event
+    engine = db_session.get_bind()
+
+    tree = create_tree()
+    statements = []
+
+    def capture(connection, cursor, statement, parameters, context, many):
+        statements.append(statement.lower())
+
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        response = client.get(f"/api/trees/{tree['id']}")
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
+    assert response.status_code == 200, response.text
+    assert response.json()["recorded_by_role"] == "admin"
+    assert not any("users.hashed_password" in statement for statement in statements)

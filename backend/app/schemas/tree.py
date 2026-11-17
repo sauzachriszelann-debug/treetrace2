@@ -3,7 +3,7 @@ from datetime import date, datetime
 from typing import Any, Literal, Optional
 from uuid import UUID
 
-from pydantic import AliasPath, BaseModel, Field, ValidationInfo, field_validator, model_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
 
 HealthStatusValue = Literal["Healthy", "Fair", "Poor", "Not assessed"]
@@ -126,9 +126,7 @@ class TreeOut(BaseModel):
 
 
 class TreeDetailOut(TreeOut):
-    recorded_by_role: Optional[Literal["admin", "field_worker", "citizen"]] = Field(
-        default=None, validation_alias=AliasPath("recorded_by", "role")
-    )
+    recorded_by_role: Optional[Literal["admin", "field_worker", "citizen"]] = None
 
 
 class PublicTreeOut(BaseModel):

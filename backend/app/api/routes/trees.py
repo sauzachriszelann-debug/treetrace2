@@ -8,7 +8,7 @@ import io
 import math
 from app.db.database import get_db
 from app.models.tree import Tree
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.tree import TreeCreate, TreeCreateOut, TreeDetailOut, TreeUpdate, TreeOut
 from app.core.security import get_current_user, require_admin
 from app.services.barangay_location import resolve_barangay
@@ -596,7 +596,15 @@ def get_tree(
     tree = db.query(Tree).filter(Tree.id == tree_id).first()
     if not tree:
         raise HTTPException(status_code=404, detail="Tree not found")
-    return tree
+    # Read only the role needed by this response, independently of the full
+    # recorder profile and its optional account columns.
+    role = None
+    if tree.recorded_by_id is not None:
+        recorded_role = db.query(User.role).filter(User.id == tree.recorded_by_id).scalar()
+        role = recorded_role.value if isinstance(recorded_role, UserRole) else recorded_role
+    detail = TreeDetailOut.model_validate(tree)
+    detail.recorded_by_role = role if role in {"admin", "field_worker", "citizen"} else None
+    return detail
 
 
 @router.patch("/{tree_id}", response_model=TreeOut)

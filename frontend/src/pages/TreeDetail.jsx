@@ -40,7 +40,7 @@ export default function TreeDetail({ previewId } = {}) {
   const [saving, setSaving]           = useState(false);
   const canManageOfficialTree = !previewId && user?.role !== "citizen";
 
-  const { data: tree, isLoading } = useQuery({
+  const { data: tree, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ["tree", id],
     queryFn: () => treesApi.get(id),
   });
@@ -147,8 +147,21 @@ export default function TreeDetail({ previewId } = {}) {
     );
   }
 
-  if (!tree) {
-    return <div className="p-4 text-center text-muted-foreground sm:p-6 lg:p-8">Tree not found.</div>;
+  if (isError || !tree) {
+    const missing = error?.response?.status === 404;
+    return (
+      <div className="space-y-3 p-4 text-center sm:p-6 lg:p-8">
+        <p role="alert" className="text-muted-foreground">
+          {missing ? "Tree not found." : "Could not load this tree. Please try again."}
+        </p>
+        {!missing && (
+          <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>
+            {isFetching ? "Loading…" : "Retry"}
+          </Button>
+        )}
+        <div><Link to="/community" className="text-sm text-primary underline">Back to Community</Link></div>
+      </div>
+    );
   }
 
   const { notes } = splitMeasurementNote(tree.notes);
