@@ -41,3 +41,8 @@ yolov8n-seg.pt
 # Local Sandbox database and original Android APK backup
 /backend/treetrace_sandbox.db
 /mobile/treetrace_installed_backup.apk
+
+# Trained species models required by the deployed inference endpoints.
+!backend/models/treetrace_final.pt
+!backend/models/MobileNetV3-Large.pt
+!backend/models/ResNet50.pt
