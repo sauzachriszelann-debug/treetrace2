@@ -62,6 +62,7 @@ class TreeCreate(TreeMeasurementInput):
     barangay: Optional[str] = None
     city: Optional[str] = "Panabo City"
     province: Optional[str] = "Davao del Norte"
+    gps_accuracy_m: Optional[float] = Field(None, ge=0, le=10000, allow_inf_nan=False)
     lat: Optional[float] = None
     lng: Optional[float] = None
     photo_url: Optional[str] = None
@@ -79,6 +80,7 @@ class TreeUpdate(TreeMeasurementInput):
     barangay: Optional[str] = None
     city: Optional[str] = None
     province: Optional[str] = None
+    gps_accuracy_m: Optional[float] = Field(None, ge=0, le=10000, allow_inf_nan=False)
     lat: Optional[float] = None
     lng: Optional[float] = None
     photo_url: Optional[str] = None
@@ -106,6 +108,7 @@ class TreeOut(BaseModel):
     barangay: Optional[str] = None
     city: Optional[str] = None
     province: Optional[str] = None
+    gps_accuracy_m: Optional[float] = Field(None, ge=0, le=10000, allow_inf_nan=False)
     lat: Optional[float] = None
     lng: Optional[float] = None
     photo_url: Optional[str] = None
@@ -141,6 +144,7 @@ class PublicTreeOut(BaseModel):
     barangay: Optional[str] = None
     city: Optional[str] = None
     province: Optional[str] = None
+    gps_accuracy_m: Optional[float] = Field(None, ge=0, le=10000, allow_inf_nan=False)
     lat: Optional[float] = None
     lng: Optional[float] = None
     photo_url: Optional[str] = None

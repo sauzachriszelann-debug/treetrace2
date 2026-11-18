@@ -80,6 +80,7 @@ class TreeSubmission(Base):
     barangay = Column(String(120), nullable=True)
     city = Column(String(120), nullable=True, default="Panabo City")
     province = Column(String(120), nullable=True, default="Davao del Norte")
+    gps_accuracy_m = Column(Float, nullable=True)
     lat = Column(Float, nullable=True)
     lng = Column(Float, nullable=True)
     photo_url = Column(String(500), nullable=True)

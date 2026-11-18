@@ -449,6 +449,7 @@ def nearby_trees(
     lat: float = Query(..., ge=-90, le=90),
     lng: float = Query(..., ge=-180, le=180),
     radius_m: float = Query(_NEARBY_DEFAULT_RADIUS_M, gt=0, le=_NEARBY_MAX_RADIUS_M),
+    gps_accuracy_m: Optional[float] = Query(None, ge=0, le=50, allow_inf_nan=False),
     limit: int = Query(_NEARBY_DEFAULT_LIMIT, ge=1, le=_NEARBY_MAX_LIMIT),
     common_name: Optional[str] = None,
     scientific_name: Optional[str] = None,
@@ -497,7 +498,10 @@ def nearby_trees(
     # longitudes when the circle contains a pole. A 1e-9-degree epsilon
     # (~0.1 mm) absorbs floating-point noise so the box can never clip a
     # tree that is inside the radius.
-    gamma = radius_m / 6371000.0
+    # Existing fixes with >50 m uncertainty need recapture, not huge overlap circles.
+    # Query the superset first; apply each record's actual radius below.
+    search_radius_m = max(radius_m, (gps_accuracy_m or 0) + 50) if gps_accuracy_m is not None else radius_m
+    gamma = search_radius_m / 6371000.0
     box_dlat = math.degrees(gamma)
     cos_lat = math.cos(math.radians(lat))
     sin_dlng = math.sin(gamma) / max(cos_lat, 1e-12)
@@ -545,7 +549,11 @@ def nearby_trees(
     measured = []
     for tree in rows:
         distance_m = _distance_km(lat, lng, tree.lat, tree.lng) * 1000.0
-        if distance_m > radius_m:
+        existing_accuracy = tree.gps_accuracy_m
+        usable_existing = existing_accuracy is not None and math.isfinite(existing_accuracy) and 0 <= existing_accuracy <= 50
+        overlap_radius = ((gps_accuracy_m or 0) + (existing_accuracy if usable_existing else 0))
+        effective_radius = max(radius_m, overlap_radius) if gps_accuracy_m is not None else radius_m
+        if distance_m > effective_radius:
             continue
         if not has_submitted_species:
             species_match = "unknown"
@@ -568,6 +576,12 @@ def nearby_trees(
                     "common_name": tree.common_name,
                     "scientific_name": tree.scientific_name,
                     "distance_m": round(distance_m, 1),
+                    "photo_url": tree.photo_url,
+                    "gps_accuracy_m": existing_accuracy,
+                    "submitted_accuracy_m": gps_accuracy_m,
+                    "accuracy_overlap": gps_accuracy_m is not None and usable_existing and distance_m <= overlap_radius,
+                    "accuracy_incomplete": gps_accuracy_m is None or not usable_existing,
+                    "match_radius_m": effective_radius,
                     "species_match": species_match,
                     "health_status": getattr(
                         tree.health_status, "value", tree.health_status
@@ -624,6 +638,8 @@ def update_tree(
     if not tree:
         raise HTTPException(status_code=404, detail="Tree not found")
     data = payload.model_dump(exclude_unset=True)
+    if ('lat' in data or 'lng' in data) and 'gps_accuracy_m' not in data:
+        data['gps_accuracy_m'] = None
     dbh = data.get("dbh_cm", tree.dbh_cm)
     height = data.get("height_m", tree.height_m)
     if "dbh_cm" in data or "height_m" in data:

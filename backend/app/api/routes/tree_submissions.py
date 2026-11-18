@@ -113,6 +113,7 @@ def submission_out(submission: TreeSubmission) -> dict:
         "barangay": submission.barangay,
         "city": submission.city,
         "province": submission.province,
+        "gps_accuracy_m": submission.gps_accuracy_m,
         "lat": submission.lat,
         "lng": submission.lng,
         "photo_url": submission.photo_url,
@@ -459,6 +460,7 @@ def approve_submission(
         "barangay": submission.barangay,
         "city": submission.city or "Panabo City",
         "province": submission.province or "Davao del Norte",
+        "gps_accuracy_m": submission.gps_accuracy_m,
         "lat": submission.lat,
         "lng": submission.lng,
         "photo_url": submission.photo_url,
@@ -467,6 +469,8 @@ def approve_submission(
     }
     # ...then reviewer corrections, kept separately in review_overrides.
     effective.update(overrides)
+    if ('lat' in overrides or 'lng' in overrides) and 'gps_accuracy_m' not in overrides:
+        effective['gps_accuracy_m'] = None
 
     if not (effective.get("common_name") or "").strip():
         raise HTTPException(

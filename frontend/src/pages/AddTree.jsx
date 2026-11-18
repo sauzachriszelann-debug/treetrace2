@@ -325,9 +325,14 @@ export default function AddTree() {
     }
     setLoading(true);
     try {
+      if (data.gps_accuracy_m > 50) {
+        toast.warning("GPS accuracy is too broad for duplicate checking. Capture GPS again outdoors.");
+        return;
+      }
       const candidates = await treesApi.nearby({
         lat: data.lat,
         lng: data.lng,
+        gps_accuracy_m: data.gps_accuracy_m ?? undefined,
         common_name: data.common_name || undefined,
         scientific_name: data.scientific_name || undefined,
       });
@@ -583,6 +588,7 @@ export default function AddTree() {
                       key={candidate.tree_id}
                       className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 p-2.5"
                     >
+                      {candidate.photo_url && <img src={candidate.photo_url} alt={`${candidate.common_name} existing tree`} className="h-16 w-14 shrink-0 rounded-md object-cover" />}
                       <div className="min-w-0">
                         <p className="truncate font-medium text-foreground">
                           {candidate.common_name}
@@ -598,6 +604,13 @@ export default function AddTree() {
                             : candidate.species_match === "unknown"
                               ? "species not provided"
                               : "different species"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {candidate.accuracy_overlap
+                            ? "GPS accuracy areas overlap. Compare the tree photos."
+                            : candidate.accuracy_incomplete
+                              ? "GPS accuracy incomplete; possible match only."
+                              : "Nearby pin; neighboring trees may be separate."}
                         </p>
                       </div>
                       <Button

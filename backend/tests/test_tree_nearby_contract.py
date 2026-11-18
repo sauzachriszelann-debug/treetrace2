@@ -462,6 +462,8 @@ def test_nearby_response_shape(client: TestClient, admin_user, db_session):
     data = nearby(client, radius_m=100).json()[0]
 
     assert set(data) == {
+        "photo_url", "gps_accuracy_m", "submitted_accuracy_m",
+        "accuracy_overlap", "accuracy_incomplete", "match_radius_m",
         "tree_id",
         "common_name",
         "scientific_name",
@@ -471,10 +473,55 @@ def test_nearby_response_shape(client: TestClient, admin_user, db_session):
         "barangay",
         "created_at",
     }
-    # Advisory data only: no raw coordinates beyond distance (approved D6).
-    assert "lat" not in data and "lng" not in data and "photo_url" not in data
+    # Staff-only advisory data; record photos allow comparison, raw coordinates stay omitted.
+    assert "lat" not in data and "lng" not in data
 
 
 def _coords(meters_north: float):
     lat, lng = north_of(meters_north)
     return {"lat": lat, "lng": lng}
+
+
+def test_accuracy_circles_find_separate_nearby_pins(client, admin_user, db_session):
+    tree = insert_tree(db_session, **dict(zip(('lat', 'lng'), north_of(35))))
+    tree.gps_accuracy_m = 20
+    db_session.commit()
+    result = nearby(client, gps_accuracy_m=20)
+    assert result.status_code == 200
+    assert result.json()[0]['tree_id'] == tree.id
+    assert result.json()[0]['accuracy_overlap'] is True
+    assert result.json()[0]['match_radius_m'] == 40
+    assert nearby(client).json() == []  # Existing distance-only clients unchanged.
+
+
+def test_unknown_record_accuracy_is_never_invented(client, admin_user, db_session):
+    insert_tree(db_session, **dict(zip(('lat', 'lng'), north_of(15))))
+    result = nearby(client, gps_accuracy_m=20).json()[0]
+    assert result['accuracy_incomplete'] is True
+    assert result['gps_accuracy_m'] is None
+    assert result['accuracy_overlap'] is False
+
+
+def test_nonoverlapping_accuracy_circles_not_suggested(client, admin_user, db_session):
+    tree = insert_tree(db_session, **dict(zip(('lat', 'lng'), north_of(45))))
+    tree.gps_accuracy_m = 20
+    db_session.commit()
+    assert nearby(client, gps_accuracy_m=20).json() == []
+
+
+@pytest.mark.parametrize('accuracy', [-1, 51, 'nan', 'inf'])
+def test_bad_accuracy_requires_new_capture(client, admin_user, accuracy):
+    assert nearby(client, gps_accuracy_m=accuracy).status_code == 422
+
+
+def test_new_tree_accuracy_persists_and_coordinate_edit_clears_it(client, admin_user, db_session):
+    response = client.post('/api/trees', json={
+        'common_name': 'Narra', 'lat': BASE_LAT, 'lng': BASE_LNG, 'gps_accuracy_m': 20,
+    })
+    assert response.status_code == 201, response.text
+    tree_id = response.json()['id']
+    assert db_session.get(Tree, tree_id).gps_accuracy_m == 20
+    updated = client.patch(f'/api/trees/{tree_id}', json={'lat': BASE_LAT + .001})
+    assert updated.status_code == 200
+    db_session.expire_all()
+    assert db_session.get(Tree, tree_id).gps_accuracy_m is None

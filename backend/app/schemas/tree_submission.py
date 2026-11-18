@@ -9,7 +9,7 @@ from datetime import date, datetime
 from typing import Any, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.tree import TreeMeasurementInput
 
@@ -29,6 +29,7 @@ class _SubmissionFields(TreeMeasurementInput):
     barangay: Optional[str] = None
     city: Optional[str] = "Panabo City"
     province: Optional[str] = "Davao del Norte"
+    gps_accuracy_m: Optional[float] = Field(None, ge=0, le=10000, allow_inf_nan=False)
     lat: Optional[float] = None
     lng: Optional[float] = None
     photo_url: Optional[str] = None
@@ -102,6 +103,7 @@ class SubmissionOut(BaseModel):
     barangay: Optional[str] = None
     city: Optional[str] = None
     province: Optional[str] = None
+    gps_accuracy_m: Optional[float] = Field(None, ge=0, le=10000, allow_inf_nan=False)
     lat: Optional[float] = None
     lng: Optional[float] = None
     photo_url: Optional[str] = None

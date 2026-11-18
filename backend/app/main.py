@@ -57,6 +57,16 @@ def sync_subscription_columns():
             conn.execute(text(statement))
 
 
+def sync_gps_accuracy_columns():
+    from sqlalchemy import inspect
+    with engine.begin() as conn:
+        for table in ('trees', 'tree_submissions'):
+            if conn.dialect.name == 'postgresql':
+                conn.execute(text(f'ALTER TABLE {table} ADD COLUMN IF NOT EXISTS gps_accuracy_m DOUBLE PRECISION'))
+            elif 'gps_accuracy_m' not in {c['name'] for c in inspect(conn).get_columns(table)}:
+                conn.execute(text(f'ALTER TABLE {table} ADD COLUMN gps_accuracy_m DOUBLE PRECISION'))
+
+
 def sync_unknown_species_columns():
     from sqlalchemy import inspect
 
@@ -521,6 +531,7 @@ def startup_event():
         # This will create tables if they don't exist
         Base.metadata.create_all(bind=engine)
         sync_unknown_species_columns()
+        sync_gps_accuracy_columns()
         sync_subscription_columns()
         sync_postgres_sequences()
         print("Database connection successful and tables synchronized!")

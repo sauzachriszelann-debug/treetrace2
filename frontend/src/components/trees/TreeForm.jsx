@@ -365,7 +365,7 @@ export default function TreeForm({
       async ({ coords }) => {
         const { latitude: lat, longitude: lng, accuracy: accuracy_m } = coords;
         setGpsLookup(null);
-        setForm(previous => ({ ...previous, lat, lng, barangay: "", city: "", province: "" }));
+        setForm(previous => ({ ...previous, lat, lng, gps_accuracy_m: accuracy_m, barangay: "", city: "", province: "" }));
         try {
           const location = await treesApi.barangayLocation({ lat, lng, accuracy_m });
           setGpsLookup({ lat, lng, status: location.status });
@@ -532,6 +532,9 @@ export default function TreeForm({
     }
 
     const payload = { ...form };
+    if (!gpsLookup || Number(gpsLookup.lat) !== lat || Number(gpsLookup.lng) !== lng) {
+      payload.gps_accuracy_m = null;
+    }
     const estimatedDimensions = ["dbh_cm", "height_m"].filter((key) => {
       const value = Number(form[key]);
       return value > 0 && (
