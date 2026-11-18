@@ -1,0 +1,785 @@
+{
+  "Acacia mangium": {
+    "scientific_name": "Acacia mangium",
+    "common_name": "Mangium",
+    "family": "Fabaceae",
+    "description": "Mangium is a tropical tree native to northeastern Australia, parts of Indonesia and Papua New Guinea. It is planted in forestry and landscapes.",
+    "distinguishing_features": "Mature foliage consists of flattened leaf stalks called phyllodes. Compare phyllode shape and veins with other Acacia species.",
+    "flower": "Cream to white flower spikes.",
+    "fruit": "Dry seed pods.",
+    "plant_type": "Tree / woody plant",
+    "lifespan": "Perennial",
+    "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/2/6/2695",
+    "taxonomy_status": "species",
+    "look_alikes": "Earleaf acacia (Acacia auriculiformis): Both have leaf-like phyllodes. Compare the broad phyllodes of mangium with the more curved phyllodes of earleaf acacia; check mature pods and veins with an expert. Botanical comparison, not a second AI prediction.",
+    "similar_species_records": [
+      {
+        "scientific_name": "Acacia auriculiformis",
+        "common_name": "Earleaf acacia",
+        "comparison": "Both have leaf-like phyllodes. Compare the broad phyllodes of mangium with the more curved phyllodes of earleaf acacia; check mature pods and veins with an expert.",
+        "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/2/6/2693",
+        "photos": [
+          {
+            "url": "/species-reference/acacia_auriculiformis_inat.jpg",
+            "asset": "assets/reference_photos/acacia_auriculiformis_inat.jpg",
+            "caption": "Acacia auriculiformis - botanical reference",
+            "scientific_name": "Acacia auriculiformis",
+            "author": "(c) David Garza, some rights reserved (CC BY)",
+            "license": "CC BY 4.0",
+            "license_url": "https://creativecommons.org/licenses/by/4.0/",
+            "source_url": "https://www.inaturalist.org/photos/762996677"
+          }
+        ]
+      }
+    ],
+    "look_alikes_source": "https://www.nparks.gov.sg/florafaunaweb/flora/2/6/2693",
+    "reference_photos": [
+      {
+        "url": "/species-reference/acacia_mangium_1.jpg",
+        "asset": "assets/reference_photos/acacia_mangium_1.jpg",
+        "caption": "Acacia mangium - botanical reference",
+        "author": "Wibowo Djatmiko ( Wie146 )",
+        "license": "CC BY-SA 3.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/3.0",
+        "source_url": "https://commons.wikimedia.org/wiki/File:Aca_mangi_150507-50043_sorx.JPG",
+        "scientific_name": "Acacia mangium"
+      },
+      {
+        "url": "/species-reference/acacia_mangium_2.jpg",
+        "asset": "assets/reference_photos/acacia_mangium_2.jpg",
+        "caption": "Acacia mangium - botanical reference",
+        "author": "Wee Hong",
+        "license": "CC BY-SA 4.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+        "source_url": "https://commons.wikimedia.org/wiki/File:Acacia_mangium_(190111-0953).jpg",
+        "scientific_name": "Acacia mangium"
+      }
+    ]
+  },
+  "Cassia fistula": {
+    "scientific_name": "Cassia fistula",
+    "common_name": "Golden shower",
+    "family": "Fabaceae",
+    "description": "Golden shower is a tree from India and Sri Lanka, grown for hanging clusters of yellow flowers.",
+    "distinguishing_features": "Pinnate leaves with 3–8 pairs of leaflets.",
+    "flower": "Long, drooping clusters of bright yellow flowers.",
+    "fruit": "Long cylindrical pods that darken at maturity.",
+    "plant_type": "Tree / woody plant",
+    "lifespan": "Perennial",
+    "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/2/7/2787",
+    "taxonomy_status": "species",
+    "look_alikes": "Siamese cassia (Senna siamea): Both have yellow flowers and pinnate leaves. Golden shower has hanging flower clusters and cylindrical pods; Siamese cassia has flattened pods. Botanical comparison, not a second AI prediction.",
+    "similar_species_records": [
+      {
+        "scientific_name": "Senna siamea",
+        "common_name": "Siamese cassia",
+        "comparison": "Both have yellow flowers and pinnate leaves. Golden shower has hanging flower clusters and cylindrical pods; Siamese cassia has flattened pods.",
+        "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/1/3118",
+        "photos": [
+          {
+            "url": "/species-reference/senna_siamea_inat.jpg",
+            "asset": "assets/reference_photos/senna_siamea_inat.jpg",
+            "caption": "Senna siamea - botanical reference",
+            "scientific_name": "Senna siamea",
+            "author": "(c) Aparna Shyam, some rights reserved (CC BY)",
+            "license": "CC BY 4.0",
+            "license_url": "https://creativecommons.org/licenses/by/4.0/",
+            "source_url": "https://www.inaturalist.org/photos/736832486"
+          }
+        ]
+      }
+    ],
+    "look_alikes_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/1/3118",
+    "reference_photos": [
+      {
+        "url": "/species-reference/cassia_fistula_1.jpg",
+        "asset": "assets/reference_photos/cassia_fistula_1.jpg",
+        "caption": "Cassia fistula - botanical reference",
+        "author": "PumaPerumal",
+        "license": "CC0",
+        "license_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+        "source_url": "https://commons.wikimedia.org/wiki/File:Amaltas_72.JPG",
+        "scientific_name": "Cassia fistula"
+      },
+      {
+        "url": "/species-reference/cassia_fistula_2.jpg",
+        "asset": "assets/reference_photos/cassia_fistula_2.jpg",
+        "caption": "Cassia fistula - botanical reference",
+        "author": "हितेन्द्र के राम",
+        "license": "CC BY-SA 4.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+        "source_url": "https://commons.wikimedia.org/wiki/File:Amaltas_flower.jpg",
+        "scientific_name": "Cassia fistula"
+      }
+    ]
+  },
+  "Casuarina equisetifolia": {
+    "scientific_name": "Casuarina equisetifolia",
+    "common_name": "Agoho",
+    "family": "Casuarinaceae",
+    "description": "Agoho is a coastal flowering tree with a pine-like appearance. Its fine green branchlets carry tiny scale leaves; it is not a true pine.",
+    "distinguishing_features": "Jointed, needle-like branchlets with scale leaves in whorls.",
+    "flower": "Small male spikes and female flower heads.",
+    "fruit": "Small woody cone-like clusters containing winged fruits.",
+    "plant_type": "Tree / woody plant",
+    "lifespan": "Perennial",
+    "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/2/7/2793",
+    "taxonomy_status": "species",
+    "look_alikes": "Caribbean pine (Pinus caribaea): Both look needle-leaved. Agoho has jointed green branchlets and tiny scale leaves; Caribbean pine has true needles grouped in bundles. Botanical comparison, not a second AI prediction.",
+    "similar_species_records": [
+      {
+        "scientific_name": "Pinus caribaea",
+        "common_name": "Caribbean pine",
+        "comparison": "Both look needle-leaved. Agoho has jointed green branchlets and tiny scale leaves; Caribbean pine has true needles grouped in bundles.",
+        "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/0/3063",
+        "photos": [
+          {
+            "url": "/species-reference/pinus_caribaea_inat.jpg",
+            "asset": "assets/reference_photos/pinus_caribaea_inat.jpg",
+            "caption": "Pinus caribaea - botanical reference",
+            "scientific_name": "Pinus caribaea",
+            "author": "(c) Ricardo siverio, some rights reserved (CC BY)",
+            "license": "CC BY 4.0",
+            "license_url": "https://creativecommons.org/licenses/by/4.0/",
+            "source_url": "https://www.inaturalist.org/photos/723248643"
+          }
+        ]
+      }
+    ],
+    "look_alikes_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/0/3063",
+    "reference_photos": [
+      {
+        "url": "/species-reference/casuarina_equisetifolia_1.jpg",
+        "asset": "assets/reference_photos/casuarina_equisetifolia_1.jpg",
+        "caption": "Casuarina equisetifolia - botanical reference",
+        "author": "M108t",
+        "license": "CC BY 4.0",
+        "license_url": "https://creativecommons.org/licenses/by/4.0",
+        "source_url": "https://commons.wikimedia.org/wiki/File:Branchlets_and_leaves_of_C_equisetifolia.jpg",
+        "scientific_name": "Casuarina equisetifolia"
+      }
+    ]
+  },
+  "Ficus benjamina": {
+    "scientific_name": "Ficus benjamina",
+    "common_name": "Weeping fig",
+    "family": "Moraceae",
+    "description": "Weeping fig is a tropical fig tree found across parts of Asia and the western Pacific. Its drooping branches give it a distinctive weeping form.",
+    "distinguishing_features": "Simple pointed leaves carried on drooping twigs.",
+    "flower": "Flowers enclosed inside the fig structure.",
+    "fruit": "Small rounded figs, often paired at leaf axils.",
+    "plant_type": "Tree / woody plant",
+    "lifespan": "Perennial",
+    "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/2/9/2902",
+    "taxonomy_status": "species",
+    "look_alikes": "Chinese banyan (Ficus microcarpa): Both are figs. Weeping fig has drooping twigs and sharply pointed leaf tips; Chinese banyan usually has blunter leaf tips and non-drooping twigs. Botanical comparison, not a second AI prediction.",
+    "similar_species_records": [
+      {
+        "scientific_name": "Ficus microcarpa",
+        "common_name": "Chinese banyan",
+        "comparison": "Both are figs. Weeping fig has drooping twigs and sharply pointed leaf tips; Chinese banyan usually has blunter leaf tips and non-drooping twigs.",
+        "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/2/9/2912",
+        "photos": [
+          {
+            "url": "/species-reference/ficus_microcarpa_inat.jpg",
+            "asset": "assets/reference_photos/ficus_microcarpa_inat.jpg",
+            "caption": "Ficus microcarpa - botanical reference",
+            "scientific_name": "Ficus microcarpa",
+            "author": "葉子",
+            "license": "CC0",
+            "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+            "source_url": "https://www.inaturalist.org/photos/59896114"
+          }
+        ]
+      }
+    ],
+    "look_alikes_source": "https://www.nparks.gov.sg/florafaunaweb/flora/2/9/2912",
+    "reference_photos": [
+      {
+        "url": "/species-reference/ficus_benjamina_1.jpg",
+        "asset": "assets/reference_photos/ficus_benjamina_1.jpg",
+        "caption": "Ficus benjamina - botanical reference",
+        "author": "Aris riyanto",
+        "license": "CC BY-SA 4.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+        "source_url": "https://commons.wikimedia.org/wiki/File:%22%2Barya%2B%22_ficus_benjamina_grows_on_jackfruit_tree_2022_0.jpg",
+        "scientific_name": "Ficus benjamina"
+      },
+      {
+        "url": "/species-reference/ficus_benjamina_2.jpg",
+        "asset": "assets/reference_photos/ficus_benjamina_2.jpg",
+        "caption": "Ficus benjamina - botanical reference",
+        "author": "Aris riyanto",
+        "license": "CC BY-SA 4.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+        "source_url": "https://commons.wikimedia.org/wiki/File:%22%2Barya%2B%22_ficus_benjamina_grows_on_jackfruit_tree_2022_1.jpg",
+        "scientific_name": "Ficus benjamina"
+      }
+    ]
+  },
+  "Gmelina arborea": {
+    "scientific_name": "Gmelina arborea",
+    "common_name": "Gmelina",
+    "family": "Lamiaceae",
+    "description": "Gmelina is an Asian tree with broad opposite leaves, yellowish-brown flowers and fleshy fruit.",
+    "distinguishing_features": "Broad ovate leaves in opposite pairs; young foliage may be lobed. Two glands occur near the leaf base.",
+    "flower": "Yellowish-brown flowers with an enlarged yellow lower lobe.",
+    "fruit": "Small yellow drupes.",
+    "plant_type": "Tree / woody plant",
+    "lifespan": "Perennial",
+    "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/2/9/2939",
+    "taxonomy_status": "species",
+    "look_alikes": "Teak (Tectona grandis): Both have broad opposite leaves. Compare leaf texture and basal glands, then flowers: Gmelina has yellowish-brown flowers; teak has small pale flowers in large branched clusters. Botanical comparison, not a second AI prediction.",
+    "similar_species_records": [
+      {
+        "scientific_name": "Tectona grandis",
+        "common_name": "Teak",
+        "comparison": "Both have broad opposite leaves. Compare leaf texture and basal glands, then flowers: Gmelina has yellowish-brown flowers; teak has small pale flowers in large branched clusters.",
+        "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/1/3178",
+        "photos": [
+          {
+            "url": "/species-reference/tectona_grandis_inat.jpg",
+            "asset": "assets/reference_photos/tectona_grandis_inat.jpg",
+            "caption": "Tectona grandis - botanical reference",
+            "scientific_name": "Tectona grandis",
+            "author": "(c) Sagnik Dutta Roy, some rights reserved (CC BY)",
+            "license": "CC BY 4.0",
+            "license_url": "https://creativecommons.org/licenses/by/4.0/",
+            "source_url": "https://www.inaturalist.org/photos/764264999"
+          }
+        ]
+      }
+    ],
+    "look_alikes_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/1/3178",
+    "reference_photos": [
+      {
+        "url": "/species-reference/gmelina_arborea_1.jpg",
+        "asset": "assets/reference_photos/gmelina_arborea_1.jpg",
+        "caption": "Gmelina arborea - botanical reference",
+        "author": "Lfatty22",
+        "license": "CC0",
+        "license_url": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+        "source_url": "https://commons.wikimedia.org/wiki/File:A_white_teak.jpg",
+        "scientific_name": "Gmelina arborea"
+      },
+      {
+        "url": "/species-reference/gmelina_arborea_2.jpg",
+        "asset": "assets/reference_photos/gmelina_arborea_2.jpg",
+        "caption": "Gmelina arborea - botanical reference",
+        "author": "Dinesh Valke from Thane, India",
+        "license": "CC BY-SA 2.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/2.0",
+        "source_url": "https://commons.wikimedia.org/wiki/File:Bhadraparni_(Hindi-_%E0%A4%AD%E0%A4%A6%E0%A5%8D%E0%A4%B0%E0%A4%AA%E0%A4%B0%E0%A5%8D%E0%A4%A3%E0%A5%80)_(3440358011).jpg",
+        "scientific_name": "Gmelina arborea"
+      }
+    ]
+  },
+  "Mangifera indica": {
+    "scientific_name": "Mangifera indica",
+    "common_name": "Mango",
+    "family": "Anacardiaceae",
+    "description": "Mango is a tropical fruit tree cultivated for its fleshy, aromatic fruit. Young leaf flushes are often bronze or reddish before turning green.",
+    "distinguishing_features": "Simple, elongated leaves with an entire, sometimes gently wavy margin.",
+    "flower": "Small flowers carried in branched clusters.",
+    "fruit": "Fleshy fruit with a large central stone.",
+    "plant_type": "Tree / woody plant",
+    "lifespan": "Perennial",
+    "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/0/3013",
+    "taxonomy_status": "species",
+    "look_alikes": "Duhat (Syzygium cumini): Both can have glossy elongated foliage. Compare fruit and leaf arrangement: mango has large stone fruits; duhat has much smaller fruits that ripen dark purple to black. Botanical comparison, not a second AI prediction.",
+    "similar_species_records": [
+      {
+        "scientific_name": "Syzygium cumini",
+        "common_name": "Duhat",
+        "comparison": "Both can have glossy elongated foliage. Compare fruit and leaf arrangement: mango has large stone fruits; duhat has much smaller fruits that ripen dark purple to black.",
+        "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/1/3158",
+        "photos": [
+          {
+            "url": "/species-reference/syzygium_cumini_inat.jpg",
+            "asset": "assets/reference_photos/syzygium_cumini_inat.jpg",
+            "caption": "Syzygium cumini - botanical reference",
+            "scientific_name": "Syzygium cumini",
+            "author": "(c) Irisa Hudson, some rights reserved (CC BY)",
+            "license": "CC BY 4.0",
+            "license_url": "https://creativecommons.org/licenses/by/4.0/",
+            "source_url": "https://www.inaturalist.org/photos/753926746"
+          }
+        ]
+      }
+    ],
+    "look_alikes_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/1/3158",
+    "reference_photos": [
+      {
+        "url": "/species-reference/mangifera_indica_1.jpg",
+        "asset": "assets/reference_photos/mangifera_indica_1.jpg",
+        "caption": "Mangifera indica - botanical reference",
+        "author": "Adityamadhav83",
+        "license": "CC BY-SA 3.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/3.0",
+        "source_url": "https://commons.wikimedia.org/wiki/File:(Mangifera_indica)_Tree_bark_view_at_Kambalakonda.JPG",
+        "scientific_name": "Mangifera indica"
+      },
+      {
+        "url": "/species-reference/mangifera_indica_2.jpg",
+        "asset": "assets/reference_photos/mangifera_indica_2.jpg",
+        "caption": "Mangifera indica - botanical reference",
+        "author": "Guus Gorter",
+        "license": "CC BY-SA 4.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+        "source_url": "https://commons.wikimedia.org/wiki/File:1977-02-25_Udaipur_-_Mangoboom_op_binnenplaats.jpg",
+        "scientific_name": "Mangifera indica"
+      }
+    ]
+  },
+  "Polyalthia longifolia": {
+    "scientific_name": "Polyalthia longifolia",
+    "common_name": "Indian mast tree",
+    "family": "Annonaceae",
+    "description": "Indian mast tree, now accepted as Monoon longifolium, is native to southern India and Sri Lanka. Its glossy narrow leaves have conspicuously wavy edges.",
+    "distinguishing_features": "Alternate, lance-shaped leaves with strongly wavy margins.",
+    "flower": "Greenish star-like flowers with six narrow petals.",
+    "fruit": "Clusters of single-seeded fruits that become purplish black.",
+    "plant_type": "Tree / woody plant",
+    "lifespan": "Perennial",
+    "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/0/3079",
+    "taxonomy_status": "species",
+    "look_alikes": "Ashoka tree (Saraca indica): Common names can be confusing: Indian mast tree is also called false ashoka. It has simple wavy-edged leaves and greenish flowers. Saraca indica has pinnate compound leaves and dense yellow-orange to red flower clusters. Compare scientific names, leaves and flowers. Botanical comparison, not a second AI prediction.",
+    "accepted_scientific_name": "Monoon longifolium",
+    "similar_species_records": [
+      {
+        "scientific_name": "Saraca indica",
+        "common_name": "Ashoka tree",
+        "comparison": "Common names can be confusing: Indian mast tree is also called false ashoka. It has simple wavy-edged leaves and greenish flowers. Saraca indica has pinnate compound leaves and dense yellow-orange to red flower clusters. Compare scientific names, leaves and flowers.",
+        "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/1/3113",
+        "photos": [
+          {
+            "url": "/species-reference/saraca_indica_inat.jpg",
+            "asset": "assets/reference_photos/saraca_indica_inat.jpg",
+            "caption": "Saraca indica - botanical reference",
+            "scientific_name": "Saraca indica",
+            "author": "Marco Mussita",
+            "license": "CC BY 4.0",
+            "license_url": "https://creativecommons.org/licenses/by/4.0/",
+            "source_url": "https://www.inaturalist.org/photos/28101328"
+          }
+        ]
+      }
+    ],
+    "look_alikes_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/1/3113",
+    "reference_photos": [
+      {
+        "url": "/species-reference/polyalthia_longifolia_inat.jpg",
+        "asset": "assets/reference_photos/polyalthia_longifolia_inat.jpg",
+        "caption": "Polyalthia longifolia - botanical reference",
+        "scientific_name": "Polyalthia longifolia",
+        "author": "Raja Sekhar Chimirala",
+        "license": "CC BY 4.0",
+        "license_url": "https://creativecommons.org/licenses/by/4.0/",
+        "source_url": "https://www.inaturalist.org/photos/510654549"
+      }
+    ]
+  },
+  "Pterocarpus indicus": {
+    "scientific_name": "Pterocarpus indicus",
+    "common_name": "Narra",
+    "family": "Fabaceae",
+    "description": "Narra is a tropical Asian tree with yellow flowers and distinctive round, winged pods. Related Pterocarpus species require careful comparison of leaves and fruit.",
+    "distinguishing_features": "Pinnate leaves; mature leaflets are usually hairless, with a flat or sunken upper midrib.",
+    "flower": "Yellow, fragrant pea-like flowers.",
+    "fruit": "Rounded pods with a thin wing around the seed-bearing centre.",
+    "plant_type": "Tree / woody plant",
+    "lifespan": "Perennial",
+    "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/0/3093",
+    "taxonomy_status": "species",
+    "look_alikes": "Burma padauk (Pterocarpus macrocarpus): These are close look-alikes. Narra usually has hairless mature leaflets and smaller winged pods. Burma padauk has some hairs below the leaflets and a raised upper midrib; inspect mature fruit too. Botanical comparison, not a second AI prediction.",
+    "similar_species_records": [
+      {
+        "scientific_name": "Pterocarpus macrocarpus",
+        "common_name": "Burma padauk",
+        "comparison": "These are close look-alikes. Narra usually has hairless mature leaflets and smaller winged pods. Burma padauk has some hairs below the leaflets and a raised upper midrib; inspect mature fruit too.",
+        "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/2/3254",
+        "photos": [
+          {
+            "url": "/species-reference/pterocarpus_macrocarpus_inat.jpg",
+            "asset": "assets/reference_photos/pterocarpus_macrocarpus_inat.jpg",
+            "caption": "Pterocarpus macrocarpus - botanical reference",
+            "scientific_name": "Pterocarpus macrocarpus",
+            "author": "(c) Utain Pummarin, some rights reserved (CC BY)",
+            "license": "CC BY 4.0",
+            "license_url": "https://creativecommons.org/licenses/by/4.0/",
+            "source_url": "https://www.inaturalist.org/photos/183057944"
+          }
+        ]
+      }
+    ],
+    "look_alikes_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/2/3254",
+    "reference_photos": [
+      {
+        "url": "/species-reference/pterocarpus_indicus_inat.jpg",
+        "asset": "assets/reference_photos/pterocarpus_indicus_inat.jpg",
+        "caption": "Pterocarpus indicus - botanical reference",
+        "scientific_name": "Pterocarpus indicus",
+        "author": "葉子",
+        "license": "CC0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "source_url": "https://www.inaturalist.org/photos/65718753"
+      }
+    ]
+  },
+  "Samanea saman": {
+    "scientific_name": "Samanea saman",
+    "common_name": "Rain tree",
+    "family": "Fabaceae",
+    "description": "Rain tree is a broad-crowned shade tree. Its finely divided leaves fold in the evening and in overcast conditions.",
+    "distinguishing_features": "Bipinnate leaves with asymmetric leaflets.",
+    "flower": "Powder-puff flower heads with pink and white stamens.",
+    "fruit": "Dark, thick-edged pods with sticky pulp.",
+    "plant_type": "Tree / woody plant",
+    "lifespan": "Perennial",
+    "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/1/3106",
+    "taxonomy_status": "species",
+    "look_alikes": "Fire tree (Delonix regia): Both have spreading crowns and divided leaves. Rain tree has pink-white powder-puff flowers and thick pods; fire tree has large red-orange petals and long, flat woody pods. Botanical comparison, not a second AI prediction.",
+    "similar_species_records": [
+      {
+        "scientific_name": "Delonix regia",
+        "common_name": "Fire tree",
+        "comparison": "Both have spreading crowns and divided leaves. Rain tree has pink-white powder-puff flowers and thick pods; fire tree has large red-orange petals and long, flat woody pods.",
+        "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/2/8/2838",
+        "photos": [
+          {
+            "url": "/species-reference/delonix_regia_inat.jpg",
+            "asset": "assets/reference_photos/delonix_regia_inat.jpg",
+            "caption": "Delonix regia - botanical reference",
+            "scientific_name": "Delonix regia",
+            "author": "no rights reserved",
+            "license": "CC0",
+            "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+            "source_url": "https://www.inaturalist.org/photos/763782929"
+          }
+        ]
+      }
+    ],
+    "look_alikes_source": "https://www.nparks.gov.sg/florafaunaweb/flora/2/8/2838",
+    "reference_photos": [
+      {
+        "url": "/species-reference/samanea_saman_1.jpg",
+        "asset": "assets/reference_photos/samanea_saman_1.jpg",
+        "caption": "Samanea saman - botanical reference",
+        "author": "Gillfoto from Juneau, Alaska, United States",
+        "license": "CC BY-SA 4.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+        "source_url": "https://commons.wikimedia.org/wiki/File:Monkeypod_tree_21.jpg",
+        "scientific_name": "Samanea saman"
+      },
+      {
+        "url": "/species-reference/samanea_saman_2.jpg",
+        "asset": "assets/reference_photos/samanea_saman_2.jpg",
+        "caption": "Samanea saman - botanical reference",
+        "author": "Afrogindahood",
+        "license": "CC BY-SA 4.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+        "source_url": "https://commons.wikimedia.org/wiki/File:Samanea_saman_Sukabumi.jpg",
+        "scientific_name": "Samanea saman"
+      }
+    ]
+  },
+  "Spathodea campanulata": {
+    "scientific_name": "Spathodea campanulata",
+    "common_name": "African tulip tree",
+    "family": "Bignoniaceae",
+    "description": "African tulip tree is a tropical African flowering tree planted for its large, showy orange-red blooms.",
+    "distinguishing_features": "Opposite, pinnately compound leaves.",
+    "flower": "Large orange-red, cup-shaped flowers.",
+    "fruit": "Dry capsules containing winged seeds.",
+    "plant_type": "Tree / woody plant",
+    "lifespan": "Perennial",
+    "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/1/3132",
+    "taxonomy_status": "species",
+    "look_alikes": "Pink poui (Tabebuia rosea): Both bear showy tubular flowers. African tulip tree has pinnate leaves and orange-red cup-like flowers; pink poui has palmately compound leaves and pink-white trumpet flowers. Botanical comparison, not a second AI prediction.",
+    "similar_species_records": [
+      {
+        "scientific_name": "Tabebuia rosea",
+        "common_name": "Pink poui",
+        "comparison": "Both bear showy tubular flowers. African tulip tree has pinnate leaves and orange-red cup-like flowers; pink poui has palmately compound leaves and pink-white trumpet flowers.",
+        "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/1/3171",
+        "photos": [
+          {
+            "asset": "assets/reference_photos/pink_poui_flowers.jpg",
+            "caption": "Pink poui flowers",
+            "author": "Forest & Kim Starr",
+            "license": "CC BY 3.0",
+            "license_url": "https://creativecommons.org/licenses/by/3.0/",
+            "source_url": "https://commons.wikimedia.org/wiki/File:Starr_061206-1952_Tabebuia_rosea.jpg",
+            "scientific_name": "Tabebuia rosea",
+            "url": "/species-reference/pink_poui_flowers.jpg"
+          },
+          {
+            "asset": "assets/reference_photos/pink_poui_leaves_flowers.jpg",
+            "caption": "Pink poui leaves and flowers",
+            "author": "Forest & Kim Starr",
+            "license": "CC BY 3.0",
+            "license_url": "https://creativecommons.org/licenses/by/3.0/",
+            "source_url": "https://commons.wikimedia.org/wiki/File:Starr_070221-4759_Tabebuia_rosea.jpg",
+            "scientific_name": "Tabebuia rosea",
+            "url": "/species-reference/pink_poui_leaves_flowers.jpg"
+          }
+        ]
+      }
+    ],
+    "look_alikes_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/1/3171",
+    "reference_photos": [
+      {
+        "url": "/species-reference/spathodea_campanulata_1.jpg",
+        "asset": "assets/reference_photos/spathodea_campanulata_1.jpg",
+        "caption": "Spathodea campanulata - botanical reference",
+        "author": "Kirt Edblom from Kihei, Hi, United States",
+        "license": "CC BY-SA 2.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/2.0",
+        "source_url": "https://commons.wikimedia.org/wiki/File:African_Tulip_(49584525956).jpg",
+        "scientific_name": "Spathodea campanulata"
+      },
+      {
+        "url": "/species-reference/spathodea_campanulata_2.jpg",
+        "asset": "assets/reference_photos/spathodea_campanulata_2.jpg",
+        "caption": "Spathodea campanulata - botanical reference",
+        "author": "cogdogblog",
+        "license": "CC BY 2.0",
+        "license_url": "https://creativecommons.org/licenses/by/2.0",
+        "source_url": "https://commons.wikimedia.org/wiki/File:African_Tulip_Tree_Flower_(8722882250).jpg",
+        "scientific_name": "Spathodea campanulata"
+      }
+    ]
+  },
+  "Swietenia macrophylla": {
+    "scientific_name": "Swietenia macrophylla",
+    "common_name": "Big-leaf mahogany",
+    "family": "Meliaceae",
+    "description": "Big-leaf mahogany is a tropical American timber tree cultivated in many tropical countries. Mature bark becomes ridged and flaky.",
+    "distinguishing_features": "Pinnate leaves with asymmetrical leaflets; young foliage can be reddish.",
+    "flower": "Small, pale flowers in branched clusters.",
+    "fruit": "Woody capsules that open to release winged seeds.",
+    "plant_type": "Tree / woody plant",
+    "lifespan": "Perennial",
+    "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/1/3150",
+    "taxonomy_status": "species",
+    "look_alikes": "West Indian mahogany (Swietenia mahagoni): Both have pinnate leaves and woody capsules with winged seeds. Compare mature leaflets and capsules with an expert; these species can hybridize, so leaf size alone is insufficient. Botanical comparison, not a second AI prediction.",
+    "similar_species_records": [
+      {
+        "scientific_name": "Swietenia mahagoni",
+        "common_name": "West Indian mahogany",
+        "comparison": "Both have pinnate leaves and woody capsules with winged seeds. Compare mature leaflets and capsules with an expert; these species can hybridize, so leaf size alone is insufficient.",
+        "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/1/3151",
+        "photos": [
+          {
+            "url": "/species-reference/swietenia_mahagoni_inat.jpg",
+            "asset": "assets/reference_photos/swietenia_mahagoni_inat.jpg",
+            "caption": "Swietenia mahagoni - botanical reference",
+            "scientific_name": "Swietenia mahagoni",
+            "author": "no rights reserved",
+            "license": "CC0",
+            "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+            "source_url": "https://www.inaturalist.org/photos/749690670"
+          }
+        ]
+      }
+    ],
+    "look_alikes_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/1/3151",
+    "reference_photos": [
+      {
+        "url": "/species-reference/swietenia_macrophylla_inat.jpg",
+        "asset": "assets/reference_photos/swietenia_macrophylla_inat.jpg",
+        "caption": "Swietenia macrophylla - botanical reference",
+        "scientific_name": "Swietenia macrophylla",
+        "author": "葉子",
+        "license": "CC0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "source_url": "https://www.inaturalist.org/photos/38634940"
+      }
+    ]
+  },
+  "Tabebuia rosea": {
+    "scientific_name": "Tabebuia rosea",
+    "common_name": "Pink poui",
+    "family": "Bignoniaceae",
+    "description": "Pink poui is an ornamental tree native to Central and South America, with showy pink or white trumpet-shaped flowers.",
+    "distinguishing_features": "Palmately compound leaves with five leaflets.",
+    "flower": "Pink or white trumpet-shaped flowers.",
+    "fruit": "Dry capsules containing winged seeds.",
+    "plant_type": "Tree / woody plant",
+    "lifespan": "Perennial",
+    "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/1/3171",
+    "taxonomy_status": "species",
+    "look_alikes": "Whitewood (Tabebuia heterophylla): Both can have pink trumpet flowers. Pink poui has five leaflets; whitewood may have one, three or five. Compare mature leaves and flowers together; leaflet count alone cannot confirm identity. Botanical comparison, not a second AI prediction.",
+    "uses": "Planted for shade and ornamental flowers.",
+    "name_story": "The species epithet rosea refers to rose-coloured flowers.",
+    "adaptation_strategies": "Species-specific adaptation guidance has not been verified.",
+    "similar_species_records": [
+      {
+        "scientific_name": "Tabebuia heterophylla",
+        "common_name": "Whitewood",
+        "comparison": "Both can have pink trumpet flowers. Pink poui has five leaflets; whitewood may have one, three or five. Compare mature leaves and flowers together; leaflet count alone cannot confirm identity.",
+        "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/1/3170",
+        "photos": [
+          {
+            "url": "/species-reference/tabebuia_heterophylla_inat.jpg",
+            "asset": "assets/reference_photos/tabebuia_heterophylla_inat.jpg",
+            "caption": "Tabebuia heterophylla - botanical reference",
+            "scientific_name": "Tabebuia heterophylla",
+            "author": "no rights reserved",
+            "license": "CC0",
+            "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+            "source_url": "https://www.inaturalist.org/photos/761833194"
+          }
+        ]
+      }
+    ],
+    "look_alikes_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/1/3170",
+    "reference_photos": [
+      {
+        "asset": "assets/reference_photos/pink_poui_flowers.jpg",
+        "caption": "Pink poui flowers",
+        "author": "Forest & Kim Starr",
+        "license": "CC BY 3.0",
+        "license_url": "https://creativecommons.org/licenses/by/3.0/",
+        "source_url": "https://commons.wikimedia.org/wiki/File:Starr_061206-1952_Tabebuia_rosea.jpg",
+        "scientific_name": "Tabebuia rosea",
+        "url": "/species-reference/pink_poui_flowers.jpg"
+      },
+      {
+        "asset": "assets/reference_photos/pink_poui_leaves_flowers.jpg",
+        "caption": "Pink poui leaves and flowers",
+        "author": "Forest & Kim Starr",
+        "license": "CC BY 3.0",
+        "license_url": "https://creativecommons.org/licenses/by/3.0/",
+        "source_url": "https://commons.wikimedia.org/wiki/File:Starr_070221-4759_Tabebuia_rosea.jpg",
+        "scientific_name": "Tabebuia rosea",
+        "url": "/species-reference/pink_poui_leaves_flowers.jpg"
+      }
+    ]
+  },
+  "Terminalia catappa": {
+    "scientific_name": "Terminalia catappa",
+    "common_name": "Talisay",
+    "family": "Combretaceae",
+    "description": "Talisay is a tropical coastal tree with layered branches. Its broad leaves may turn red before they fall.",
+    "distinguishing_features": "Large reverse-egg-shaped leaves with a pair of glands near the base.",
+    "flower": "Small pale flowers on slender spikes.",
+    "fruit": "Flattened fleshy fruits with a hard inner stone.",
+    "plant_type": "Tree / woody plant",
+    "lifespan": "Perennial",
+    "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/3/1/3181",
+    "taxonomy_status": "species",
+    "look_alikes": "Madagascar almond (Terminalia mantaly): Both may have tiered crowns. Talisay has large broad leaves that can turn red before falling; Madagascar almond has smaller spatula-shaped leaves with uneven edges. Botanical comparison, not a second AI prediction.",
+    "similar_species_records": [
+      {
+        "scientific_name": "Terminalia mantaly",
+        "common_name": "Madagascar almond",
+        "comparison": "Both may have tiered crowns. Talisay has large broad leaves that can turn red before falling; Madagascar almond has smaller spatula-shaped leaves with uneven edges.",
+        "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/2/7/2762",
+        "photos": [
+          {
+            "url": "/species-reference/terminalia_mantaly_inat.jpg",
+            "asset": "assets/reference_photos/terminalia_mantaly_inat.jpg",
+            "caption": "Terminalia mantaly - botanical reference",
+            "scientific_name": "Terminalia mantaly",
+            "author": "葉子",
+            "license": "CC0",
+            "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+            "source_url": "https://www.inaturalist.org/photos/64924207"
+          }
+        ]
+      }
+    ],
+    "look_alikes_source": "https://www.nparks.gov.sg/florafaunaweb/flora/2/7/2762",
+    "reference_photos": [
+      {
+        "url": "/species-reference/terminalia_catappa_inat.jpg",
+        "asset": "assets/reference_photos/terminalia_catappa_inat.jpg",
+        "caption": "Terminalia catappa - botanical reference",
+        "scientific_name": "Terminalia catappa",
+        "author": "(c) 胡正恆(Jackson Hu), some rights reserved (CC BY)",
+        "license": "CC BY 4.0",
+        "license_url": "https://creativecommons.org/licenses/by/4.0/",
+        "source_url": "https://www.inaturalist.org/photos/763295818"
+      }
+    ]
+  },
+  "Vitex parviflora": {
+    "scientific_name": "Vitex parviflora",
+    "common_name": "Molave",
+    "family": "Lamiaceae",
+    "plant_type": "Tree / woody plant",
+    "lifespan": "Perennial",
+    "taxonomy_status": "species",
+    "description": "Molave is a tropical tree native to parts of Malesia, including the Philippines, and Palau. It belongs to the mint family, Lamiaceae.",
+    "distinguishing_features": "Compare mature leaves and reproductive structures with related Vitex species. Differences can be subtle.",
+    "botanical_source": "https://powo.science.kew.org/taxon/urn%3Alsid%3Aipni.org%3Anames%3A865916-1/general-information",
+    "similar_species_records": [
+      {
+        "scientific_name": "Vitex quinata",
+        "common_name": "Vitex quinata",
+        "comparison": "These closely related species can be difficult to separate. An expert should compare mature reproductive structures; foliage or a distant tree photo alone is insufficient.",
+        "botanical_source": "https://powo.science.kew.org/taxon/urn%3Alsid%3Aipni.org%3Anames%3A865957-1/general-information",
+        "photos": [
+          {
+            "url": "/species-reference/vitex_quinata_inat.jpg",
+            "asset": "assets/reference_photos/vitex_quinata_inat.jpg",
+            "caption": "Vitex quinata - botanical reference",
+            "scientific_name": "Vitex quinata",
+            "author": "葉子",
+            "license": "CC0",
+            "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+            "source_url": "https://www.inaturalist.org/photos/173577206"
+          }
+        ]
+      }
+    ],
+    "look_alikes": "Vitex quinata (Vitex quinata): These closely related species can be difficult to separate. An expert should compare mature reproductive structures; foliage or a distant tree photo alone is insufficient. Botanical comparison, not a second AI prediction.",
+    "look_alikes_source": "https://powo.science.kew.org/taxon/urn%3Alsid%3Aipni.org%3Anames%3A865957-1/general-information",
+    "reference_photos": [
+      {
+        "url": "/species-reference/vitex_parviflora_inat.jpg",
+        "asset": "assets/reference_photos/vitex_parviflora_inat.jpg",
+        "caption": "Vitex parviflora - botanical reference",
+        "scientific_name": "Vitex parviflora",
+        "author": "Kevin Faccenda",
+        "license": "CC BY 4.0",
+        "license_url": "https://creativecommons.org/licenses/by/4.0/",
+        "source_url": "https://www.inaturalist.org/photos/577809093"
+      }
+    ]
+  },
+  "Eucalyptus": {
+    "scientific_name": "Eucalyptus",
+    "common_name": "Eucalyptus (genus)",
+    "family": "Myrtaceae",
+    "taxonomy_status": "genus",
+    "plant_type": "Tree / woody plant",
+    "lifespan": "Perennial",
+    "description": "This trained class identifies the genus Eucalyptus, not an exact species. Rainbow eucalyptus (Eucalyptus deglupta) is one example, not a confirmed identification of this tree.",
+    "distinguishing_features": "An expert must compare mature leaves, flower buds, fruits and bark to identify the species.",
+    "look_alikes": "An exact species identification is needed before selecting a close species comparison.",
+    "botanical_source": "https://www.nparks.gov.sg/florafaunaweb/flora/2/8/2886",
+    "reference_photos": [
+      {
+        "url": "/species-reference/eucalyptus_deglupta_2.jpg",
+        "asset": "assets/reference_photos/eucalyptus_deglupta_2.jpg",
+        "caption": "Genus example: Eucalyptus deglupta - not the confirmed species",
+        "author": "Photo by David J. Stang",
+        "license": "CC BY-SA 4.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+        "source_url": "https://commons.wikimedia.org/wiki/File:Eucalyptus_deglupta_10zz.jpg",
+        "scientific_name": "Eucalyptus deglupta"
+      }
+    ]
+  },
+  "Acacia-Semanca": {
+    "scientific_name": "Acacia-Semanca",
+    "common_name": "Acacia-Semanca (unverified label)",
+    "taxonomy_status": "unverified",
+    "family": null,
+    "description": "Acacia-Semanca is a dataset label whose scientific identity has not been verified. An expert must confirm the botanical name before family, species photos or comparisons can be assigned.",
+    "look_alikes": "Species comparisons are withheld until the botanical name is verified.",
+    "reference_photos": []
+  }
+}

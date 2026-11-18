@@ -6,7 +6,7 @@
     "app/main.py": {
       "memory": 2048,
       "maxDuration": 300,
-      "includeFiles": "{models/tree_trunk_dbh_v1.pt,models/treetrace_final.pt,models/MobileNetV3-Large.pt,models/ResNet50.pt,data/panabo_barangays.geojson}",
+      "includeFiles": "{models/tree_trunk_dbh_v1.pt,models/treetrace_final.pt,models/MobileNetV3-Large.pt,models/ResNet50.pt,data/panabo_barangays.geojson,data/species_reference.json}",
       "excludeFiles": "{tests/**,.pytest_cache/**,.venv/**,venv/**,sandbox_uploads/**,**/__pycache__/**,**/*.pyc,.env*,*.jpg,*.png,models/roboflow_efficientnet/**}"
     }
   },

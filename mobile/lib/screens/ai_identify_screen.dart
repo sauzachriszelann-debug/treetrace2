@@ -14,6 +14,7 @@ import '../services/theme.dart';
 import '../widgets/widgets.dart';
 import '../widgets/expandable_photo.dart';
 import '../widgets/photo_observations_card.dart';
+import '../widgets/species_references.dart';
 import '../widgets/tree_age_card.dart';
 import 'add_tree_screen.dart';
 import 'upgrade_screen.dart';
@@ -992,7 +993,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
               _InfoRow('Fruit',
                   _textValue('fruit', fallback: 'Species-specific fruiting')),
               _InfoRow('Diagnostic Features', features),
-              _InfoRow('Look-alikes', lookAlikes),
+              SpeciesComparisons(result: _result ?? {}, fallback: lookAlikes),
             ],
           ),
         ),
@@ -1120,37 +1121,11 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
   }
 
   Widget _buildMatchGallery() {
-    final images = speciesReferencePhotos(_result ?? {});
-    if (images.isEmpty && _photo == null) return const SizedBox.shrink();
-    final count = images.length + (_photo != null ? 1 : 0);
+    final photos = curatedReferencePhotos(_result ?? {});
     return _buildEncyclopediaSection(
-      title: 'Scan and reference photos',
+      title: 'Species reference photos',
       icon: Icons.photo_library_outlined,
-      child: Column(children: [
-        const Text('Reference photos show examples of the identified species, not this individual tree.'),
-        if (images.isEmpty) const Text('No species reference photos are available for this result.'),
-        SizedBox(
-        height: 190,
-        child: PageView.builder(
-          controller: PageController(viewportFraction: 0.88),
-          itemCount: count,
-          itemBuilder: (_, index) {
-            if (_photo != null && index == 0) {
-              return _GalleryFrame(
-                label: 'Your scan',
-                child: ExpandablePhoto(image: FileImage(_photo!), label: 'Your scan'),
-              );
-            }
-            final imageIndex = _photo != null ? index - 1 : index;
-            return _GalleryFrame(
-              label: 'Species reference ${imageIndex + 1} — a different tree',
-              child: ExpandablePhoto(image: NetworkImage(images[imageIndex]),
-                  label: 'Species reference — ${_result?['scientific_name'] ?? ''}'),
-            );
-          },
-        ),
-      ),
-      ]),
+      child: SpeciesReferencePhotos(photos: photos.map((p) => Map<String, dynamic>.from(p)).toList()),
     );
   }
 
@@ -1746,52 +1721,6 @@ class _QuestionTile extends StatelessWidget {
     );
   }
 }
-
-class _GalleryFrame extends StatelessWidget {
-  final String label;
-  final Widget child;
-  const _GalleryFrame({required this.label, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(right: 10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: kBorder),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          child,
-          Positioned(
-            left: 10,
-            right: 10,
-            bottom: 10,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.5),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 
 class _CareTile extends StatelessWidget {
   final IconData icon;

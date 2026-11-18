@@ -1,3 +1,4 @@
+import { ReferencePhotos, SpeciesComparisons } from '@/components/trees/SpeciesReferences';
 import TreeAgeEstimate from '@/components/trees/TreeAgeEstimate';
 import { useState } from "react";
 import TreePhotoPreview from "@/components/trees/TreePhotoPreview";
@@ -302,6 +303,8 @@ export default function TreeDetail({ previewId } = {}) {
                 <Card><CardHeader><CardTitle>Species and scan details</CardTitle></CardHeader>
                   <CardContent className="space-y-3 text-sm">
                     <p><strong>Original AI confidence:</strong> {aiConfidence != null ? `${aiConfidence.toFixed(2)}% (${aiSuggestion.common_name || aiSuggestion.scientific_name})` : 'No confidence saved for this record.'}</p>
+                    <ReferencePhotos photos={tree.species_profile?.reference_photos} />
+                    <SpeciesComparisons records={tree.species_profile?.similar_species_records} />
                     {Object.entries({Family: tree.species_profile?.family, Overview: tree.species_profile?.description,
                       'Diagnostic features': tree.species_profile?.distinguishing_features,
                       'Similar species': tree.species_profile?.look_alikes,

@@ -56,4 +56,5 @@ def restrict_scan_result(result):
         return unknown_scan("This species is outside the trained classes. Submit for expert review.")
     if result.get("confidence") not in ("High", "Medium"):
         return unknown_scan("TreeTrace is unsure about this match. Submit for expert review.")
-    return {**result, "trained_class": label}
+    from app.services.species_reference import enrich_species_reference
+    return enrich_species_reference({**result, "trained_class": label})

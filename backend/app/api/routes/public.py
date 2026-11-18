@@ -186,8 +186,8 @@ def public_tree_wiki(tree_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Tree not found")
 
     from app.services.ai_identify import get_species_wiki
-    from app.services.local_species_classifier import SPECIES_REFERENCE
-    if tree.scientific_name in SPECIES_REFERENCE:
+    from app.services.species_reference import species_reference
+    if species_reference(tree.scientific_name):
         from app.services.ai_identify import _build_wiki
         from app.services.profile_content import species_content
         return species_content(tree, _build_wiki(tree.common_name, tree.scientific_name, None, None, None))

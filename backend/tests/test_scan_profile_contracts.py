@@ -41,7 +41,9 @@ def test_profile_removes_provider_diagnostics_and_uses_shared_botanical_facts():
 def test_species_correction_never_relabels_old_ai_facts():
     tree = Tree(common_name='Narra', scientific_name='Pterocarpus indicus',
         scan_profile={'scientific_name': 'Tabebuia rosea', 'family': 'Bignoniaceae', 'confidence_percent': 85.38})
-    assert tree.species_profile == {}
+    assert tree.species_profile['family'] == 'Fabaceae'
+    assert tree.species_profile['scientific_name'] == 'Pterocarpus indicus'
+    assert 'confidence_percent' not in tree.species_profile
     assert tree.scan_profile['confidence_percent'] == 85.38
 
 

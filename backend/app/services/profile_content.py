@@ -21,11 +21,11 @@ def saved_profile(tree):
         return {}
 
 def species_facts(tree):
-    from app.services.local_species_classifier import SPECIES_REFERENCE
+    from app.services.species_reference import species_reference
     saved = saved_profile(tree)
     scientific = (tree.scientific_name or '').strip().lower()
     snapshot_matches = scientific and saved.get('scientific_name', '').strip().lower() == scientific
-    facts = {**(saved if snapshot_matches else {}), **SPECIES_REFERENCE.get(tree.scientific_name, {})}
+    facts = {**(saved if snapshot_matches else {}), **species_reference(tree.scientific_name)}
     return facts
 
 def species_content(tree, wiki):
@@ -35,6 +35,9 @@ def species_content(tree, wiki):
     if not facts:
         return wiki
     wiki['species_profile'] = facts
+    wiki['reference_photos'] = facts.get('reference_photos', [])
+    wiki['similar_species_records'] = facts.get('similar_species_records', [])
+    wiki.setdefault('sources', {})['botanical'] = facts.get('botanical_source')
     wiki['tagline'] = facts.get('description') or wiki.get('tagline')
     basic = wiki.setdefault('basic_info', {})
     basic['family'] = facts.get('family')
@@ -51,6 +54,16 @@ def species_content(tree, wiki):
         'Adaptation strategies': facts.get('adaptation_strategies'),
         'Name story': facts.get('name_story'),
     }
+    # Remove generic provider guesses when using curated taxon facts.
+    if facts.get('taxonomy_status'):
+        basic.update(native_to=facts.get('native_to'), invasive_status='Not assessed',
+                     mature_height=None, mature_spread=None, flowering_season=None, leaf_type=None)
+        wiki['history_and_legends'] = None
+        wiki['symbolism'] = None
+        wiki['popular_questions'] = []
+        wiki['uses'] = {'ecological': facts.get('uses')}
+        wiki['name_story'] = facts.get('name_story')
+        wiki['adaptation_strategies'] = facts.get('adaptation_strategies')
     if scientific == 'tabebuia rosea':
         basic.update(native_to='Mexico to Venezuela and Ecuador', invasive_status='Not assessed',
                      mature_height='Up to 35 m (species reference, not this tree)',

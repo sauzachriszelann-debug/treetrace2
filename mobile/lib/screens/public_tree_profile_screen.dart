@@ -1,3 +1,4 @@
+import '../widgets/species_references.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -215,6 +216,7 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
       padding: const EdgeInsets.all(20),
       children: [
         _buildStatsStrip(tree),
+        SavedSpeciesReferences(scientificName: tree.scientificName),
         const SizedBox(height: 24),
         if (tree.isProtected ||
             const ['CR', 'EN', 'VU'].contains(tree.statusCode)) ...[

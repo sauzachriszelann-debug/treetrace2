@@ -1,3 +1,4 @@
+import '../widgets/species_references.dart';
 import '../widgets/expandable_photo.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -179,6 +180,7 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
               ],
               const SizedBox(height: 16),
 
+              SavedSpeciesReferences(scientificName: tree.scientificName),
               // Details card
               Container(
                 padding: const EdgeInsets.all(16),

@@ -1,3 +1,4 @@
+import { ReferencePhotos, SpeciesComparisons } from '@/components/trees/SpeciesReferences';
 import TreeAgeEstimate from '@/components/trees/TreeAgeEstimate';
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -311,8 +312,10 @@ export default function PublicTreeProfile() {
             </div>
 
             <div className="mx-4 bg-white rounded-2xl border border-[#e8ede6]">
+              {wiki.reference_photos?.length > 0 && <Section icon={BookOpen} title="Species reference photos"><ReferencePhotos photos={wiki.reference_photos} /></Section>}
               <Section icon={TreePine} title="Similar species">
-                <p className="text-sm leading-relaxed">{wiki.similar_species || 'No verified similar-species information is available.'}</p>
+                {wiki.similar_species_records?.length ? <SpeciesComparisons records={wiki.similar_species_records} /> :
+                  <p className="text-sm leading-relaxed">{wiki.similar_species || 'No verified similar-species information is available.'}</p>}
               </Section>
             </div>
             {/* Uses */}

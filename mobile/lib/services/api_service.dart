@@ -1,3 +1,4 @@
+import 'photo_sources.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
@@ -817,7 +818,7 @@ class ApiService {
     try {
       await _recordAiIdentification(result);
     } catch (_) {/* Keep the actual AI result; never invent an identity. */}
-    return result;
+    return enrichScanSpeciesFacts(result);
   }
 
   Future<Map<String, dynamic>> submitUnknownSpecies(
