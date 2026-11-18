@@ -49,6 +49,7 @@ class AIIdentifyScreen extends StatefulWidget {
 class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
   File? _photo;
   bool _identifying = false;
+  bool _openingTreeForm = false;
   Map<String, dynamic>? _result;
   Map<String, dynamic>? _usage;
   /// Phase 13.4: the usage badges used to show "Loading" forever whenever
@@ -154,6 +155,30 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
           });
     } finally {
       if (mounted) setState(() => _identifying = false);
+    }
+  }
+
+  Future<void> _openTreeForm() async {
+    if (_openingTreeForm || _photo == null || _result == null) return;
+    _openingTreeForm = true;
+    try {
+      final completed = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute<bool>(
+          builder: (_) => AddTreeScreen(aiResult: _result, initialPhoto: _photo),
+        ),
+      );
+      // Add Tree returns true only after saving, queueing, or replaying a
+      // completed registration. Back/cancel keeps this scan available.
+      if (!mounted || completed != true) return;
+      setState(() {
+        _photo = null;
+        _result = null;
+        _trunkPreview = null;
+        _profileTab = 0;
+      });
+    } finally {
+      _openingTreeForm = false;
     }
   }
 
@@ -729,15 +754,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
           child: ElevatedButton.icon(
             onPressed: needsExpertReview
                 ? _submitUnknown
-                : () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => AddTreeScreen(
-                          aiResult: _result,
-                          initialPhoto: _photo,
-                        ),
-                      ),
-                    ),
+                : _openTreeForm,
             icon: Icon(needsExpertReview
                 ? Icons.science_outlined
                 : Icons.add_location_alt_rounded),
