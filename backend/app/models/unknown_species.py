@@ -1,3 +1,4 @@
+from sqlalchemy import JSON
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -14,6 +15,7 @@ class UnknownSpecies(Base):
     submitter_notes = Column(Text, nullable=True)
     possible_name = Column(String(150), nullable=True)   # user's guess
     ai_candidates = Column(Text, nullable=True)           # JSON list from AI
+    scan_profile = Column(JSON, nullable=True)
     dbh_cm = Column(Float, nullable=True)
     height_m = Column(Float, nullable=True)
     reviewed = Column(Boolean, default=False)

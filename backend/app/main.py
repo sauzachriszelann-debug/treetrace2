@@ -62,15 +62,21 @@ def sync_gps_accuracy_columns():
     with engine.begin() as conn:
         for table in ('trees', 'tree_submissions'):
             if conn.dialect.name == 'postgresql':
+                conn.execute(text(f'ALTER TABLE {table} ADD COLUMN IF NOT EXISTS scan_profile JSON'))
                 conn.execute(text(f'ALTER TABLE {table} ADD COLUMN IF NOT EXISTS gps_accuracy_m DOUBLE PRECISION'))
-            elif 'gps_accuracy_m' not in {c['name'] for c in inspect(conn).get_columns(table)}:
-                conn.execute(text(f'ALTER TABLE {table} ADD COLUMN gps_accuracy_m DOUBLE PRECISION'))
+            else:
+                columns = {c['name'] for c in inspect(conn).get_columns(table)}
+                if 'gps_accuracy_m' not in columns:
+                    conn.execute(text(f'ALTER TABLE {table} ADD COLUMN gps_accuracy_m DOUBLE PRECISION'))
+                if 'scan_profile' not in columns:
+                    conn.execute(text(f'ALTER TABLE {table} ADD COLUMN scan_profile JSON'))
 
 
 def sync_unknown_species_columns():
     from sqlalchemy import inspect
 
     columns = {
+        "scan_profile": "JSON",
         "identified_scientific_name": "VARCHAR(150)",
         "dbh_cm": "DOUBLE PRECISION",
         "height_m": "DOUBLE PRECISION",

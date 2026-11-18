@@ -1,3 +1,4 @@
+from app.schemas.scan_profile import ScanProfile
 import math
 from datetime import date, datetime
 from typing import Any, Literal, Optional
@@ -62,6 +63,7 @@ class TreeCreate(TreeMeasurementInput):
     barangay: Optional[str] = None
     city: Optional[str] = "Panabo City"
     province: Optional[str] = "Davao del Norte"
+    scan_profile: Optional[ScanProfile] = None
     gps_accuracy_m: Optional[float] = Field(None, ge=0, le=10000, allow_inf_nan=False)
     lat: Optional[float] = None
     lng: Optional[float] = None
@@ -80,6 +82,7 @@ class TreeUpdate(TreeMeasurementInput):
     barangay: Optional[str] = None
     city: Optional[str] = None
     province: Optional[str] = None
+    scan_profile: Optional[ScanProfile] = None
     gps_accuracy_m: Optional[float] = Field(None, ge=0, le=10000, allow_inf_nan=False)
     lat: Optional[float] = None
     lng: Optional[float] = None
@@ -97,6 +100,7 @@ class TreeUpdate(TreeMeasurementInput):
 
 
 class TreeOut(BaseModel):
+    species_profile: Optional[dict] = None
     id: int
     common_name: str
     scientific_name: Optional[str] = None
@@ -108,6 +112,7 @@ class TreeOut(BaseModel):
     barangay: Optional[str] = None
     city: Optional[str] = None
     province: Optional[str] = None
+    scan_profile: Optional[ScanProfile] = None
     gps_accuracy_m: Optional[float] = Field(None, ge=0, le=10000, allow_inf_nan=False)
     lat: Optional[float] = None
     lng: Optional[float] = None
@@ -133,6 +138,7 @@ class TreeDetailOut(TreeOut):
 
 
 class PublicTreeOut(BaseModel):
+    species_profile: Optional[dict] = None
     id: int
     common_name: str
     scientific_name: Optional[str] = None
@@ -144,6 +150,7 @@ class PublicTreeOut(BaseModel):
     barangay: Optional[str] = None
     city: Optional[str] = None
     province: Optional[str] = None
+    scan_profile: Optional[ScanProfile] = None
     gps_accuracy_m: Optional[float] = Field(None, ge=0, le=10000, allow_inf_nan=False)
     lat: Optional[float] = None
     lng: Optional[float] = None
@@ -162,6 +169,7 @@ class PublicTreeOut(BaseModel):
 
 class PublicTreeProfileOut(PublicTreeOut):
     estimated_age_years: Optional[float] = None
+    age_estimate: Optional[dict] = None
 
 
 class TreeCreateOut(TreeOut):

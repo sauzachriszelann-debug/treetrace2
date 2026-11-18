@@ -31,19 +31,6 @@ function calcBiomassCarbon(dbh_cm, height_m) {
   };
 }
 
-const usefulAiNote = (description) => {
-  const text = (description || "").trim();
-  if (!text) return "";
-  const lower = text.toLowerCase();
-  const blocked = [
-    "detailed treetrace vision enrichment is unavailable",
-    "identified using plantnet botanical image matching",
-    "gemini details are temporarily unavailable",
-    "species match is based on plantnet",
-  ];
-  return blocked.some((phrase) => lower.includes(phrase)) ? "" : text;
-};
-
 export default function TreeForm({
   initial = {},
   onSubmit,
@@ -334,9 +321,12 @@ export default function TreeForm({
       } else {
         setForm((prev) => ({
           ...prev,
+          scan_profile: Object.fromEntries(Object.entries(result).filter(([key]) =>
+            ['scientific_name', 'common_name', 'confidence_percent', 'family', 'description',
+             'distinguishing_features', 'look_alikes', 'habitat', 'uses', 'adaptation_strategies',
+             'name_story', 'plant_type', 'lifespan', 'flower', 'fruit'].includes(key))),
           common_name: result.common_name || prev.common_name,
           scientific_name: result.scientific_name || prev.scientific_name,
-          notes: usefulAiNote(result.description) || prev.notes,
         }));
         setSpeciesPrediction({
           name: result.common_name || result.scientific_name,
@@ -436,6 +426,7 @@ export default function TreeForm({
         height_m: height.value,
         barangay: form.barangay || undefined,
         location_description: latitude ? `${latitude}, ${longitude}` : undefined,
+        scan_profile: { ...(form.scan_profile || {}), ...(unknownCandidate || {}) },
         submitter_notes: form.notes || undefined,
         ai_candidates: unknownCandidate ? [unknownCandidate] : [],
       });
@@ -856,6 +847,14 @@ export default function TreeForm({
           preliminarySpecies={unknownDialogOpen}
           portalTarget={unknownDialogOpen ? unknownAnalysisSlot : null}
           onDimensions={fillDimensions}
+          onAgeEstimated={(age) => setForm(previous => ({ ...previous, scan_profile: {
+            ...(previous.scan_profile || {}),
+            scientific_name: previous.scan_profile?.scientific_name || (unknownDialogOpen ? unknownCandidate?.scientific_name : previous.scientific_name),
+            common_name: previous.scan_profile?.common_name || (unknownDialogOpen ? unknownCandidate?.common_name : previous.common_name),
+            estimated_dbh_cm: Number(previous.dbh_cm) > 0 && Number(previous.dbh_cm) <= 300 ? Number(previous.dbh_cm) : null,
+            estimated_height_m: Number(previous.height_m) > 0 && Number(previous.height_m) <= 80 ? Number(previous.height_m) : null,
+            age_estimate: age,
+          } }))}
           onAnalysisPending={setPhotoAnalysisPending}
           ageDbhCm={Number(form.dbh_cm) > 0 ? Number(form.dbh_cm) : null}
           ageHeightM={Number(form.height_m) > 0 ? Number(form.height_m) : null}

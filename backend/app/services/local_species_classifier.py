@@ -21,6 +21,13 @@ TRIAL_COMMON_NAMES = {"Ficus benjamina": "Weeping fig", "Tabebuia rosea": "Pink 
 SPECIES_REFERENCE = {
     "Tabebuia rosea": {
         "family": "Bignoniaceae",
+        "plant_type": "Tree / woody plant",
+        "lifespan": "Perennial",
+        "flower": "Pink or white trumpet-shaped flowers",
+        "fruit": "Dry capsules containing winged seeds",
+        "uses": "Planted for shade and ornamental flowers.",
+        "name_story": "The species epithet rosea refers to rose-coloured flowers.",
+        "adaptation_strategies": "Species-specific adaptation guidance has not been verified.",
         "description": "Pink poui is an ornamental tree native to Central and South America, with showy pink or white trumpet-shaped flowers.",
         "distinguishing_features": "Showy pink or white trumpet-shaped flowers; confirm identification using botanical features and expert review.",
         "look_alikes": "Compare with Tabebuia heterophylla (whitewood), another tree with pale pink tubular flowers. T. heterophylla can have 1, 3 or 5 leaflets; T. rosea has five leaflets. Leaf count alone is insufficient: compare mature leaves and flowers and ask an expert to confirm. This is a botanical comparison, not a second AI prediction.",

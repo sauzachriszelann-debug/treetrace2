@@ -23,7 +23,7 @@ function requestError(error) {
   return error?.response ? 'Prediction could not complete. Try again.' : error?.message || 'Check your connection and try again.';
 }
 
-export default function GalleryTreePredictions({ file, scientificName, onDimensions, onAnalysisPending,
+export default function GalleryTreePredictions({ file, scientificName, onDimensions, onAnalysisPending, onAgeEstimated,
   ageDbhCm, ageHeightM, portalTarget, preliminarySpecies = false, dimensionsSource = 'ai_prediction' }) {
   const [prediction, setPrediction] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -180,7 +180,7 @@ export default function GalleryTreePredictions({ file, scientificName, onDimensi
       </div>}
       {supplementLoading && <p role="status">Checking added photos.</p>}
       {supplementError && <p role="alert">{supplementError}</p>}
-      <TreeAgeEstimate scientificName={scientificName}
+      <TreeAgeEstimate onEstimated={onAgeEstimated} scientificName={scientificName}
         preliminarySpecies={preliminarySpecies}
         dbhCm={ageDbhCm === undefined ? dbh : ageDbhCm}
         heightM={ageHeightM === undefined ? height : ageHeightM}

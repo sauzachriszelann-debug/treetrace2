@@ -1,3 +1,4 @@
+from app.schemas.scan_profile import ScanProfile
 """Pydantic schemas for G4 tree submissions.
 
 Reuses the exact validators that guard ``trees`` input (measurements must be
@@ -29,6 +30,7 @@ class _SubmissionFields(TreeMeasurementInput):
     barangay: Optional[str] = None
     city: Optional[str] = "Panabo City"
     province: Optional[str] = "Davao del Norte"
+    scan_profile: Optional[ScanProfile] = None
     gps_accuracy_m: Optional[float] = Field(None, ge=0, le=10000, allow_inf_nan=False)
     lat: Optional[float] = None
     lng: Optional[float] = None
@@ -103,6 +105,7 @@ class SubmissionOut(BaseModel):
     barangay: Optional[str] = None
     city: Optional[str] = None
     province: Optional[str] = None
+    scan_profile: Optional[ScanProfile] = None
     gps_accuracy_m: Optional[float] = Field(None, ge=0, le=10000, allow_inf_nan=False)
     lat: Optional[float] = None
     lng: Optional[float] = None

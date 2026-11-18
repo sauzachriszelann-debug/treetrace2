@@ -1,3 +1,4 @@
+import TreeAgeEstimate from '@/components/trees/TreeAgeEstimate';
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { publicApiService } from "@/api/publicApi";
@@ -33,20 +34,6 @@ function Section({ icon: Icon, title, children, defaultOpen = true }) {
         {open ? <ChevronUp className="w-4 h-4 text-[#6b8f71]" /> : <ChevronDown className="w-4 h-4 text-[#6b8f71]" />}
       </button>
       {open && <div className="px-5 pb-5">{children}</div>}
-    </div>
-  );
-}
-
-function ScoreBar({ label, score }) {
-  const pct = Math.min(5, Math.max(0, parseInt(score) || 3));
-  return (
-    <div className="flex items-center gap-3">
-      <span className="text-xs text-[#6b8f71] w-16 flex-shrink-0">{label}</span>
-      <div className="flex gap-1">
-        {[1,2,3,4,5].map(i => (
-          <div key={i} className={`w-5 h-2 rounded-full ${i <= pct ? "bg-[#2d6a4f]" : "bg-[#e8ede6]"}`} />
-        ))}
-      </div>
     </div>
   );
 }
@@ -138,7 +125,7 @@ export default function PublicTreeProfile() {
     </div>
   );
 
-  const tabs = ["overview", "care", "info", "history"];
+  const tabs = ["overview", "care", "explore", "info", "history"];
 
   return (
     <div className="min-h-screen bg-[#f4f7f3]">
@@ -185,7 +172,7 @@ export default function PublicTreeProfile() {
         <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-8">
           <h1 className="text-white text-3xl font-bold leading-tight sm:text-5xl">{tree.common_name}</h1>
           {tree.scientific_name && (
-            <p className="text-white/80 text-sm italic mt-1 sm:text-base">Also known as {tree.scientific_name}</p>
+            <p className="text-white/80 text-sm italic mt-1 sm:text-base">Scientific name: {tree.scientific_name}</p>
           )}
           {wiki?.tagline && !wikiLoading && (
             <p className="text-white/70 text-xs mt-2 max-w-3xl leading-relaxed sm:text-sm">{wiki.tagline}</p>
@@ -278,12 +265,24 @@ export default function PublicTreeProfile() {
         )}
 
         {/* ══ OVERVIEW TAB ══ */}
+        {activeTab === "overview" && <div className="mx-4 mt-4 space-y-3">
+          <TreeAgeEstimate scientificName={tree.scientific_name} dbhCm={tree.dbh_cm} heightM={tree.height_m}
+            initialEstimate={tree.age_estimate || { status: 'unavailable', reason: 'No saved or reviewed growth estimate is available for this record.' }} />
+          <div className="rounded-xl border bg-white p-4 text-sm">
+            <p className="font-semibold">Original AI scan confidence</p>
+            <p>{Number.isFinite(tree.scan_profile?.confidence_percent)
+              ? `${tree.scan_profile.confidence_percent.toFixed(2)}% — ${tree.scan_profile.common_name || tree.scan_profile.scientific_name}`
+              : 'Unavailable — no scan confidence was saved for this record.'}</p>
+            <p className="text-xs text-muted-foreground">AI prediction score, separate from expert confirmation.</p>
+          </div>
+        </div>}
         {activeTab === "overview" && wiki && !wikiLoading && (
           <div className="mt-4 space-y-3">
 
             {/* Basic Info */}
             <div className="mx-4 bg-white rounded-2xl overflow-hidden border border-[#e8ede6]">
               <Section icon={Leaf} title="Basic Info">
+                <InfoRow label="Family" value={wiki.basic_info?.family} />
                 <InfoRow label="Native to" value={wiki.basic_info?.native_to} />
                 <InfoRow label="Invasive Status" value={wiki.basic_info?.invasive_status} />
                 <InfoRow label="Plant Type" value={wiki.basic_info?.plant_type} />
@@ -299,9 +298,8 @@ export default function PublicTreeProfile() {
             <div className="mx-4 bg-white rounded-2xl overflow-hidden border border-[#e8ede6]">
               <Section icon={Star} title="Characteristics">
                 <div className="space-y-2.5">
-                  <ScoreBar label="Nativity" score={wiki.characteristics?.nativity} />
-                  <ScoreBar label="Flower" score={wiki.characteristics?.flower} />
-                  <ScoreBar label="Fruit" score={wiki.characteristics?.fruit} />
+                  {Object.entries(wiki.characteristics || {}).filter(([key]) => !['nativity', 'flower', 'fruit', 'leaf_color'].includes(key))
+                    .map(([key, value]) => <InfoRow key={key} label={key} value={value} />)}
                 </div>
                 {wiki.characteristics?.leaf_color && (
                   <p className="mt-3 text-xs text-[#6b8f71]">
@@ -312,6 +310,11 @@ export default function PublicTreeProfile() {
               </Section>
             </div>
 
+            <div className="mx-4 bg-white rounded-2xl border border-[#e8ede6]">
+              <Section icon={TreePine} title="Similar species">
+                <p className="text-sm leading-relaxed">{wiki.similar_species || 'No verified similar-species information is available.'}</p>
+              </Section>
+            </div>
             {/* Uses */}
             {wiki.uses && (
               <div className="mx-4 bg-white rounded-2xl overflow-hidden border border-[#e8ede6]">
@@ -484,6 +487,13 @@ export default function PublicTreeProfile() {
         )}
 
         {/* ══ HISTORY TAB ══ */}
+        {activeTab === "explore" && <div className="mx-4 mt-4 rounded-2xl border bg-white">
+          <Section icon={BookOpen} title="Explore">
+            {Object.entries(wiki?.explore || {}).map(([key, value]) => <InfoRow key={key} label={key} value={value} />)}
+            {!wiki?.explore && <p>Species reference information is unavailable.</p>}
+            {wiki?.sources?.botanical && <a href={wiki.sources.botanical} target="_blank" rel="noopener noreferrer" className="text-sm underline">Botanical reference</a>}
+          </Section>
+        </div>}
         {activeTab === "history" && wiki && !wikiLoading && (
           <div className="mt-4 space-y-3">
 

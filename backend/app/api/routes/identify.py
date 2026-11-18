@@ -1,3 +1,4 @@
+from app.schemas.scan_profile import ScanProfile
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form, Response
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from sqlalchemy.exc import IntegrityError
@@ -606,6 +607,7 @@ def community_structure(
     }
 
 class UnknownSpeciesSubmit(TreeMeasurementInput):
+    scan_profile: Optional[ScanProfile] = None
     photo_url: str
     dbh_cm: Optional[float] = None
     height_m: Optional[float] = None
@@ -672,6 +674,7 @@ def submit_unknown_species(
         location_description=payload.location_description,
         possible_name=payload.possible_name,
         submitter_notes=payload.submitter_notes,
+        scan_profile=payload.scan_profile.model_dump() if payload.scan_profile else None,
         dbh_cm=payload.dbh_cm,
         height_m=payload.height_m,
         ai_candidates=json.dumps(payload.ai_candidates or []),
@@ -850,6 +853,7 @@ def convert_unknown_species_to_submission(
             submission = TreeSubmission(
                 common_name=(entry.identified_as or "").strip(),
                 scientific_name=entry.identified_scientific_name,
+                scan_profile=entry.scan_profile,
                 dbh_cm=entry.dbh_cm,
                 height_m=entry.height_m,
                 photo_url=entry.photo_url,

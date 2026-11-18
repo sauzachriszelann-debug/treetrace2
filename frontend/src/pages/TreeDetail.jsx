@@ -1,3 +1,4 @@
+import TreeAgeEstimate from '@/components/trees/TreeAgeEstimate';
 import { useState } from "react";
 import TreePhotoPreview from "@/components/trees/TreePhotoPreview";
 import { useParams, Link, useNavigate } from "react-router-dom";
@@ -290,6 +291,20 @@ export default function TreeDetail({ previewId } = {}) {
                   </CardContent>
                 </Card>
 
+                <TreeAgeEstimate scientificName={tree.scientific_name} dbhCm={tree.dbh_cm} heightM={tree.height_m}
+                  initialEstimate={tree.scan_profile?.scientific_name === tree.scientific_name && tree.scan_profile?.estimated_dbh_cm === tree.dbh_cm && tree.scan_profile?.estimated_height_m === tree.height_m ? tree.scan_profile?.age_estimate : null} />
+                <Card><CardHeader><CardTitle>Species and scan details</CardTitle></CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    <p><strong>Original AI confidence:</strong> {Number.isFinite(tree.scan_profile?.confidence_percent) ? `${tree.scan_profile.confidence_percent}% (${tree.scan_profile.common_name || tree.scan_profile.scientific_name})` : 'No confidence saved for this record.'}</p>
+                    {Object.entries({Family: tree.species_profile?.family, Overview: tree.species_profile?.description,
+                      'Diagnostic features': tree.species_profile?.distinguishing_features,
+                      'Similar species': tree.species_profile?.look_alikes,
+                      'Explore - ecological uses': tree.species_profile?.uses,
+                      'Explore - adaptation': tree.species_profile?.adaptation_strategies,
+                      'Name story': tree.species_profile?.name_story,
+                    }).map(([key, value]) => value ? <div key={key}><p className="font-semibold">{key}</p><p>{value}</p></div> : null)}
+                  </CardContent>
+                </Card>
                 <Card>
                   <CardHeader className="px-4 pb-3 pt-4 sm:px-5">
                     <CardTitle className="font-fraunces text-base">Location</CardTitle>

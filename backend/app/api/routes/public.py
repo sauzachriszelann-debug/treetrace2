@@ -42,8 +42,23 @@ def public_get_tree(tree_id: str, db: Session = Depends(get_db)):
     except ValidationError:
         return profile
     age = estimate_tree_age(request)
+    # Reuse the saved growth scenario; never call a paid AI from a public GET.
+    from app.services.profile_content import saved_profile
+    from app.services.tree_age import estimate_from_rates
+    from app.schemas.tree_age import TreeAgeResponse
+    snapshot = saved_profile(tree)
+    saved_age = snapshot.get('age_estimate')
+    if age.status != 'estimated' and saved_age and snapshot.get('scientific_name', '').lower() == tree.scientific_name.lower():
+        try:
+            previous = TreeAgeResponse.model_validate(saved_age)
+            if previous.growth_rates:
+                age = estimate_from_rates(request, previous.growth_rates,
+                    source=previous.source, assumptions=previous.assumptions)
+        except (ValueError, TypeError):
+            pass
     if age.status == "estimated":
         profile.estimated_age_years = age.dbh_age_years or age.height_age_years
+        profile.age_estimate = age.model_dump()
     return profile
 
 
@@ -171,6 +186,11 @@ def public_tree_wiki(tree_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Tree not found")
 
     from app.services.ai_identify import get_species_wiki
+    from app.services.local_species_classifier import SPECIES_REFERENCE
+    if tree.scientific_name in SPECIES_REFERENCE:
+        from app.services.ai_identify import _build_wiki
+        from app.services.profile_content import species_content
+        return species_content(tree, _build_wiki(tree.common_name, tree.scientific_name, None, None, None))
     name = tree.common_name or "Unknown Tree"
     sci  = tree.scientific_name or ""
 
@@ -178,8 +198,10 @@ def public_tree_wiki(tree_id: str, db: Session = Depends(get_db)):
         loop = _asyncio.new_event_loop()
         wiki = loop.run_until_complete(get_species_wiki(name, sci))
         loop.close()
-        return wiki
+        from app.services.profile_content import species_content
+        return species_content(tree, wiki)
     except Exception as e:
         # Fallback wiki if APIs fail
         from app.services.ai_identify import _build_wiki
-        return _build_wiki(name, sci, None, None, None)
+        from app.services.profile_content import species_content
+        return species_content(tree, _build_wiki(name, sci, None, None, None))

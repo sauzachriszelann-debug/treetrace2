@@ -1,3 +1,4 @@
+from sqlalchemy import JSON
 from sqlalchemy import (
     Column, Integer, String, Float, Date, Text,
     DateTime, ForeignKey, Enum, UniqueConstraint
@@ -47,6 +48,7 @@ class Tree(Base):
     barangay = Column(String(120), nullable=True)
     city = Column(String(120), nullable=True, default="Panabo City")
     province = Column(String(120), nullable=True, default="Davao del Norte")
+    scan_profile = Column(JSON, nullable=True)
     gps_accuracy_m = Column(Float, nullable=True)
     lat = Column(Float, nullable=True)
     lng = Column(Float, nullable=True)
@@ -73,6 +75,11 @@ class Tree(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     health_logs = relationship("HealthLog", back_populates="tree", cascade="all, delete-orphan")
+
+    @property
+    def species_profile(self):
+        from app.services.profile_content import species_facts
+        return species_facts(self)
 
     def _conservation_info(self):
         from app.services.species_db import lookup_species

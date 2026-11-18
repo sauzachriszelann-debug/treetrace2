@@ -4,10 +4,11 @@ import { Button } from '@/components/ui/button';
 
 const positive = value => typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
 
-export default function TreeAgeEstimate({ scientificName, dbhCm, heightM, preliminarySpecies = false, dimensionsSource = 'ai_prediction' }) {
+export default function TreeAgeEstimate({ scientificName, dbhCm, heightM, preliminarySpecies = false, dimensionsSource = 'ai_prediction', initialEstimate = null, onEstimated }) {
   const [state, setState] = useState({ loading: true });
   const [retry, setRetry] = useState(0);
   useEffect(() => {
+    if (initialEstimate) { setState({ result: initialEstimate }); return; }
     if (!scientificName?.trim() || (!positive(dbhCm) && !positive(heightM))) return;
     let active = true;
     const controller = new AbortController();
@@ -15,13 +16,13 @@ export default function TreeAgeEstimate({ scientificName, dbhCm, heightM, prelim
     const timer = setTimeout(() => Promise.resolve().then(() => aiApi.estimateAge({ scientific_name: scientificName.trim(),
       dbh_cm: positive(dbhCm), height_m: positive(heightM), dimensions_source: dimensionsSource,
     }, { signal: controller.signal })).then(result => {
-      if (active) setState({ result });
+      if (active) { setState({ result }); onEstimated?.(result); }
     }).catch(error => {
       if (active) setState({ error: error?.response?.status === 429
         ? 'AI age estimation is temporarily busy. Try again later.' : 'Age estimate could not load. Try again.' });
     }), 250);
     return () => { active = false; clearTimeout(timer); controller.abort(); };
-  }, [scientificName, dbhCm, heightM, dimensionsSource, retry]);
+  }, [scientificName, dbhCm, heightM, dimensionsSource, retry, initialEstimate]);
 
   if (!scientificName?.trim()) return <p className="text-sm text-muted-foreground">Age needs an identified species.</p>;
   if (!positive(dbhCm) && !positive(heightM)) return <p className="text-sm text-muted-foreground">Age needs a DBH or height value.</p>;
