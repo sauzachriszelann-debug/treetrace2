@@ -17,6 +17,12 @@ from app.services import dbh_yolo
 
 PROMPT = """Inspect the gallery photo and the YOLO target-trunk diagnostics.
 Set target_identified=true only for a single clearly identifiable main tree.
+Also assess photo_observations independently of size prediction. Set
+photo_assessed=true only after inspecting the original photo. List only visible
+parts (bark, leaves, crown). Describe bark as Smooth, Rough, Ridged, Flaky or
+Unclear, with specific visible evidence. Use Unclear and needs_closeup=true
+when bark detail is too small, blurred or hidden. Do not use species-typical bark
+as an observation. Do not diagnose disease or declare overall tree health.
 If YOLO found no mask, assess the original photo directly; do not invent a mask
 or pixel diagnostics. If multiple trees make the target ambiguous, set
 target_identified=false and both values null with ambiguous_target.
@@ -329,6 +335,8 @@ async def predict_gallery_size(image_bytes, content_type, *, treetop_bytes=None,
             dbh_reason_code='ambiguous_target', dbh_reason=METRIC_REASONS['ambiguous_target'],
             height_reason_code='ambiguous_target', height_reason=METRIC_REASONS['ambiguous_target'],
             reason='AI could not identify one clear target tree. No sizes predicted.')
+    from app.schemas.photo_observations import normalize_observations
+    observations = normalize_observations(raw.get('photo_observations'))
     dbh, dbh_code, dbh_reason = _metric_result(raw, 'dbh', 300)
     height, height_code, height_reason = _metric_result(raw, 'height', 80)
     evidence = raw.get('same_tree_evidence')
@@ -344,6 +352,7 @@ async def predict_gallery_size(image_bytes, content_type, *, treetop_bytes=None,
     return GallerySizeResponse(
         status='predicted' if dbh is not None or height is not None else 'cannot_estimate',
         predicted_dbh_cm=dbh, predicted_height_m=height, **detection,
+        photo_observations=observations,
         needs_treetop_photo=height_code == 'top_hidden' or (identified and raw.get('top_visible') is False),
         treetop_photo_used=treetop_bytes is not None and height is not None,
         needs_treebase_photo=dbh_code == 'base_hidden' or height_code == 'base_hidden',

@@ -545,3 +545,19 @@ def test_no_mask_uses_ai_only_for_identified_target(monkeypatch, model, identifi
     assert result['predicted_dbh_cm'] == (23 if identified is True else None)
     assert result['predicted_height_m'] == (9 if identified is True else None)
     assert_not_measured(result)
+
+
+def test_bark_observations_survive_gallery_response(monkeypatch, model):
+    monkeypatch.setattr(ai_identify, 'gallery_vision_prediction', AsyncMock(return_value={
+        'base_visible': True, 'top_visible': True,
+        'dbh': {'value': 20, 'evidence': 'visible trunk', **visual_support()},
+        'height': {'value': 7, 'evidence': 'visible tree', **visual_support()},
+        'photo_observations': {'photo_assessed': True, 'parts_visible': ['bark'],
+            'bark_appearance': 'Ridged', 'bark_evidence': 'Vertical grooves on the visible trunk.',
+            'needs_closeup': False},
+    }))
+    observations = run()['photo_observations']
+    assert observations['status'] == 'observed'
+    assert observations['bark_appearance'] == 'Ridged'
+    assert observations['bark_evidence'] == 'Vertical grooves on the visible trunk.'
+    assert observations['no_visible_signs'] is False

@@ -23,6 +23,17 @@ GALLERY_VISION_RESPONSE_SCHEMA = {
     'type': 'OBJECT',
     'properties': {
         'dbh': _metric_schema(), 'height': _metric_schema(),
+        'photo_observations': {
+            'type': 'OBJECT',
+            'properties': {
+                'photo_assessed': {'type': 'BOOLEAN'},
+                'parts_visible': {'type': 'ARRAY', 'items': {'type': 'STRING'}},
+                'bark_appearance': {'type': 'STRING', 'enum': ['Smooth', 'Rough', 'Ridged', 'Flaky', 'Unclear']},
+                'bark_evidence': {'type': 'STRING'},
+                'needs_closeup': {'type': 'BOOLEAN'},
+            },
+            'required': ['photo_assessed', 'parts_visible', 'bark_appearance', 'bark_evidence', 'needs_closeup'],
+        },
         'target_identified': {'type': 'BOOLEAN'},
         'base_visible': {'type': 'BOOLEAN'},
         'top_visible': {'type': 'BOOLEAN'},
@@ -59,6 +70,7 @@ class GallerySizeResponse(BaseModel):
     dbh_reason: Optional[str] = None
     height_reason_code: Optional[str] = None
     height_reason: Optional[str] = None
+    photo_observations: Optional[dict] = None
     reason: str
     note: str = ('Unvalidated prediction; may be inaccurate. Experimental estimate: '
                  'validate DBH against tape and height against a clinometer.')
