@@ -58,3 +58,29 @@ def test_scan_profile_schema_upgrade_is_idempotent(monkeypatch):
         main.sync_unknown_species_columns()
     for table in ('trees', 'tree_submissions', 'unknown_species'):
         assert 'scan_profile' in {column['name'] for column in inspect(engine).get_columns(table)}
+
+
+def test_detail_recovers_original_confidence_from_approved_submission(client, admin_user, db_session):
+    import json
+    from app.models.tree_submission import TreeSubmission
+    tree = Tree(common_name='Narra', scientific_name='Pterocarpus indicus')
+    db_session.add(tree)
+    db_session.flush()
+    db_session.add(TreeSubmission(status='approved', approved_tree_id=tree.id,
+        ai_candidates=json.dumps([{'common_name': 'Mango', 'scientific_name': 'Mangifera indica', 'confidence_percent': 21.16}])))
+    db_session.commit()
+    response = client.get(f'/api/trees/{tree.id}')
+    assert response.status_code == 200
+    body = response.json()
+    assert body['common_name'] == 'Narra'
+    assert body['original_ai_suggestion']['common_name'] == 'Mango'
+    assert body['original_ai_suggestion']['confidence_percent'] == 21.16
+    assert db_session.get(Tree, tree.id).scan_profile is None
+
+
+def test_confidence_is_not_invented_for_manual_records(client, admin_user, db_session):
+    tree = Tree(common_name='Manual tree')
+    db_session.add(tree)
+    db_session.commit()
+    body = client.get(f'/api/trees/{tree.id}').json()
+    assert body['original_ai_suggestion'] is None

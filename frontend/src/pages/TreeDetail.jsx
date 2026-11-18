@@ -166,6 +166,8 @@ export default function TreeDetail({ previewId } = {}) {
   }
 
   const { notes } = splitMeasurementNote(tree.notes);
+  const aiSuggestion = tree.original_ai_suggestion || tree.scan_profile;
+  const aiConfidence = Number.isFinite(aiSuggestion?.confidence_percent) ? aiSuggestion.confidence_percent : null;
   const recorderRole = tree.recorded_by_role ?? (tree.recorded_by_id === user?.id ? user?.role : null);
 
   return (
@@ -186,6 +188,10 @@ export default function TreeDetail({ previewId } = {}) {
           <div className="mb-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
             <h1 className="break-words font-fraunces text-2xl font-semibold sm:text-3xl">{tree.common_name}</h1>
             <HealthBadge status={tree.health_status} />
+            <span title="Original AI prediction score, separate from expert confirmation"
+              className={`inline-flex w-fit items-center rounded-full border px-3 py-1 text-xs font-semibold ${aiConfidence == null ? 'border-slate-200 bg-slate-50 text-slate-600' : aiConfidence >= 75 ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+              {aiConfidence == null ? 'AI confidence unavailable' : `AI confidence ${aiConfidence.toFixed(2)}%`}
+            </span>
           </div>
           {tree.scientific_name && (
             <p className="text-muted-foreground italic">{tree.scientific_name}</p>
@@ -295,7 +301,7 @@ export default function TreeDetail({ previewId } = {}) {
                   initialEstimate={tree.scan_profile?.scientific_name === tree.scientific_name && tree.scan_profile?.estimated_dbh_cm === tree.dbh_cm && tree.scan_profile?.estimated_height_m === tree.height_m ? tree.scan_profile?.age_estimate : null} />
                 <Card><CardHeader><CardTitle>Species and scan details</CardTitle></CardHeader>
                   <CardContent className="space-y-3 text-sm">
-                    <p><strong>Original AI confidence:</strong> {Number.isFinite(tree.scan_profile?.confidence_percent) ? `${tree.scan_profile.confidence_percent}% (${tree.scan_profile.common_name || tree.scan_profile.scientific_name})` : 'No confidence saved for this record.'}</p>
+                    <p><strong>Original AI confidence:</strong> {aiConfidence != null ? `${aiConfidence.toFixed(2)}% (${aiSuggestion.common_name || aiSuggestion.scientific_name})` : 'No confidence saved for this record.'}</p>
                     {Object.entries({Family: tree.species_profile?.family, Overview: tree.species_profile?.description,
                       'Diagnostic features': tree.species_profile?.distinguishing_features,
                       'Similar species': tree.species_profile?.look_alikes,

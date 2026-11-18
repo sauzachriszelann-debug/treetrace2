@@ -617,6 +617,10 @@ def get_tree(
         recorded_role = db.query(User.role).filter(User.id == tree.recorded_by_id).scalar()
         role = recorded_role.value if isinstance(recorded_role, UserRole) else recorded_role
     detail = TreeDetailOut.model_validate(tree)
+    from app.services.profile_content import original_ai_suggestion
+    from app.schemas.scan_profile import ScanProfile
+    suggestion = original_ai_suggestion(db, tree)
+    detail.original_ai_suggestion = ScanProfile.model_validate(suggestion) if suggestion else None
     detail.recorded_by_role = role if role in {"admin", "field_worker", "citizen"} else None
     return detail
 

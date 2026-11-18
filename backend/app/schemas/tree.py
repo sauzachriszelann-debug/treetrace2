@@ -134,6 +134,7 @@ class TreeOut(BaseModel):
 
 
 class TreeDetailOut(TreeOut):
+    original_ai_suggestion: Optional[ScanProfile] = None
     recorded_by_role: Optional[Literal["admin", "field_worker", "citizen"]] = None
 
 

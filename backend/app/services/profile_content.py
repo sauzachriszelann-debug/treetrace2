@@ -69,3 +69,55 @@ def species_content(tree, wiki):
         wiki['care_profile'] = {'difficulty': 'Not assessed', 'watering': 'Moderate', 'sunlight': 'Full sun'}
         wiki['popular_questions'] = []
     return clean_content(wiki)
+
+
+def original_ai_suggestion(db, tree):
+    """Recover original evidence without modifying the tree or inventing a score."""
+    import json
+    import math
+    from app.models.tree_submission import TreeSubmission
+    from app.models.unknown_species import UnknownSpecies
+
+    def checked(candidate):
+        if not isinstance(candidate, dict):
+            return None
+        score = candidate.get('confidence_percent')
+        if score is None:
+            fraction = candidate.get('confidence_score', candidate.get('score'))
+            if isinstance(fraction, (int, float)) and not isinstance(fraction, bool) and math.isfinite(fraction) and 0 <= fraction <= 1:
+                score = fraction * 100
+        if not isinstance(score, (int, float)) or isinstance(score, bool) or not math.isfinite(score) or not 0 <= score <= 100:
+            return None
+        try:
+            return ScanProfile.model_validate({
+                'confidence_percent': score,
+                'common_name': candidate.get('common_name') or '',
+                'scientific_name': candidate.get('scientific_name') or '',
+            }).model_dump(exclude_none=True)
+        except ValidationError:
+            return None
+
+    direct = checked(saved_profile(tree))
+    if direct:
+        return direct
+    submission = db.query(TreeSubmission).filter(
+        TreeSubmission.approved_tree_id == tree.id,
+        TreeSubmission.status == 'approved',
+    ).first()
+    if submission is None:
+        return None
+    evidence = [submission.ai_candidates]
+    if submission.source_unknown_species_id is not None:
+        entry = db.query(UnknownSpecies).filter(UnknownSpecies.id == submission.source_unknown_species_id).first()
+        if entry is not None:
+            evidence.append(entry.ai_candidates)
+    for raw in evidence:
+        try:
+            candidates = json.loads(raw) if isinstance(raw, str) else raw
+        except (ValueError, TypeError):
+            continue
+        if isinstance(candidates, list) and candidates:
+            suggestion = checked(candidates[0])
+            if suggestion:
+                return suggestion
+    return None
