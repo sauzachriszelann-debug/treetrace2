@@ -18,6 +18,8 @@ class UnknownSpecies(Base):
     scan_profile = Column(JSON, nullable=True)
     dbh_cm = Column(Float, nullable=True)
     height_m = Column(Float, nullable=True)
+    reviewed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
     reviewed = Column(Boolean, default=False)
     review_notes = Column(Text, nullable=True)
     identified_as = Column(String(150), nullable=True)    # admin fills after review

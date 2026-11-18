@@ -27,6 +27,7 @@ const adminItems = [
   { label: "Health Logs", icon: BarChart3, path: "/health-logs" },
   // Phase 10C: one "Tree Reviews" item replaces the old "Unknown Review".
   // Shown to admins AND field workers (the backend allows both to review).
+  { label: "AI Training Data", icon: ClipboardList, path: "/ai-training-data", adminOnly: true },
   { label: "Tree Reviews", icon: ClipboardCheck, path: "/tree-reviews", staffOnly: true },
   { label: "Reports & Tools", icon: FileText, path: "/reports" },
   { label: "Users", icon: Users, path: "/admin/users" },
@@ -123,7 +124,7 @@ export default function Sidebar({ user, mobileOpen = false, onMobileClose }) {
                 Admin
               </p>
               {adminItems
-                .filter((item) => !item.staffOnly || isStaff)
+                .filter((item) => (!item.staffOnly || isStaff) && (!item.adminOnly || isAdmin))
                 .map((item) => (
                   <NavItem
                     key={item.path}

@@ -1,3 +1,4 @@
+import AITrainingData from './pages/AITrainingData';
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 
@@ -69,6 +70,7 @@ export default function App() {
           <Route path="upgrade"     element={<Upgrade />} />
           {/* Phase 10C: unified staff review surface. */}
           <Route path="tree-reviews" element={<TreeReviews />} />
+          <Route path="ai-training-data" element={<AITrainingData />} />
           {/* Legacy links keep working: Unknown Species is now tab 2 of Tree
               Reviews. The standalone page stays reachable for deep links. */}
           <Route path="unknown-species" element={<Navigate to="/tree-reviews" replace />} />

@@ -643,6 +643,8 @@ def _unknown_species_out(entry: UnknownSpecies):
         "submitter_notes": entry.submitter_notes,
         "possible_name": entry.possible_name,
         "ai_candidates": candidates,
+        "reviewed_by_id": entry.reviewed_by_id,
+        "reviewed_at": entry.reviewed_at,
         "reviewed": entry.reviewed,
         "review_notes": entry.review_notes,
         "identified_as": entry.identified_as,
@@ -744,6 +746,9 @@ def review_unknown_species(
     if entry.submitted_by_id == current_user.id:
         raise HTTPException(status_code=403, detail="You cannot review your own submission.")
 
+    from datetime import datetime, timezone
+    entry.reviewed_by_id = current_user.id if payload.reviewed and payload.identified_as else None
+    entry.reviewed_at = datetime.now(timezone.utc) if payload.reviewed and payload.identified_as else None
     entry.reviewed = payload.reviewed
     if "identified_scientific_name" in payload.model_fields_set:
         entry.identified_scientific_name = (

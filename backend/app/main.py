@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from app.db.database import engine, Base
 from app.core.config import settings
-from app.api.routes import auth, trees, health_logs, users, storage, public, identify, evaluation, planting, tree_submissions
+from app.api.routes import training_data, auth, trees, health_logs, users, storage, public, identify, evaluation, planting, tree_submissions
 
 # Import all models
 from app.models import user, tree, health_log, evaluation_result, planting_recommendation, tree_submission, species_photo
@@ -77,6 +77,8 @@ def sync_unknown_species_columns():
 
     columns = {
         "scan_profile": "JSON",
+        "reviewed_by_id": "INTEGER",
+        "reviewed_at": "TIMESTAMP WITH TIME ZONE",
         "identified_scientific_name": "VARCHAR(150)",
         "dbh_cm": "DOUBLE PRECISION",
         "height_m": "DOUBLE PRECISION",
@@ -574,3 +576,5 @@ def root():
 @app.get("/api/health")
 def health_check():
     return {"status": "ok"}
+
+app.include_router(training_data.router, prefix="/api/admin/training-data", tags=["AI Training Data"])
