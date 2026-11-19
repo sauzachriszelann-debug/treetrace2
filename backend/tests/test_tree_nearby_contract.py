@@ -516,12 +516,12 @@ def test_bad_accuracy_requires_new_capture(client, admin_user, accuracy):
 
 def test_new_tree_accuracy_persists_and_coordinate_edit_clears_it(client, admin_user, db_session):
     response = client.post('/api/trees', json={
-        'common_name': 'Narra', 'lat': BASE_LAT, 'lng': BASE_LNG, 'gps_accuracy_m': 20,
+        'common_name': 'Narra', 'lat': 7.311886, 'lng': 125.67230, 'gps_accuracy_m': 20,
     })
     assert response.status_code == 201, response.text
     tree_id = response.json()['id']
     assert db_session.get(Tree, tree_id).gps_accuracy_m == 20
-    updated = client.patch(f'/api/trees/{tree_id}', json={'lat': BASE_LAT + .001})
+    updated = client.patch(f'/api/trees/{tree_id}', json={'lat': 7.311886 + .001})
     assert updated.status_code == 200
     db_session.expire_all()
     assert db_session.get(Tree, tree_id).gps_accuracy_m is None

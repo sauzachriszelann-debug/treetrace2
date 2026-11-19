@@ -84,15 +84,15 @@ def submission_payload():
         "common_name": "Narra",
         "scientific_name": "Pterocarpus indicus",
         "barangay": "New Visayas",
-        "lat": 7.45,
-        "lng": 125.80,
+        "lat": 7.311886,
+        "lng": 125.67230,
         "dbh_cm": 20.0,
         "notes": "Citizen field note",
     }
 
 
 def _create(client, payload=None, **extra):
-    base = {"common_name": "Narra"} if payload is None else payload
+    base = {"common_name": "Narra", "lat": 7.311886, "lng": 125.67230} if payload is None else payload
     body = {**base, **extra}
     return client.post("/api/tree-submissions/", json=body)
 
@@ -408,7 +408,7 @@ def test_cannot_review_own_submission(
     g4_client, g4_auth_as, db_session
 ):
     staff = g4_auth_as(UserRole.field_worker)
-    created = _create(g4_client, {"common_name": "Self review"})
+    created = _create(g4_client, {"common_name": "Self review", "lat": 7.311886, "lng": 125.67230})
     submission_id = created.json()["id"]
 
     approve = g4_client.post(
@@ -507,7 +507,7 @@ def test_link_records_existing_tree_without_creating_one(
     g4_client, g4_auth_as, db_session, submission_payload
 ):
     g4_auth_as(UserRole.admin)
-    tree = g4_client.post("/api/trees/", json={"common_name": "Old Narra"})
+    tree = g4_client.post("/api/trees/", json={"common_name": "Old Narra", "lat": 7.311886, "lng": 125.67230})
     tree_id = tree.json()["id"]
     trees_before = db_session.query(func.count(Tree.id)).scalar()
 
@@ -530,7 +530,7 @@ def test_multiple_submissions_may_link_same_tree(
     the same existing tree. Only APPROVED rows are index-constrained."""
     g4_auth_as(UserRole.admin)
     tree_id = g4_client.post(
-        "/api/trees/", json={"common_name": "Contested Narra"}
+        "/api/trees/", json={"common_name": "Contested Narra", "lat": 7.311886, "lng": 125.67230}
     ).json()["id"]
 
     first = _pending_submission(g4_client, g4_auth_as, submission_payload)
@@ -562,7 +562,7 @@ def test_link_nonexistent_tree_is_404(g4_client, g4_auth_as, submission_payload)
 def test_linked_state_is_terminal(g4_client, g4_auth_as, submission_payload):
     g4_auth_as(UserRole.admin)
     tree_id = g4_client.post(
-        "/api/trees/", json={"common_name": "Existing"}
+        "/api/trees/", json={"common_name": "Existing", "lat": 7.311886, "lng": 125.67230}
     ).json()["id"]
     submission = _pending_submission(g4_client, g4_auth_as, submission_payload)
     g4_auth_as(UserRole.admin)
@@ -601,7 +601,7 @@ def test_overrides_apply_without_touching_evidence(
     g4_client, g4_auth_as, db_session
 ):
     submission = _pending_submission(
-        g4_client, g4_auth_as, {"barangay": "New Visayas", "lat": 7.45}
+        g4_client, g4_auth_as, {"barangay": "New Visayas", "lat": 7.311886, "lng": 125.67230}
     )
     g4_auth_as(UserRole.admin)
 
@@ -691,7 +691,7 @@ def test_convert_preserves_submitter_and_evidence(
     entry = _make_unknown_entry(
         db_session,
         citizen,
-        location_description="7.4500, 125.8000",
+        location_description="7.311886, 125.672300",
         submitter_notes="Big leaves near the plaza.",
         ai_candidates='[{"common_name": "Narra"}]',
     )
@@ -711,8 +711,8 @@ def test_convert_preserves_submitter_and_evidence(
     assert body["source"] == "ai_identify"
     assert body["common_name"] == "Narra"
     assert body["photo_url"] == entry.photo_url
-    assert body["lat"] == pytest.approx(7.45)
-    assert body["lng"] == pytest.approx(125.80)
+    assert body["lat"] == pytest.approx(7.311886)
+    assert body["lng"] == pytest.approx(125.67230)
     # Safeguard C: the ORIGINAL submitter is preserved.
     assert body["submitted_by_id"] == citizen.id
     assert body["source_unknown_species_id"] == entry.id
@@ -722,7 +722,7 @@ def test_convert_preserves_submitter_and_evidence(
     # The unknown-species entry itself is never modified by conversion.
     db_session.refresh(entry)
     assert entry.identified_as == "Narra"  # set by review, not conversion
-    assert entry.location_description == "7.4500, 125.8000"
+    assert entry.location_description == "7.311886, 125.672300"
 
 
 def test_convert_is_replay_safe(
@@ -811,7 +811,7 @@ def test_converted_submission_flows_through_approval(
     # Approving from a second, different reviewer (not the submitter).
     g4_auth_as(UserRole.field_worker)
     approved = g4_client.post(
-        f"/api/tree-submissions/{submission['id']}/approve", json={}
+        f"/api/tree-submissions/{submission['id']}/approve", json={"lat": 7.311886, "lng": 125.67230}
     )
     assert approved.status_code == 200, approved.text
     tree = approved.json()["tree"]
@@ -820,9 +820,11 @@ def test_converted_submission_flows_through_approval(
     assert tree["dbh_cm"] == 20
     assert tree["height_m"] == height
     assert tree["carbon_kg"] == expected_carbon
-    # Unparseable coordinates stay NULL - never guessed.
-    assert tree["lat"] is None
-    assert tree["lng"] is None
+    # The reviewer supplied verified coordinates; original unparseable evidence stays untouched.
+    assert tree["lat"] == 7.311886
+    assert tree["lng"] == 125.67230
+    assert submission["lat"] is None
+    assert submission["lng"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -951,7 +953,7 @@ def test_concurrent_approve_only_one_wins(g4_concurrency):
     identity["user"] = citizen
     with TestClient(app) as client:
         created = client.post(
-            "/api/tree-submissions/", json={"common_name": "Narra"}
+            "/api/tree-submissions/", json={"common_name": "Narra", "lat": 7.311886, "lng": 125.67230}
         )
         assert created.status_code == 201, created.text
         submission_id = created.json()["id"]

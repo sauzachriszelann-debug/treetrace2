@@ -1,4 +1,5 @@
 from app.schemas.scan_profile import ScanProfile
+from app.services.inventory_boundary import validate_inventory_location, validate_review_location_description
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form, Response
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from sqlalchemy.exc import IntegrityError
@@ -669,6 +670,7 @@ def submit_unknown_species(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    validate_review_location_description(payload.location_description)
     enforce_unknown_limit(current_user, db)
     entry = UnknownSpecies(
         photo_url=payload.photo_url,
@@ -840,6 +842,7 @@ def convert_unknown_species_to_submission(
         return replay(existing)
 
     lat, lng = _parse_location_description(entry.location_description)
+    validate_inventory_location(lat, lng, required=False)
     notes_parts = [
         text
         for text in (

@@ -8,6 +8,7 @@ def test_profile_filters_private_fields_and_reuses_saved_age(client, admin_user,
     response = client.post('/api/trees', json={
         'common_name': 'Pink poui', 'scientific_name': 'Tabebuia rosea',
         'dbh_cm': 15, 'height_m': 7, 'notes': 'PRIVATE FIELD NOTES',
+        'lat': 7.311886, 'lng': 125.67230,
         'scan_profile': {
             'common_name': 'Pink poui', 'scientific_name': 'Tabebuia rosea',
             'confidence_percent': 85.38, 'notes': 'NEVER PUBLIC',

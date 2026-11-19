@@ -12,6 +12,7 @@ from app.models.user import User, UserRole
 from app.schemas.tree import TreeCreate, TreeCreateOut, TreeDetailOut, TreeUpdate, TreeOut
 from app.core.security import get_current_user, require_admin
 from app.services.barangay_location import resolve_barangay
+from app.services.inventory_boundary import validate_inventory_location
 from app.services.species_db import lookup_species
 
 router = APIRouter()
@@ -371,6 +372,8 @@ def create_tree(
                 )
             return replay(existing)
 
+    validate_inventory_location(payload.lat, payload.lng, payload.gps_accuracy_m)
+
     biomass, carbon = _estimate_tree_carbon(data.get("dbh_cm"), data.get("height_m"))
     data["biomass_kg"] = biomass
     data["carbon_kg"] = carbon
@@ -644,6 +647,11 @@ def update_tree(
     data = payload.model_dump(exclude_unset=True)
     if ('lat' in data or 'lng' in data) and 'gps_accuracy_m' not in data:
         data['gps_accuracy_m'] = None
+    # Merge PATCH coordinates with stored values before checking the effective location.
+    # Unrelated health/notes edits do not move a legacy record or invent GPS.
+    if {'lat', 'lng', 'gps_accuracy_m'} & data.keys():
+        validate_inventory_location(data.get('lat', tree.lat), data.get('lng', tree.lng),
+                                    data.get('gps_accuracy_m', tree.gps_accuracy_m))
     dbh = data.get("dbh_cm", tree.dbh_cm)
     height = data.get("height_m", tree.height_m)
     if "dbh_cm" in data or "height_m" in data:

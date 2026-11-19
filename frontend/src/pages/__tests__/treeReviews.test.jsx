@@ -46,8 +46,8 @@ const pendingSubmission = {
   health_status: "Healthy",
   barangay: "Panabo",
   city: "Panabo City",
-  lat: null,
-  lng: null,
+  lat: 7.311886,
+  lng: 125.67230,
   photo_url: null,
   date_recorded: "2026-10-23",
   notes: "Found near the school",
@@ -355,5 +355,32 @@ describe("navigation (task 7/8)", () => {
   test("a citizen does not see Tree Reviews in the sidebar", async () => {
     renderSidebar({ role: "citizen", full_name: "C" });
     expect(screen.queryByText("Tree Reviews")).toBeNull();
+  });
+});
+
+
+describe("inventory boundary review coordinates", () => {
+  test("missing GPS prevents approval until the reviewer supplies both coordinates", async () => {
+    treeSubmissionsApi.list.mockResolvedValue([{...pendingSubmission, lat:null, lng:null}]);
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', {name:'Approve', exact:true}));
+    fireEvent.click(screen.getByRole('button', {name:'Yes, approve', exact:true}));
+    expect(treeSubmissionsApi.approve).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Latitude for inventory *'), {target:{value:'7.311886'}});
+    fireEvent.change(screen.getByLabelText('Longitude for inventory *'), {target:{value:'125.6723'}});
+    fireEvent.click(screen.getByRole('button', {name:'Yes, approve', exact:true}));
+    await waitFor(() => expect(treeSubmissionsApi.approve).toHaveBeenCalledWith(1, {lat:7.311886, lng:125.6723}));
+  });
+
+  test("a server boundary rejection keeps the review dialog and entered GPS", async () => {
+    treeSubmissionsApi.approve.mockRejectedValueOnce({response:{status:422,data:{detail:'This location is outside the Panabo City inventory boundary.'}}});
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', {name:'Approve',exact:true}));
+    fireEvent.change(screen.getByLabelText('Latitude for inventory *'), {target:{value:'7.4475'}});
+    fireEvent.change(screen.getByLabelText('Longitude for inventory *'), {target:{value:'125.8078'}});
+    fireEvent.click(screen.getByRole('button', {name:'Yes, approve',exact:true}));
+    await waitFor(() => expect(treeSubmissionsApi.approve).toHaveBeenCalledWith(1,{lat:7.4475,lng:125.8078}));
+    expect(screen.getByRole('dialog', {name:'Approve tree submission'})).toBeInTheDocument();
+    expect(screen.getByLabelText('Latitude for inventory *')).toHaveValue(7.4475);
   });
 });

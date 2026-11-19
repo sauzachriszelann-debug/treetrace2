@@ -165,6 +165,8 @@ def tree_payload() -> dict[str, Any]:
         "dbh_cm": 24.0,
         "height_m": 9.0,
         "notes": "Internal field note",
+        "lat": 7.311886,
+        "lng": 125.67230,
     }
 
 

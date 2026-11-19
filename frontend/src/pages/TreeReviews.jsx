@@ -79,12 +79,14 @@ function ReviewQueue({ canIdentify, reviewerId }) {
   const [rejectReason, setRejectReason] = useState("");
   const [confirmApproveId, setConfirmApproveId] = useState(null);
   const [reviewSpecies, setReviewSpecies] = useState({ common_name: "", scientific_name: "" });
+  const [reviewLocation, setReviewLocation] = useState({ lat: "", lng: "" });
 
   const beginApproval = (submission) => {
     setReviewSpecies({
       common_name: submission.common_name || "",
       scientific_name: submission.scientific_name || "",
     });
+    setReviewLocation({ lat: submission.lat == null ? "" : String(submission.lat), lng: submission.lng == null ? "" : String(submission.lng) });
     setConfirmApproveId(submission.id);
   };
 
@@ -117,7 +119,15 @@ function ReviewQueue({ canIdentify, reviewerId }) {
     const commonName = reviewSpecies.common_name.trim();
     const scientificName = reviewSpecies.scientific_name.trim();
     if (!commonName) return;
+    const lat = Number(reviewLocation.lat);
+    const lng = Number(reviewLocation.lng);
+    if (!reviewLocation.lat.trim() || !reviewLocation.lng.trim() || !Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      toast.error("Provide valid latitude and longitude inside Panabo City before approval.");
+      return;
+    }
     const overrides = {};
+    if (lat !== submission.lat) overrides.lat = lat;
+    if (lng !== submission.lng) overrides.lng = lng;
     if (commonName !== (submission.common_name || "")) overrides.common_name = commonName;
     if (scientificName !== (submission.scientific_name || "")) {
       overrides.scientific_name = scientificName || null;
@@ -406,6 +416,17 @@ function ReviewQueue({ canIdentify, reviewerId }) {
                   disabled={busyId === approvalSubmission.id}
                 />
               </label>
+            </div>
+            <p className="text-sm text-muted-foreground">The server verifies the tree location against the Panabo City boundary before approval.</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[['lat', 'Latitude', -90, 90], ['lng', 'Longitude', -180, 180]].map(([field, label, min, max]) => (
+                <label key={field} className="space-y-1 text-sm">
+                  <span>{label} for inventory *</span>
+                  <Input type="number" step="any" min={min} max={max} required
+                    value={reviewLocation[field]} disabled={busyId === approvalSubmission.id}
+                    onChange={(event) => setReviewLocation(previous => ({...previous, [field]: event.target.value}))} />
+                </label>
+              ))}
             </div>
             <div className="flex flex-wrap justify-end gap-2">
               <Button

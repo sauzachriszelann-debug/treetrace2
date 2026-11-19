@@ -200,45 +200,26 @@ def test_tree_create_rejects_invalid_coordinates(
         (90.0, 180.0),
     ],
 )
-def test_tree_create_allows_valid_coordinates(
+def test_tree_create_rejects_valid_world_coordinates_outside_panabo(
     client, admin_user, tree_payload, lat, lng
 ):
     response = client.post(
         "/api/trees/", json={**tree_payload, "lat": lat, "lng": lng}
     )
 
-    assert response.status_code == 201
-    data = response.json()
-    assert data["lat"] == lat
-    assert data["lng"] == lng
+    assert response.status_code == 422
+    assert "outside the Panabo City" in response.json()["detail"]
 
 
-def test_tree_create_allows_missing_coordinates(client, admin_user, tree_payload):
-    response = client.post(
-        "/api/trees/", json={**tree_payload, "lat": None, "lng": None}
-    )
-
-    assert response.status_code == 201
-    data = response.json()
-    assert data["lat"] is None
-    assert data["lng"] is None
+def test_tree_create_requires_coordinates(client, admin_user, tree_payload):
+    response = client.post('/api/trees/', json={**tree_payload, 'lat': None, 'lng': None})
+    assert response.status_code == 422
 
 
-@pytest.mark.parametrize(("present", "absent"), [("lat", "lng"), ("lng", "lat")])
-def test_tree_create_allows_partial_coordinates(
-    client, admin_user, tree_payload, present, absent
-):
-    """A tree may be recorded with only one coordinate side; the other stays None."""
-    value = 7.4333371 if present == "lat" else 125.8089195
-
-    response = client.post(
-        "/api/trees/", json={**tree_payload, present: value, absent: None}
-    )
-
-    assert response.status_code == 201
-    data = response.json()
-    assert data[present] == value
-    assert data[absent] is None
+@pytest.mark.parametrize(('present','absent'), [('lat','lng'),('lng','lat')])
+def test_tree_create_rejects_partial_coordinates(client, admin_user, tree_payload, present, absent):
+    response=client.post('/api/trees/',json={**tree_payload,absent:None})
+    assert response.status_code == 422
 
 
 @pytest.mark.parametrize(("field", "value"), [("lat", 999), ("lng", -999)])
@@ -308,7 +289,7 @@ def test_tree_create_rejects_uuid_reuse_with_different_location(
     client_uuid = "aaaa2222-2222-4333-8444-555555555555"
     first = client.post(
         "/api/trees/",
-        json=_uuid_payload({**tree_payload, "lat": 7.4, "lng": 125.8}, client_uuid),
+        json=_uuid_payload({**tree_payload, "lat": 7.311886, "lng": 125.67230}, client_uuid),
     )
     assert first.status_code == 201
 
@@ -324,7 +305,7 @@ def test_replay_reports_differences_without_overwriting(client, admin_user, tree
     client_uuid = "bbbb1111-2222-4333-8444-555555555555"
     created = client.post(
         "/api/trees/",
-        json=_uuid_payload({**tree_payload, "lat": 7.4, "lng": 125.8}, client_uuid),
+        json=_uuid_payload({**tree_payload, "lat": 7.311886, "lng": 125.67230}, client_uuid),
     )
     assert created.status_code == 201
     tree_id = created.json()["id"]
@@ -334,8 +315,8 @@ def test_replay_reports_differences_without_overwriting(client, admin_user, tree
         json=_uuid_payload(
             {
                 **tree_payload,
-                "lat": 7.4,
-                "lng": 125.8,
+                "lat": 7.311886,
+                "lng": 125.67230,
                 "dbh_cm": 26.5,
                 "height_m": 11.0,
                 "health_status": "Fair",

@@ -21,6 +21,7 @@ import json
 from datetime import date, datetime, timezone
 from typing import Optional
 
+from app.services.inventory_boundary import validate_inventory_location
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
@@ -289,6 +290,8 @@ def create_submission(
                 )
             return replay(existing)
 
+    validate_inventory_location(payload.lat, payload.lng, payload.gps_accuracy_m, required=False)
+
     # Quota is reserved inside the insert transaction (safeguard B): a failed
     # insert below rolls it back, and replays returned above never consume.
     _take_submission_quota(db, current_user)
@@ -497,6 +500,8 @@ def approve_submission(
                 "errors": exc.errors(),
             },
         )
+
+    validate_inventory_location(tree_payload.lat, tree_payload.lng, tree_payload.gps_accuracy_m)
 
     biomass, carbon = _estimate_tree_carbon(
         tree_payload.dbh_cm, tree_payload.height_m,
