@@ -1,10 +1,11 @@
+import { PANABO_BARANGAYS } from "@/lib/panaboBarangays";
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { publicApiService } from "@/api/publicApi";
 import { MapContainer, TileLayer, Marker, Popup, LayersControl, LayerGroup } from "react-leaflet";
 import { Link, useNavigate } from "react-router-dom";
 import HealthBadge from "@/components/trees/HealthBadge";
-import { Leaf, TreePine, MapPin, Search, ScanLine, Map, List, ChevronRight } from "lucide-react";
+import { Leaf, TreePine, MapPin, Search, ScanLine, Map as MapIcon, List, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,6 +55,7 @@ export default function PublicPortal() {
   const navigate = useNavigate();
   const [search, setSearch]     = useState("");
   const [statusFilter, setStatus] = useState("all");
+  const [barangayFilter, setBarangay] = useState("all");
   const [view, setView]         = useState("map");
 
   const { data: allTrees = [], isLoading } = useQuery({
@@ -71,9 +73,19 @@ export default function PublicPortal() {
         t.barangay?.toLowerCase().includes(q);
       const matchStatus =
         statusFilter === "all" || t.health_status === statusFilter;
-      return matchSearch && matchStatus;
+      const matchBarangay = barangayFilter === "all" || t.barangay?.trim().toLowerCase() === barangayFilter;
+      return matchSearch && matchStatus && matchBarangay;
     });
-  }, [allTrees, search, statusFilter]);
+  }, [allTrees, search, statusFilter, barangayFilter]);
+
+  const barangays = useMemo(() => {
+    const names = new Map(PANABO_BARANGAYS.map(name => [name.toLowerCase(), name]));
+    for (const tree of allTrees) {
+      const name = tree.barangay?.trim();
+      if (name && !names.has(name.toLowerCase())) names.set(name.toLowerCase(), name);
+    }
+    return [...names.values()].sort((a, b) => a.localeCompare(b));
+  }, [allTrees]);
 
   const geoTrees = filtered.filter((t) => t.lat && t.lng);
   const totalCarbon = allTrees.reduce((s, t) => s + (t.carbon_kg || 0), 0);
@@ -112,18 +124,28 @@ export default function PublicPortal() {
       {/* Controls bar */}
       <div className="bg-[#f5f5f0] border-b border-border px-4 sm:px-6 lg:px-8 py-4">
         <div className="max-w-5xl mx-auto space-y-3">
-          <div className="grid grid-cols-2 sm:grid-cols-[minmax(220px,1fr)_10rem_auto] gap-3">
-            <div className="relative col-span-2 sm:col-span-1 min-w-0">
+          <div className="grid grid-cols-2 lg:grid-cols-[minmax(180px,1fr)_12rem_10rem_auto] gap-3">
+            <div className="relative col-span-2 lg:col-span-1 min-w-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 className="pl-9 bg-white"
-                placeholder="Search by name, species, barangay..."
+                aria-label="Search trees"
+                placeholder="Search name or species..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
+            <Select value={barangayFilter} onValueChange={setBarangay}>
+              <SelectTrigger aria-label="Filter by barangay" className="w-full bg-white">
+                <SelectValue placeholder="All Barangays" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Barangays</SelectItem>
+                {barangays.map(name => <SelectItem key={name.toLowerCase()} value={name.toLowerCase()}>{name}</SelectItem>)}
+              </SelectContent>
+            </Select>
             <Select value={statusFilter} onValueChange={setStatus}>
-              <SelectTrigger className="w-full sm:w-40 bg-white">
+              <SelectTrigger aria-label="Filter by health status" className="w-full sm:w-40 bg-white">
                 <SelectValue placeholder="All Status" />
               </SelectTrigger>
               <SelectContent>
@@ -135,7 +157,7 @@ export default function PublicPortal() {
               </SelectContent>
             </Select>
             <Button
-              className="w-full sm:w-auto bg-[#2d5a27] hover:bg-[#234820] text-white flex items-center justify-center gap-2 whitespace-nowrap"
+              className="col-span-2 lg:col-span-1 w-full sm:w-auto bg-[#2d5a27] hover:bg-[#234820] text-white flex items-center justify-center gap-2 whitespace-nowrap"
               onClick={() => navigate("/scan")}
             >
               <ScanLine className="w-4 h-4" />
@@ -151,7 +173,7 @@ export default function PublicPortal() {
                   view === "map" ? "bg-white shadow-sm text-foreground border border-border" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <Map className="w-4 h-4" /> Map View
+                <MapIcon className="w-4 h-4" /> Map View
               </button>
               <button
                 onClick={() => setView("list")}
