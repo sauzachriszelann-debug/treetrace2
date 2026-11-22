@@ -75,3 +75,24 @@ test("portrait photo expands and closes without losing submission details", asyn
   expect(screen.getByText("30 cm")).toBeTruthy();
   expect(treeSubmissionsApi.deleteMine).not.toHaveBeenCalled();
 });
+
+test("card delete icon opens confirmation without opening details or deleting immediately", async () => {
+  treeSubmissionsApi.my.mockResolvedValue([{ id: 9, common_name: "Narra", status: "pending" }]);
+  openPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Delete submission: Narra" }));
+  const dialog = await screen.findByRole("dialog", { name: "Delete this submission?" });
+  expect(screen.queryByText("Full details and review status of your submission.")).toBeNull();
+  expect(treeSubmissionsApi.deleteMine).not.toHaveBeenCalled();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  expect(treeSubmissionsApi.deleteMine).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Delete submission: Narra" }));
+  fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete submission" }));
+  await waitFor(() => expect(treeSubmissionsApi.deleteMine).toHaveBeenCalledWith(9, undefined));
+});
+test("reviewed cards do not offer deletion unsupported by the review API", async () => {
+  treeSubmissionsApi.my.mockResolvedValue([{ id: 9, common_name: "Mango", status: "approved" }]);
+  treeSubmissionsApi.mySpecies.mockResolvedValue([{ id: 7, review_status: "closed" }]);
+  openPage();
+  await screen.findByRole("button", { name: "View submission: Mango" });
+  expect(screen.queryByRole("button", { name: /^Delete submission:/ })).toBeNull();
+});

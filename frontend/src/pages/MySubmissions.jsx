@@ -18,6 +18,7 @@ import {
   XCircle,
   CheckCircle2,
   Link2,
+  Trash2,
 } from "lucide-react";
 
 const PREFILL_KEY = "treetrace_submission_prefill";
@@ -126,14 +127,14 @@ export default function MySubmissions() {
           {submissions.map((entry) => {
             const meta = STATUS_META[entry.status] || STATUS_META.pending;
             return (
-              <button
-                type="button"
+              <article
                 key={`${entry.isSpeciesSubmission ? "species" : "tree"}-${entry.id}`}
-                onClick={() => setSelectedSubmission(entry)}
-                aria-label={`View submission: ${entry.common_name || "Unnamed tree"}`}
-                className="group overflow-hidden rounded-xl border bg-card text-left shadow-sm transition hover:border-primary/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="group relative overflow-hidden rounded-xl border bg-card shadow-sm transition hover:border-primary/50 hover:shadow-md"
               >
-                <div className="flex items-start gap-3 p-4">
+                <button type="button" onClick={() => setSelectedSubmission(entry)}
+                  aria-label={`View submission: ${entry.common_name || "Unnamed tree"}`}
+                  className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+                <div className={`flex items-start gap-3 p-4 ${entry.status === "pending" ? "pr-14" : ""}`}>
                   {entry.photo_url ? (
                     <img src={entry.photo_url} alt="" className="h-20 w-20 shrink-0 rounded-lg border object-cover" />
                   ) : (
@@ -148,8 +149,22 @@ export default function MySubmissions() {
                     <p className="mt-1 text-xs text-muted-foreground">{entry.created_at ? new Date(entry.created_at).toLocaleDateString() : "Date unavailable"}</p>
                   </div>
                 </div>
-                <div className="border-t px-4 py-2 text-right text-xs font-medium text-primary group-hover:underline">View details</div>
-              </button>
+                </button>
+                {entry.status === "pending" && <Button
+                  type="button" size="icon" variant="ghost"
+                  aria-label={`Delete submission: ${entry.common_name || "Unnamed tree"}`}
+                  title="Delete submission"
+                  disabled={remove.isPending}
+                  className="absolute right-2 top-2 h-9 w-9 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={(event) => { event.stopPropagation(); setDeleteTarget(entry); }}
+                ><Trash2 className="h-4 w-4" /></Button>}
+                <div className="flex justify-end border-t px-4 py-2">
+                  <button type="button" onClick={() => setSelectedSubmission(entry)}
+                    className="rounded text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    View details
+                  </button>
+                </div>
+              </article>
             );
           })}
         </div>
