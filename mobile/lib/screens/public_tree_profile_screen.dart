@@ -1,4 +1,4 @@
-import '../widgets/species_references.dart';
+import '../widgets/tree_age_card.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -124,63 +124,67 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
       foregroundColor: Colors.white,
       elevation: 0,
       flexibleSpace: FlexibleSpaceBar(
-        background: ExpandablePhoto(image: CachedNetworkImageProvider(tree.photoUrl ?? ''), label: 'Inventory photo', enabled: tree.photoUrl?.isNotEmpty == true, thumbnail: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Hero Photo
-            tree.photoUrl != null
-                ? CachedNetworkImage(
-                    imageUrl: tree.photoUrl!, fit: BoxFit.cover)
-                : Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                          colors: [Color(0xFF1a3323), Color(0xFF2d6b3a)]),
+        background: ExpandablePhoto(
+            image: CachedNetworkImageProvider(tree.photoUrl ?? ''),
+            label: 'Inventory photo',
+            enabled: tree.photoUrl?.isNotEmpty == true,
+            thumbnail: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Hero Photo
+                tree.photoUrl != null
+                    ? CachedNetworkImage(
+                        imageUrl: tree.photoUrl!, fit: BoxFit.cover)
+                    : Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                              colors: [Color(0xFF1a3323), Color(0xFF2d6b3a)]),
+                        ),
+                        child: const Icon(Icons.park,
+                            color: Colors.white24, size: 80),
+                      ),
+
+                // Modern Gradient
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withOpacity(0.2),
+                        Colors.black.withOpacity(0.9)
+                      ],
+                      stops: const [0.0, 1.0],
                     ),
-                    child:
-                        const Icon(Icons.park, color: Colors.white24, size: 80),
                   ),
-
-            // Modern Gradient
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(0.2),
-                    Colors.black.withOpacity(0.9)
-                  ],
-                  stops: const [0.0, 1.0],
                 ),
-              ),
-            ),
 
-            // Info Content
-            Positioned(
-              bottom: 80,
-              left: 24,
-              right: 24,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  HealthBadge(tree.healthStatus),
-                  const SizedBox(height: 12),
-                  Text(tree.commonName,
-                      style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 32,
-                          fontWeight: FontWeight.w800)),
-                  if (tree.scientificName != null)
-                    Text(tree.scientificName!,
-                        style: GoogleFonts.inter(
-                            color: Colors.white.withOpacity(0.7),
-                            fontSize: 16,
-                            fontStyle: FontStyle.italic)),
-                ],
-              ),
-            ),
-          ],
-        )),
+                // Info Content
+                Positioned(
+                  bottom: 80,
+                  left: 24,
+                  right: 24,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      HealthBadge(tree.healthStatus),
+                      const SizedBox(height: 12),
+                      Text(tree.commonName,
+                          style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 32,
+                              fontWeight: FontWeight.w800)),
+                      if (tree.scientificName != null)
+                        Text(tree.scientificName!,
+                            style: GoogleFonts.inter(
+                                color: Colors.white.withOpacity(0.7),
+                                fontSize: 16,
+                                fontStyle: FontStyle.italic)),
+                    ],
+                  ),
+                ),
+              ],
+            )),
       ),
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(48),
@@ -216,7 +220,7 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
       padding: const EdgeInsets.all(20),
       children: [
         _buildStatsStrip(tree),
-        SavedSpeciesReferences(scientificName: tree.scientificName),
+        SavedScanDetails(tree: tree),
         const SizedBox(height: 24),
         if (tree.isProtected ||
             const ['CR', 'EN', 'VU'].contains(tree.statusCode)) ...[
@@ -237,18 +241,31 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
         if (_wiki?['characteristics'] != null)
           _buildWikiSection('⭐ Characteristics', _wiki!['characteristics']),
         const SizedBox(height: 16),
-
         const SizedBox(height: 100),
       ],
     );
   }
 
   Widget _buildStatsStrip(TreeModel tree) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      _buildMeasurementStats(tree),
+      const SizedBox(height: 12),
+      TreeAgeCard(
+        scientificName: tree.scientificName ?? '', dbhCm: tree.dbhCm, heightM: tree.heightM,
+        initialEstimate: tree.ageEstimate ?? {
+          'status': 'unavailable',
+          'reason': 'No saved or reviewed growth estimate is available for this record.',
+        },
+      ),
+    ]);
+  }
+
+  Widget _buildMeasurementStats(TreeModel tree) {
     final carbon = tree.carbonKg ?? _estimateCarbonKg(tree.dbhCm, tree.heightM);
     return Row(
       children: [
         _StatPill(
-            Icons.eco_rounded, '${carbon.toStringAsFixed(1)} kg', 'CO2 Stock'),
+            Icons.eco_rounded, '${carbon.toStringAsFixed(1)} kg', 'Carbon stock'),
         const SizedBox(width: 12),
         _StatPill(Icons.straighten_rounded,
             '${tree.dbhCm?.toStringAsFixed(0) ?? "0"} cm', 'DBH'),
@@ -458,7 +475,9 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  ExpandablePhoto(image: CachedNetworkImageProvider(photos[index]), label: 'Inventory photo'),
+                  ExpandablePhoto(
+                      image: CachedNetworkImageProvider(photos[index]),
+                      label: 'Inventory photo'),
                   Positioned(
                     left: 12,
                     bottom: 12,
@@ -469,8 +488,7 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
                         color: Colors.black.withOpacity(0.45),
                         borderRadius: BorderRadius.circular(999),
                       ),
-                      child: Text(
-                          'Inventory photo',
+                      child: Text('Inventory photo',
                           style: const TextStyle(
                               color: Colors.white,
                               fontSize: 11,
@@ -486,7 +504,8 @@ class _PublicTreeProfileScreenState extends State<PublicTreeProfileScreen>
     );
   }
 
-  List<String> _recordPhotos(TreeModel tree) => recordedTreePhotos(tree.photoUrl);
+  List<String> _recordPhotos(TreeModel tree) =>
+      recordedTreePhotos(tree.photoUrl);
 
   double _estimateCarbonKg(double? dbhCm, double? heightM) {
     if (dbhCm == null || dbhCm <= 0) return 0;
@@ -600,7 +619,6 @@ class _PublicHealthLog {
     );
   }
 }
-
 
 class _GuideCard extends StatelessWidget {
   final String title;

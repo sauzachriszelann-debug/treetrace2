@@ -31,6 +31,7 @@ dependencies:
 
   # QR scanner
   mobile_scanner: ^5.1.0
+  qr_flutter: ^4.1.0
 
   # Map
   flutter_map: ^7.0.2

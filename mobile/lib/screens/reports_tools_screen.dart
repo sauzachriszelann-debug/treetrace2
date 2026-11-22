@@ -69,7 +69,6 @@ class _ReportsToolsScreenState extends State<ReportsToolsScreen> {
   Map<String, dynamic> _fallbackAnalytics() => {
         'total_users': 0,
         'active_users': 0,
-        'ai_identifications_today': 0,
         'by_plan': {'free': 0},
         'business': {
           'pro_users': 0,
@@ -83,7 +82,6 @@ class _ReportsToolsScreenState extends State<ReportsToolsScreen> {
     final byPlan = <String, int>{};
     final byRole = <String, int>{};
     var active = 0;
-    var aiToday = 0;
     var upgrades = 0;
     var pro = 0;
     var institutional = 0;
@@ -94,7 +92,6 @@ class _ReportsToolsScreenState extends State<ReportsToolsScreen> {
       byPlan[plan] = (byPlan[plan] ?? 0) + 1;
       byRole[role] = (byRole[role] ?? 0) + 1;
       if (user['is_active'] != false) active++;
-      aiToday += (user['ai_identifications_today'] as num?)?.toInt() ?? 0;
       if (user['upgrade_requested'] == true) upgrades++;
       if (plan == 'pro') pro++;
       if (plan == 'enterprise' || role == 'admin' || role == 'field_worker') {
@@ -105,7 +102,6 @@ class _ReportsToolsScreenState extends State<ReportsToolsScreen> {
     return {
       'total_users': users.length,
       'active_users': active,
-      'ai_identifications_today': aiToday,
       'by_plan': byPlan,
       'by_role': byRole,
       'business': {
@@ -383,7 +379,6 @@ Validation Note: DBH and AI-assisted values should be validated through field me
                         _MetricGrid(compact: true, metrics: [
                           _Metric('Total Users', '${_analytics?['total_users'] ?? 0}', Icons.groups_rounded, kPrimary),
                           _Metric('Active Users', '${_analytics?['active_users'] ?? 0}', Icons.verified_user_rounded, kHealthy),
-                          _Metric('AI Uses Today', '${_analytics?['ai_identifications_today'] ?? 0}', Icons.auto_awesome_rounded, kFair),
                           _Metric('Free Users', '${(_analytics?['by_plan'] ?? {})['free'] ?? 0}', Icons.person_rounded, kMutedFg),
                         ]),
                       ],

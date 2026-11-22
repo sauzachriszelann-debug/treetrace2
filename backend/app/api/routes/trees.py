@@ -456,6 +456,9 @@ def nearby_trees(
     limit: int = Query(_NEARBY_DEFAULT_LIMIT, ge=1, le=_NEARBY_MAX_LIMIT),
     common_name: Optional[str] = None,
     scientific_name: Optional[str] = None,
+    duplicate_check: bool = False,
+    dbh_cm: Optional[float] = Query(None, gt=0, allow_inf_nan=False),
+    height_m: Optional[float] = Query(None, gt=0, allow_inf_nan=False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -503,7 +506,9 @@ def nearby_trees(
     # tree that is inside the radius.
     # Existing fixes with >50 m uncertainty need recapture, not huge overlap circles.
     # Query the superset first; apply each record's actual radius below.
-    search_radius_m = max(radius_m, (gps_accuracy_m or 0) + 50) if gps_accuracy_m is not None else radius_m
+    if duplicate_check:
+        radius_m = 5.0
+    search_radius_m = max(radius_m, (gps_accuracy_m or 0) + 50) if gps_accuracy_m is not None and not duplicate_check else radius_m
     gamma = search_radius_m / 6371000.0
     box_dlat = math.degrees(gamma)
     cos_lat = math.cos(math.radians(lat))
@@ -555,7 +560,7 @@ def nearby_trees(
         existing_accuracy = tree.gps_accuracy_m
         usable_existing = existing_accuracy is not None and math.isfinite(existing_accuracy) and 0 <= existing_accuracy <= 50
         overlap_radius = ((gps_accuracy_m or 0) + (existing_accuracy if usable_existing else 0))
-        effective_radius = max(radius_m, overlap_radius) if gps_accuracy_m is not None else radius_m
+        effective_radius = max(radius_m, overlap_radius) if gps_accuracy_m is not None and not duplicate_check else radius_m
         if distance_m > effective_radius:
             continue
         if not has_submitted_species:
@@ -570,6 +575,13 @@ def nearby_trees(
                 and _normalize_name(tree.scientific_name) == submitted_sci
             )
             species_match = "exact" if (same_common or same_sci) else "different"
+        if duplicate_check and species_match != "exact":
+            continue
+        dimensions_match = all(
+            submitted is not None and existing is not None
+            and math.isclose(submitted, existing, rel_tol=0, abs_tol=0.01)
+            for submitted, existing in ((dbh_cm, tree.dbh_cm), (height_m, tree.height_m))
+        )
         measured.append(
             (
                 distance_m,
@@ -586,6 +598,14 @@ def nearby_trees(
                     "accuracy_incomplete": gps_accuracy_m is None or not usable_existing,
                     "match_radius_m": effective_radius,
                     "species_match": species_match,
+                    "dbh_cm": tree.dbh_cm,
+                    "height_m": tree.height_m,
+                    "duplicate_warning": "red" if dimensions_match else "yellow",
+                    "duplicate_reason": (
+                        "Same species within 5 m with matching DBH and height. Possible duplicate."
+                        if dimensions_match else
+                        "Same species within 5 m. DBH or height differs or is missing; compare the records."
+                    ) if duplicate_check else None,
                     "health_status": getattr(
                         tree.health_status, "value", tree.health_status
                     ),

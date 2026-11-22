@@ -7,8 +7,8 @@ String identificationError(Object error) {
     if (status == 401) {
       return 'Your session expired. Sign in again, then retry identification.';
     }
-    if (status == 402 || status == 429) {
-      return 'Identification limit reached. Try again later or check your plan.';
+    if (status == 429) {
+      return 'Identification is temporarily busy. Try again later.';
     }
     if (status == 403) {
       return 'Your account cannot use identification. Check account access.';

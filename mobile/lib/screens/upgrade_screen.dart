@@ -131,7 +131,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
             features: const [
               'View public tree map',
               'Unlimited QR scanning',
-              '10 AI identifications per day',
+              'Unlimited AI identification',
               '15 unknown species submissions per day',
             ],
           ),
@@ -143,7 +143,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
             icon: Icons.workspace_premium_outlined,
             highlighted: isPro,
             features: const [
-              '50 AI identifications per day',
+              'Unlimited AI identification',
               '100 unknown species submissions per day',
               'Full dashboard and analytics',
               'Priority unknown-species review',

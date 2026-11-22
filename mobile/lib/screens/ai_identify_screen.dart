@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -16,6 +17,7 @@ import '../widgets/expandable_photo.dart';
 import '../widgets/photo_observations_card.dart';
 import '../widgets/species_references.dart';
 import '../widgets/tree_age_card.dart';
+import '../widgets/unknown_submission_sheet.dart';
 import 'add_tree_screen.dart';
 import 'upgrade_screen.dart';
 
@@ -52,7 +54,9 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
   bool _identifying = false;
   bool _openingTreeForm = false;
   Map<String, dynamic>? _result;
+  Uint8List? _trunkPreview;
   Map<String, dynamic>? _usage;
+
   /// Phase 13.4: the usage badges used to show "Loading" forever whenever
   /// the single initState fetch failed (e.g. the adb tunnel was momentarily
   /// down) because the error was swallowed. Track the fetch state so a
@@ -95,9 +99,6 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
     }
   }
 
-  Map<String, dynamic>? get _aiUsage =>
-      _usage?['ai'] is Map ? Map<String, dynamic>.from(_usage!['ai']) : null;
-
   Map<String, dynamic>? get _unknownUsage => _usage?['unknown'] is Map
       ? Map<String, dynamic>.from(_usage!['unknown'])
       : null;
@@ -124,6 +125,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
     setState(() {
       _photo = f;
       _result = null;
+      _trunkPreview = null;
       _profileTab = 0;
       _identifying = true;
     });
@@ -141,21 +143,28 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
     }
     try {
       final r = await (widget.identifyFn?.call(f) ??
-          api.identifyTree(f, checkGalleryHeight: true));
+          api.identifyTree(f,
+              includeTrunkPreview: true, checkGalleryHeight: true));
       if (!mounted) return;
-      _incrementUsage('ai');
-      setState(() => _result = r);
+      setState(() {
+        _result = r;
+        _trunkPreview = _decodeTrunkPreview(r['trunk_preview_png']);
+      });
     } catch (e) {
       if (!mounted) return;
-      final isLimit = e is DioException &&
-          (e.response?.statusCode == 402 || e.response?.statusCode == 429);
-      setState(() => _result = {
-            'not_identified': true,
-            'limit_reached': isLimit,
-            'reason': identificationError(e)
-          });
+      setState(() =>
+          _result = {'not_identified': true, 'reason': identificationError(e)});
     } finally {
       if (mounted) setState(() => _identifying = false);
+    }
+  }
+
+  Uint8List? _decodeTrunkPreview(Object? encoded) {
+    if (encoded is! String || encoded.isEmpty) return null;
+    try {
+      return base64Decode(encoded);
+    } on FormatException {
+      return null;
     }
   }
 
@@ -166,7 +175,20 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
       final completed = await Navigator.push<bool>(
         context,
         MaterialPageRoute<bool>(
-          builder: (_) => AddTreeScreen(aiResult: _result, initialPhoto: _photo),
+          builder: (_) => AddTreeScreen(
+            aiResult: _result,
+            initialPhoto: _photo,
+            onBackToScanner: () {
+              if (!mounted) return;
+              setState(() {
+                _photo = null;
+                _result = null;
+                _trunkPreview = null;
+                _profileTab = 0;
+              });
+              Navigator.of(context).pop(false);
+            },
+          ),
         ),
       );
       // Add Tree returns true only after saving, queueing, or replaying a
@@ -184,16 +206,21 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
   }
 
   Future<void> _submitUnknown() async {
-    if (_photo == null) return;
+    if (_photo == null || _identifying) return;
+    final evidence = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) =>
+          UnknownSubmissionSheet(photo: _photo!, result: _result ?? {}),
+    );
+    if (evidence == null || !mounted) return;
     setState(() => _identifying = true);
     var submitted = false;
     try {
-      final payload = {
+      final payload = <String, dynamic>{
+        ...evidence,
         'photo_url': '',
         'possible_name': _result?['common_name'],
-        'submitter_notes':
-            _result?['reason'] ?? 'Submitted from mobile AI scanner',
-        'ai_candidates': _result?['possible_candidates'] ?? [],
       };
 
       if (await api.isOnline()) {
@@ -249,6 +276,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
           if (submitted) {
             _photo = null;
             _result = null;
+            _trunkPreview = null;
           }
         });
         if (submitted) {
@@ -277,7 +305,17 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
             (_result?['scientific_name']?.toString().trim().isNotEmpty ??
                 false) ||
             (_result?['partial'] == true));
-    final confidence = _result?['confidence'] as String?;
+    final reportedPercent = _result?['confidence_percent'];
+    final score = _result?['confidence_score'] ?? _result?['plantnet_score'];
+    final percentage = reportedPercent is num && reportedPercent.isFinite &&
+            reportedPercent >= 0 && reportedPercent <= 100
+        ? reportedPercent.toDouble()
+        : score is num && score.isFinite && score >= 0 && score <= 1
+            ? score.toDouble() * 100
+            : null;
+    final confidence = percentage != null
+        ? 'Confidence ${percentage.toStringAsFixed(2)}%'
+        : _result?['confidence']?.toString();
     final isProtected = _result?['protected'] == true;
     final isCitizen = context.watch<AuthProvider>().user?.role == 'citizen';
 
@@ -313,6 +351,11 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
             const SizedBox(height: 12),
             // ── Scanner UI / Photo Area ──────────────────────────────────────
             _buildPhotoArea(notIdentified, confidence),
+            if (!_identifying && _trunkPreview != null)
+              const Text('YOLOv8 trunk preview')
+            else if (!_identifying &&
+                _result?['trunk_preview_reason'] is String)
+              Text(_result!['trunk_preview_reason'] as String),
 
             const SizedBox(height: 24),
 
@@ -447,9 +490,9 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
           child: _UsagePanel(
             icon: Icons.auto_awesome,
             title: 'AI Scan',
-            usage: _aiUsage,
-            fallback: fallback,
-            onTap: onTap,
+            usage: const {'unlimited': true},
+            fallback: '',
+            onTap: null,
           ),
         ),
         const SizedBox(width: 10),
@@ -557,12 +600,23 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
   }
 
   Widget _buildImagePreview(bool notIdentified, String? confidence) {
+    final trunkPreview = _trunkPreview;
+    final ImageProvider<Object> scanImage;
+    if (trunkPreview == null) {
+      scanImage = FileImage(_photo!);
+    } else {
+      scanImage = MemoryImage(trunkPreview);
+    }
     return Stack(
       fit: StackFit.expand,
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(22),
-          child: ExpandablePhoto(image: FileImage(_photo!), label: 'Your scan'),
+          child: ExpandablePhoto(
+            image: scanImage,
+            label: trunkPreview == null ? 'Your scan' : 'YOLOv8 trunk preview',
+            fit: trunkPreview == null ? BoxFit.cover : BoxFit.contain,
+          ),
         ),
         if (_result != null && !notIdentified)
           Positioned(
@@ -727,8 +781,20 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
         ),
         const SizedBox(height: 16),
         _buildQuickInfoGrid(),
+        if (needsExpertReview && _photo != null) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _submitUnknown,
+            icon: const Icon(Icons.straighten),
+            label: const Text('Review DBH, height & carbon'),
+          ),
+          const Text('Add a base or top photo if needed, then review the measurements before submitting.',
+            style: TextStyle(fontSize: 13, height: 1.4)),
+          const SizedBox(height: 12),
+        ],
         TreeAgeCard(
           scientificName: _result?['scientific_name']?.toString() ?? '',
+          onEstimated: (age) { _result?['age_estimate'] = age; },
           dbhCm: ageDimension(_result?['estimated_dbh_cm']),
           heightM: ageDimension(_result?['estimated_height_m']),
         ),
@@ -927,12 +993,17 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
         if (_photo != null)
           ClipRRect(
             borderRadius: BorderRadius.circular(18),
-            child: ExpandablePhoto(image: FileImage(_photo!), label: 'Your scan',
-                height: 180, width: double.infinity),
+            child: ExpandablePhoto(
+                image: FileImage(_photo!),
+                label: 'Your scan',
+                height: 180,
+                width: double.infinity),
           ),
         if (_photo != null) const SizedBox(height: 12),
-        PhotoObservationsCard(observations: _result?['photo_observations'] is Map
-            ? Map<String, dynamic>.from(_result!['photo_observations']) : null),
+        PhotoObservationsCard(
+            observations: _result?['photo_observations'] is Map
+                ? Map<String, dynamic>.from(_result!['photo_observations'])
+                : null),
         const SizedBox(height: 12),
         _buildMatchGallery(),
         const SizedBox(height: 12),
@@ -993,9 +1064,15 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
               _InfoRow('Fruit',
                   _textValue('fruit', fallback: 'Species-specific fruiting')),
               _InfoRow('Diagnostic Features', features),
-              SpeciesComparisons(result: _result ?? {}, fallback: lookAlikes),
+
             ],
           ),
+        ),
+        const SizedBox(height: 12),
+        _buildEncyclopediaSection(
+          title: 'Similar species',
+          icon: Icons.compare_arrows_rounded,
+          child: SpeciesComparisons(result: _result ?? {}, fallback: lookAlikes),
         ),
         const SizedBox(height: 12),
         _buildEncyclopediaSection(
@@ -1115,7 +1192,8 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        const Text('Tree health is not assessed from species identification. A field worker must review its condition.'),
+        const Text(
+            'Tree health is not assessed from species identification. A field worker must review its condition.'),
       ],
     );
   }
@@ -1216,9 +1294,10 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
             children: [
               Icon(icon, color: kPrimary, size: 19),
               const SizedBox(width: 8),
-              Expanded(child: Text(title,
-                  style: GoogleFonts.inter(
-                      fontWeight: FontWeight.w800, fontSize: 15))),
+              Expanded(
+                  child: Text(title,
+                      style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w800, fontSize: 15))),
             ],
           ),
           const SizedBox(height: 12),
@@ -1319,10 +1398,14 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
         switch ((_result?['base_visible'], _result?['top_visible'])) {
       (true, true) =>
         'The base and top were detected, but AI Scan could not estimate a height from this photo.',
-      (true, false) => 'AI Scan could not confirm the highest point of the tree.',
-      (false, true) => 'AI Scan could not confirm where the trunk meets the ground.',
-      (false, false) => 'AI Scan could not confirm the trunk base or the highest point.',
-      _ => 'AI Scan did not receive a visibility check for the trunk base and highest point.',
+      (true, false) =>
+        'AI Scan could not confirm the highest point of the tree.',
+      (false, true) =>
+        'AI Scan could not confirm where the trunk meets the ground.',
+      (false, false) =>
+        'AI Scan could not confirm the trunk base or the highest point.',
+      _ =>
+        'AI Scan did not receive a visibility check for the trunk base and highest point.',
     };
     return Column(children: [
       IntrinsicHeight(
@@ -1330,7 +1413,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _InfoPill(Icons.straighten, 'Predicted DBH',
-                '${_result!['estimated_dbh_cm'] ?? '--'} cm'),
+                _result!['estimated_dbh_cm'] == null ? 'Unavailable' : '${_result!['estimated_dbh_cm']} cm'),
             const SizedBox(width: 8),
             _InfoPill(Icons.height, 'Predicted height',
                 height == null ? 'Unavailable' : '$height m'),
@@ -1341,9 +1424,17 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
         ),
       ),
       const SizedBox(height: 8),
+      if (_result?['estimated_dbh_cm'] == null)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Text(
+            'DBH: ${_result?['dbh_unavailable_reason'] ?? 'No usable DBH estimate was returned for this photo.'}',
+            style: const TextStyle(color: kMutedFg, fontSize: 12, height: 1.4),
+          ),
+        ),
       if (height == null)
         Text(
-          _result?['height_unavailable_reason']?.toString() ?? heightMessage,
+          'Height: ${_result?['height_unavailable_reason'] ?? heightMessage}',
           textAlign: TextAlign.center,
           style: const TextStyle(color: kMutedFg, fontSize: 11),
         ),
@@ -1405,7 +1496,6 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
   }
 
   Widget _buildErrorCard() {
-    final limitReached = _result?['limit_reached'] == true;
     final reason = _result?['reason']?.toString() ?? '';
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1418,7 +1508,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
           const Icon(Icons.error_outline_rounded, color: Colors.red, size: 34),
           const SizedBox(height: 10),
           Text(
-            limitReached ? 'Daily Limit Reached' : 'Could Not Identify',
+            'Could Not Identify',
             style: GoogleFonts.inter(
                 fontWeight: FontWeight.w800, color: Colors.red),
           ),
@@ -1434,16 +1524,9 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
             width: double.infinity,
             height: 48,
             child: ElevatedButton.icon(
-              onPressed: limitReached
-                  ? () => showUpgradeSheet(context)
-                  : _photo == null
-                      ? null
-                      : _submitUnknown,
-              icon: Icon(limitReached
-                  ? Icons.workspace_premium_outlined
-                  : Icons.upload_file),
-              label: Text(
-                  limitReached ? 'View Pro Plans' : 'Submit Unknown Species'),
+              onPressed: _photo == null ? null : _submitUnknown,
+              icon: const Icon(Icons.upload_file),
+              label: const Text('Submit Unknown Species'),
               style: ElevatedButton.styleFrom(backgroundColor: kPrimary),
             ),
           ),
@@ -1530,7 +1613,7 @@ class _UsagePanel extends StatelessWidget {
   final String title;
   final Map<String, dynamic>? usage;
   final String fallback;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const _UsagePanel({
     required this.icon,

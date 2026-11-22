@@ -126,12 +126,12 @@ Future<void> runScan(WidgetTester tester) async {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void main() {
-  testWidgets('usage badges render live counters once the fetch succeeds',
+  testWidgets('AI scans stay unlimited alongside the expert review counter',
       (tester) async {
     await pumpScreen(tester, usageLoader: () async => usageFixture());
 
     expect(find.text('Loading'), findsNothing);
-    expect(find.text('7 / 10 left'), findsOneWidget);
+    expect(find.text('Unlimited'), findsOneWidget);
     expect(find.text('4 / 5 left'), findsOneWidget);
   });
 
@@ -140,13 +140,13 @@ void main() {
     final completer = Completer<Map<String, dynamic>>();
     await pumpScreen(tester, usageLoader: () => completer.future);
 
-    expect(find.text('Loading'), findsNWidgets(2));
+    expect(find.text('Loading'), findsOneWidget);
 
     completer.complete(usageFixture());
     await tester.pumpAndSettle();
 
     expect(find.text('Loading'), findsNothing);
-    expect(find.text('7 / 10 left'), findsOneWidget);
+    expect(find.text('Unlimited'), findsOneWidget);
   });
 
   testWidgets('a failed usage fetch shows a retry state, never an endless spinner',
@@ -161,14 +161,14 @@ void main() {
     // Phase 13.4 regression guard: the old code swallowed this failure and
     // left both badges on "Loading" forever.
     expect(find.text('Loading'), findsNothing);
-    expect(find.text('Unavailable — tap to retry'), findsNWidgets(2));
+    expect(find.text('Unavailable — tap to retry'), findsOneWidget);
 
     await tester.tap(find.text('Unavailable — tap to retry').first);
     await tester.pumpAndSettle();
 
     expect(calls, 2, reason: 'tapping the failed badge must retry the fetch');
     expect(find.text('Unavailable — tap to retry'), findsNothing);
-    expect(find.text('7 / 10 left'), findsOneWidget);
+    expect(find.text('Unlimited'), findsOneWidget);
   });
 
   testWidgets('a staff payload renders as Unlimited, not as a stuck value',
@@ -197,8 +197,7 @@ void main() {
     expect(find.text('Pterocarpus fictus'), findsAtLeastNWidgets(1));
     // No role is injected, so the screen is not in the citizen flow.
     expect(find.text('Add to Inventory'), findsOneWidget);
-    // The scan consumed one AI credit: 3 of 10 used -> 6 of 10 left.
-    expect(find.text('6 / 10 left'), findsOneWidget);
+    expect(find.text('Unlimited'), findsOneWidget);
     expect(find.text('Could Not Identify'), findsNothing);
   });
 
@@ -217,11 +216,10 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Submit Unknown Species'), findsOneWidget);
-    // A failed scan must not silently consume a credit.
-    expect(find.text('7 / 10 left'), findsOneWidget);
+    expect(find.text('Unlimited'), findsOneWidget);
   });
 
-  testWidgets('a 402 response renders the Daily Limit Reached state',
+  testWidgets('a 402 response displays a scan error without an upgrade prompt',
       (tester) async {
     await pumpScreen(
       tester,
@@ -230,12 +228,12 @@ void main() {
     );
     await runScan(tester);
 
-    expect(find.text('Daily Limit Reached'), findsOneWidget);
-    expect(find.text('Could Not Identify'), findsNothing);
+    expect(find.text('Daily Limit Reached'), findsNothing);
+    expect(find.text('Could Not Identify'), findsOneWidget);
     expect(
-      find.text('Identification limit reached. Try again later or check your plan.'),
+      find.text('Identification server error (HTTP 402). Retry; if it continues, check the backend terminal.'),
       findsOneWidget,
     );
-    expect(find.text('View Pro Plans'), findsOneWidget);
+    expect(find.text('View Pro Plans'), findsNothing);
   });
 }

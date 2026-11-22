@@ -10,6 +10,8 @@ import '../services/auth_provider.dart';
 import '../services/theme.dart';
 import '../widgets/widgets.dart';
 
+const _plantingSecondary = Color(0xFF506458);
+
 class PlantingRecommendationsScreen extends StatefulWidget {
   final bool focusReview;
   const PlantingRecommendationsScreen({super.key, this.focusReview = false});
@@ -53,12 +55,16 @@ class _PlantingRecommendationsScreenState
       if (!mounted) return;
       setState(() {
         final weather = suggestions['weather_context'];
-        _weatherContext = weather is Map
-            ? Map<String, dynamic>.from(weather)
-            : null;
+        _weatherContext =
+            weather is Map ? Map<String, dynamic>.from(weather) : null;
+        final seenSuggestions = <(String, String)>{};
         _suggestions = (suggestions['suggestions'] as List? ?? [])
             .whereType<Map>()
             .map((e) => Map<String, dynamic>.from(e))
+            .where((item) => seenSuggestions.add((
+                  item['species_name'].toString().trim().toLowerCase(),
+                  item['recommended_area'].toString().trim().toLowerCase(),
+                )))
             .toList();
         _records = records
             .map((e) => PlantingRecommendationModel.fromJson(
@@ -177,25 +183,25 @@ class _PlantingRecommendationsScreenState
     return Scaffold(
       backgroundColor: kBackground,
       appBar: AppBar(
-        title: const Text('Planting Recommendations'),
+        title: const Text('Planting', maxLines: 1),
         actions: [
           IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded)),
         ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openCreateSheet(),
-        backgroundColor: kPrimary,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add_photo_alternate_outlined),
-        label: Text(isManager ? 'Add Plant' : 'Suggest Plant'),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: kPrimary))
           : RefreshIndicator(
               onRefresh: _load,
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                 children: [
+                  if (showReviewFirst) ...[
+                    _AddPlantPrompt(
+                      isManager: isManager,
+                      onTap: () => _openCreateSheet(),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   if (showReviewFirst && pendingRecords.isNotEmpty) ...[
                     const _SectionTitle('Citizen Suggestions for Review'),
                     const SizedBox(height: 10),
@@ -246,14 +252,16 @@ class _PlantingRecommendationsScreenState
                       const SizedBox(height: 4),
                       const Text(
                         'Counts priority species with zero or one record. This is an inventory gap, not proof a planting site is needed. Barangays without tree records cannot be ranked yet.',
-                        style: TextStyle(color: kMuted, fontSize: 11),
+                        style:
+                            TextStyle(color: _plantingSecondary, fontSize: 11),
                       ),
                       const SizedBox(height: 8),
                       ..._barangayNeeds.take(5).map((area) => _BarangayNeedCard(
                             item: area,
                             onTap: () {
                               setState(() {
-                                _barangayCtrl.text = area['barangay'].toString();
+                                _barangayCtrl.text =
+                                    area['barangay'].toString();
                               });
                               _load();
                             },
@@ -286,7 +294,8 @@ class _PlantingRecommendationsScreenState
                         _barangayHasInventory != false) ...[
                       const Text(
                         'Weather context is unavailable for this barangay. It needs geolocated tree records and a reachable weather service.',
-                        style: TextStyle(color: kMuted, fontSize: 12),
+                        style:
+                            TextStyle(color: _plantingSecondary, fontSize: 12),
                       ),
                       const SizedBox(height: 10),
                     ],
@@ -382,7 +391,7 @@ class _SpeciesPhotoLibraryCard extends StatelessWidget {
                 : speciesPhotos
                     .map((item) => item['species_name'].toString())
                     .join(', '),
-            style: const TextStyle(color: kMuted, fontSize: 12),
+            style: const TextStyle(color: _plantingSecondary, fontSize: 12),
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
@@ -656,10 +665,10 @@ class _PlantingFormSheetState extends State<_PlantingFormSheet> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(Icons.add_photo_alternate_outlined,
-                                color: kMutedFg, size: 34),
+                                color: _plantingSecondary, size: 34),
                             SizedBox(height: 8),
                             Text('Add tree/seedling photo',
-                                style: TextStyle(color: kMutedFg)),
+                                style: TextStyle(color: _plantingSecondary)),
                           ],
                         ),
                       )
@@ -809,11 +818,12 @@ class _BarangayNeedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final gaps = (item['underrepresented_native_priority_species'] as List? ?? [])
-        .whereType<Map>()
-        .map((species) =>
-            '${species['species_name']} (${species['recorded_count']})')
-        .toList();
+    final gaps =
+        (item['underrepresented_native_priority_species'] as List? ?? [])
+            .whereType<Map>()
+            .map((species) =>
+                '${species['species_name']} (${species['recorded_count']})')
+            .toList();
     final photoMissing = item['missing_verified_photo_count'] ?? 0;
     return Card(
       color: kCard,
@@ -830,7 +840,7 @@ class _BarangayNeedCard extends StatelessWidget {
           '${item['recorded_species_count']} species recorded\n'
           '0–1 recorded: ${gaps.isEmpty ? 'none from priority list' : gaps.join(', ')}'
           '${photoMissing > 0 ? '\n$photoMissing verified photos needed' : ''}',
-          style: const TextStyle(color: kMuted, fontSize: 11),
+          style: const TextStyle(color: _plantingSecondary, fontSize: 11),
         ),
         isThreeLine: true,
         trailing: const Icon(Icons.chevron_right_rounded, color: kPrimary),
@@ -855,7 +865,7 @@ class _NoInventoryNotice extends StatelessWidget {
       ),
       child: Text(
         'No tree inventory records match "$barangay". Check the barangay name or add tree records before using inventory-based suggestions.',
-        style: const TextStyle(color: kMuted, fontSize: 12),
+        style: const TextStyle(color: _plantingSecondary, fontSize: 12),
       ),
     );
   }
@@ -893,7 +903,7 @@ class _WeatherContextCard extends StatelessWidget {
             'Estimated by Open-Meteo from the center of available tree GPS records. '
             'Suggestions still use inventory balance; species-specific climate '
             'thresholds have not been added.',
-            style: TextStyle(color: kMuted, fontSize: 11),
+            style: TextStyle(color: _plantingSecondary, fontSize: 11),
           ),
         ],
       ),
@@ -914,7 +924,11 @@ class _SuggestionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final priority = item['priority']?.toString() ?? 'Medium';
-    final color = priority == 'High' ? kPoor : kFair;
+    final color = priority == 'Approved'
+        ? kPrimary
+        : priority == 'High'
+            ? kPoor
+            : const Color(0xFF805500);
     final images = _imageUrlsFor(item);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -984,7 +998,9 @@ class _SuggestionCard extends StatelessWidget {
             Text(
               item['scientific_name'].toString(),
               style: const TextStyle(
-                  color: kMutedFg, fontStyle: FontStyle.italic, fontSize: 12),
+                  color: _plantingSecondary,
+                  fontStyle: FontStyle.italic,
+                  fontSize: 12),
             ),
           ],
           if (images.isNotEmpty) ...[
@@ -999,10 +1015,10 @@ class _SuggestionCard extends StatelessWidget {
                   item['reason']?.toString() ??
                   'Recommended planting suggestion.',
             ),
-          ] else ...[
+          ] else if (item['photo_missing'] != true) ...[
             const SizedBox(height: 8),
             const Text('No photo available.',
-                style: TextStyle(color: kMuted, fontSize: 11)),
+                style: TextStyle(color: _plantingSecondary, fontSize: 11)),
           ],
           if (item['photo_missing'] == true) ...[
             const SizedBox(height: 4),
@@ -1010,14 +1026,14 @@ class _SuggestionCard extends StatelessWidget {
               images.isEmpty
                   ? 'Verified species photo needed.'
                   : 'This photo is not verified for the species.',
-              style: const TextStyle(color: kFair, fontSize: 11),
+              style: const TextStyle(color: Color(0xFF805500), fontSize: 11),
             ),
           ],
           const SizedBox(height: 8),
           Text(
             item['reason']?.toString() ?? '',
-            style:
-                const TextStyle(color: kMutedFg, fontSize: 12.5, height: 1.35),
+            style: const TextStyle(
+                color: _plantingSecondary, fontSize: 12.5, height: 1.35),
           ),
           const SizedBox(height: 8),
           _AreaReason(
@@ -1136,7 +1152,7 @@ class _AreaReason extends StatelessWidget {
             Text(
               reason!,
               style: const TextStyle(
-                color: kMutedFg,
+                color: _plantingSecondary,
                 fontSize: 11.5,
                 height: 1.3,
               ),
@@ -1244,12 +1260,13 @@ class _PlantingRecordCard extends StatelessWidget {
                     if ((item.scientificName ?? '').isNotEmpty)
                       Text(item.scientificName!,
                           style: const TextStyle(
-                              color: kMutedFg,
+                              color: _plantingSecondary,
                               fontSize: 12,
                               fontStyle: FontStyle.italic)),
                     Text(
                       item.barangay ?? 'No area selected',
-                      style: const TextStyle(color: kMutedFg, fontSize: 12),
+                      style: const TextStyle(
+                          color: _plantingSecondary, fontSize: 12),
                     ),
                   ],
                 ),
@@ -1264,7 +1281,7 @@ class _PlantingRecordCard extends StatelessWidget {
               maxLines: 4,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                color: kMutedFg,
+                color: _plantingSecondary,
                 fontSize: 12,
                 height: 1.35,
               ),
@@ -1418,7 +1435,7 @@ void _showPlantPhotoDetail(
               const Center(
                 child: Text(
                   'Swipe photos',
-                  style: TextStyle(color: kMutedFg, fontSize: 12),
+                  style: TextStyle(color: _plantingSecondary, fontSize: 12),
                 ),
               ),
             ],

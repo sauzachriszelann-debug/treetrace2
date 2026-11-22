@@ -1,5 +1,6 @@
 import '../widgets/species_references.dart';
 import '../widgets/expandable_photo.dart';
+import '../widgets/tree_age_card.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -108,34 +109,37 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
                     fontSize: 16,
                     fontWeight: FontWeight.w700)),
             background: tree.photoUrl != null
-                ? ExpandablePhoto(image: CachedNetworkImageProvider(tree.photoUrl!), label: 'Inventory photo', thumbnail: Stack(fit: StackFit.expand, children: [
-                    // Phase 12C.5 (B): graceful offline fallback instead of
-                    // the framework's raw exception rendering (which showed a
-                    // red X plus the SocketException text on-device).
-                    CachedNetworkImage(
-                      imageUrl: tree.photoUrl!,
-                      fit: BoxFit.cover,
-                      placeholder: (_, __) => Container(color: kSidebarBg),
-                      errorWidget: (_, __, ___) => Container(
-                        color: kSidebarBg,
-                        alignment: Alignment.center,
-                        child: Icon(Icons.park_outlined,
-                            size: 56,
-                            color: Colors.white.withValues(alpha: 0.6)),
+                ? ExpandablePhoto(
+                    image: CachedNetworkImageProvider(tree.photoUrl!),
+                    label: 'Inventory photo',
+                    thumbnail: Stack(fit: StackFit.expand, children: [
+                      // Phase 12C.5 (B): graceful offline fallback instead of
+                      // the framework's raw exception rendering (which showed a
+                      // red X plus the SocketException text on-device).
+                      CachedNetworkImage(
+                        imageUrl: tree.photoUrl!,
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => Container(color: kSidebarBg),
+                        errorWidget: (_, __, ___) => Container(
+                          color: kSidebarBg,
+                          alignment: Alignment.center,
+                          child: Icon(Icons.park_outlined,
+                              size: 56,
+                              color: Colors.white.withValues(alpha: 0.6)),
+                        ),
                       ),
-                    ),
-                    Container(
-                        decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.transparent,
-                          Colors.black.withOpacity(0.65)
-                        ],
-                      ),
-                    )),
-                  ]))
+                      Container(
+                          decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withOpacity(0.65)
+                          ],
+                        ),
+                      )),
+                    ]))
                 : Container(color: kSidebarBg),
           ),
         ),
@@ -211,10 +215,16 @@ class _TreeDetailScreenState extends State<TreeDetailScreen> {
                       tree.carbonKg != null
                           ? '${tree.carbonKg!.toStringAsFixed(2)} kg'
                           : null),
+                  SavedScanDetails(tree: tree),
+                  TreeAgeCard(
+                      initialEstimate: savedAgeForTree(tree),
+                      scientificName: tree.scientificName ?? '',
+                      dbhCm: tree.dbhCm,
+                      heightM: tree.heightM),
                   _infoRow(
                       Icons.gps_fixed,
                       'GPS',
-                      tree.lat != null
+                      tree.lat != null && tree.lng != null
                           ? '${tree.lat!.toStringAsFixed(5)}, ${tree.lng!.toStringAsFixed(5)}'
                           : null),
                   if (tree.notes != null && tree.notes!.isNotEmpty) ...[

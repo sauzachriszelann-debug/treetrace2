@@ -61,6 +61,10 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
   String? _treetopError;
   int _treetopRequest = 0;
   Uint8List? _galleryTrunkPreview;
+  bool _photoDbhEstimate = false;
+  bool _photoHeightEstimate = false;
+
+  bool get _hasPhotoEstimates => _photoDbhEstimate || _photoHeightEstimate;
   Map<String, dynamic>? _photoMeasurement;
   Uint8List? _preview;
   bool _baseConfirmed = false;
@@ -106,6 +110,8 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
       _photo = initial.photo;
       _measurementSkipped = initial.measurementSkipped;
       _species = initial.species;
+      _photoDbhEstimate = initial.photoDbhEstimate;
+      _photoHeightEstimate = initial.photoHeightEstimate;
       _dbh = initial.dbh;
       _height = initial.heightMeters;
       _heightResult = initial.heightResult;
@@ -204,12 +210,14 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
             : result['reason']?.toString() ??
                 'No reliable DBH. Retake or skip measurement.';
       });
+      if (!valid) await _predictGallery(photo);
     } catch (error) {
       if (mounted) {
         setState(() => _dbhMessage = error is DioException &&
                 error.response?.statusCode == 413
             ? 'Original photo exceeds the server upload limit (HTTP 413).'
             : 'DBH unavailable. Check the connection or take a new level photo.');
+        await _predictGallery(photo);
       }
     } finally {
       if (speciesWork != null) await speciesWork;
@@ -226,6 +234,19 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
       setState(() {
         _galleryPrediction = prediction;
         _galleryTrunkPreview = preview;
+        final dbh = acceptedGalleryValue(prediction, 'predicted_dbh_cm', 300);
+        final height =
+            acceptedGalleryValue(prediction, 'predicted_height_m', 80);
+        if (dbh != null && _diameter.text.isEmpty) {
+          _diameter.text = dbh.toStringAsFixed(1);
+          _photoDbhEstimate = true;
+          _dbhMessage = null;
+        }
+        if (height != null && _treeHeight.text.isEmpty) {
+          _treeHeight.text = height.toStringAsFixed(2);
+          _photoHeightEstimate = true;
+          _heightMessage = null;
+        }
       });
     } catch (error) {
       if (!mounted || _photo?.path != photo.path) return;
@@ -234,6 +255,9 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
         final status = error.response?.statusCode;
         if (status == 413) {
           reason = 'The gallery upload exceeded the server size limit.';
+        } else if (status == 404) {
+          reason =
+              'Gallery estimates are unavailable on this backend. Check which Vercel deployment the app uses.';
         } else if (status == 429) {
           reason = 'The AI request limit has been reached. Try again later.';
         } else if (status == 401 || status == 403) {
@@ -259,9 +283,14 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
     }
   }
 
-  String _predictionValue(String key, double maximum) =>
-      acceptedGalleryValue(_galleryPrediction, key, maximum)?.toStringAsFixed(0) ??
-      'Unavailable';
+  Future<void> _retryGalleryPrediction(File photo) async {
+    setState(() => _busy = true);
+    try {
+      await _predictGallery(photo);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   Future<void> _addTreetopPhoto() async {
     final original = _photo;
@@ -272,54 +301,98 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
       if (widget.pickTreetopPhoto != null) {
         top = await widget.pickTreetopPhoto!();
       } else {
-        final source = await showModalBottomSheet<ImageSource>(context: context,
-          builder: (context) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-            ListTile(leading: const Icon(Icons.photo_library_outlined), title: const Text('Select treetop photo'),
-              onTap: () => Navigator.pop(context, ImageSource.gallery)),
-            ListTile(leading: const Icon(Icons.camera_alt_outlined), title: const Text('Take treetop photo'),
-              onTap: () => Navigator.pop(context, ImageSource.camera)),
-          ])));
+        final source = await showModalBottomSheet<ImageSource>(
+            context: context,
+            builder: (context) => SafeArea(
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  ListTile(
+                      leading: const Icon(Icons.photo_library_outlined),
+                      title: const Text('Select treetop photo'),
+                      onTap: () => Navigator.pop(context, ImageSource.gallery)),
+                  ListTile(
+                      leading: const Icon(Icons.camera_alt_outlined),
+                      title: const Text('Take treetop photo'),
+                      onTap: () => Navigator.pop(context, ImageSource.camera)),
+                ])));
         if (source == null) return;
-        final picked = await ImagePicker().pickImage(source: source, imageQuality: 85, maxWidth: 1600);
+        final picked = await ImagePicker()
+            .pickImage(source: source, imageQuality: 85, maxWidth: 1600);
         if (picked != null) top = File(picked.path);
       }
-      if (top == null || !mounted || request != _treetopRequest || _photo?.path != original.path) return;
-      setState(() { _addingTreetop = true; _treetopError = null; _treetopPhoto = top; });
+      if (top == null ||
+          !mounted ||
+          request != _treetopRequest ||
+          _photo?.path != original.path) return;
+      setState(() {
+        _addingTreetop = true;
+        _treetopError = null;
+        _treetopPhoto = top;
+      });
       final result = await (widget.predictWithTreetop?.call(original, top) ??
           api.predictGallerySize(original, treetopPhoto: top));
-      if (!mounted || request != _treetopRequest || _photo?.path != original.path) return;
+      if (!mounted ||
+          request != _treetopRequest ||
+          _photo?.path != original.path) return;
+      final trunkPreview = result['trunk_detected'] == true
+          ? await _decodePreview(result['preview_png'])
+          : null;
+      if (!mounted ||
+          request != _treetopRequest ||
+          _photo?.path != original.path) return;
       final value = result['predicted_height_m'];
-      final valid = result['treetop_photo_used'] == true && result['status'] == 'predicted' &&
-          result['method'] == 'gallery_yolo_vision_prediction' && result['quality'] == 'unvalidated' &&
-          result['validated_accuracy'] == false && result['prediction_basis'] == 'visual_appearance' &&
-          result['target_identified'] == true && value is num && value.isFinite && value >= 1 && value <= 80;
+      final valid = result['treetop_photo_used'] == true &&
+          result['status'] == 'predicted' &&
+          result['method'] == 'gallery_yolo_vision_prediction' &&
+          result['quality'] == 'unvalidated' &&
+          result['validated_accuracy'] == false &&
+          result['prediction_basis'] == 'visual_appearance' &&
+          result['target_identified'] == true &&
+          value is num &&
+          value.isFinite &&
+          value >= 1 &&
+          value <= 80;
       setState(() {
+        if (trunkPreview != null) _galleryTrunkPreview = trunkPreview;
         if (valid) {
-          // Supplemental image updates height only. Keep original DBH, species,
-          // trunk overlay and measured fields, even if AI revises those numbers.
-          _galleryPrediction = {...?_galleryPrediction,
-            'status': 'predicted', 'target_identified': true,
-            'predicted_height_m': value, 'treetop_photo_used': true,
+          final height = value;
+          if (_treeHeight.text.isEmpty ||
+              (_photoHeightEstimate &&
+                  double.tryParse(_treeHeight.text) ==
+                      _galleryPrediction?['predicted_height_m'])) {
+            _treeHeight.text = height.toStringAsFixed(2);
+            _photoHeightEstimate = true;
+            _heightMessage = null;
+          }
+          _galleryPrediction = {
+            ...?_galleryPrediction,
+            'status': 'predicted',
+            'target_identified': true,
+            'predicted_height_m': value,
+            'treetop_photo_used': true,
             'needs_treetop_photo': false,
             'height_reason': result['height_reason'],
             'height_reason_code': result['height_reason_code'],
             'uncertainties': [
-              ...((_galleryPrediction?['uncertainties'] as List?) ?? []).where((v) => !v.toString().startsWith('Height:')),
-              ...((result['uncertainties'] as List?) ?? []).where((v) => v.toString().startsWith('Height:')),
+              ...((_galleryPrediction?['uncertainties'] as List?) ?? [])
+                  .where((v) => !v.toString().startsWith('Height:')),
+              ...((result['uncertainties'] as List?) ?? [])
+                  .where((v) => v.toString().startsWith('Height:')),
             ],
           };
         } else {
-          _treetopError = result['height_reason']?.toString() ?? result['reason']?.toString() ??
+          _treetopError = result['height_reason']?.toString() ??
+              result['reason']?.toString() ??
               'Height unavailable. Include the treetop and overlapping branches of this same tree.';
         }
       });
     } catch (_) {
       if (mounted && request == _treetopRequest) {
         setState(() => _treetopError =
-          'Treetop photo could not be processed. Check your connection and try again.');
+            'Treetop photo could not be processed. Check your connection and try again.');
       }
     } finally {
-      if (mounted && request == _treetopRequest) setState(() => _addingTreetop = false);
+      if (mounted && request == _treetopRequest)
+        setState(() => _addingTreetop = false);
     }
   }
 
@@ -372,6 +445,7 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
       final observation = capture['height_observation'];
       setState(() {
         _dbh = null;
+        _photoDbhEstimate = false;
         _diameter.clear();
         _dbhMessage = capture['image_base64'] == null
             ? 'Trunk measurement skipped.'
@@ -379,6 +453,7 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
         _height = observation is Map
             ? heightFromArObservation(Map<String, dynamic>.from(observation))
             : null;
+        _photoHeightEstimate = false;
         _treeHeight.text = _height?.toStringAsFixed(2) ?? '';
         _heightMessage = _height == null
             ? capture['height_reason']?.toString() ??
@@ -404,10 +479,16 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
       baseConfirmed: _baseConfirmed);
   bool get _canUse =>
       !_busy &&
+      !_addingTreetop &&
       _unknownSpecies == null &&
       (widget.advancedAr
           ? _hasReviewedValues
-          : _photo != null && (_measurementSkipped || _photoAccepted));
+          : _photo != null &&
+              (_measurementSkipped ||
+                  _photoAccepted ||
+                  (_hasPhotoEstimates &&
+                      (_diameter.text.trim().isNotEmpty ||
+                          _treeHeight.text.trim().isNotEmpty))));
 
   Future<void> _scanLevel() async {
     if (_busy) return;
@@ -431,7 +512,9 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
                         _heightResult = null;
                         _baseConfirmed = false;
                         _measurementSkipped = false;
+                        _photoDbhEstimate = false;
                         _diameter.clear();
+                        _photoHeightEstimate = false;
                         _treeHeight.clear();
                         _preview = null;
                         _previewReady = false;
@@ -536,7 +619,9 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
       _dbh = null;
       _height = null;
       _heightResult = null;
+      _photoDbhEstimate = false;
       _diameter.clear();
+      _photoHeightEstimate = false;
       _treeHeight.clear();
     });
     _use(saveRequested: true);
@@ -630,7 +715,9 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
       _dbh = null;
       _height = null;
       _heightResult = null;
+      _photoDbhEstimate = false;
       _diameter.clear();
+      _photoHeightEstimate = false;
       _treeHeight.clear();
       _dbhMessage = 'No metric depth available on this phone.';
       _heightMessage = 'No tracked distance available on this phone.';
@@ -674,6 +761,12 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
       heightMeters: _height,
       heightResult: _measurementSkipped ? null : _heightResult,
       photo: _photo,
+      photoDbhEstimate: !_measurementSkipped &&
+          _photoDbhEstimate &&
+          _diameter.text.trim().isNotEmpty,
+      photoHeightEstimate: !_measurementSkipped &&
+          _photoHeightEstimate &&
+          _treeHeight.text.trim().isNotEmpty,
       reviewedCommonName: _common.text.trim(),
       reviewedScientificName: _scientific.text.trim(),
       reviewedDbhCm:
@@ -729,10 +822,16 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
           if (_photo != null)
             ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: ExpandablePhoto(image: FileImage(_photo!), label: 'Tree scan', height: 200, fit: BoxFit.cover)),
+                child: ExpandablePhoto(
+                    image: FileImage(_photo!),
+                    label: 'Tree scan',
+                    height: 200,
+                    fit: BoxFit.cover)),
           if (_species != null && !_busy)
-            PhotoObservationsCard(observations: _species?['photo_observations'] is Map
-                ? Map<String, dynamic>.from(_species!['photo_observations']) : null),
+            PhotoObservationsCard(
+                observations: _species?['photo_observations'] is Map
+                    ? Map<String, dynamic>.from(_species!['photo_observations'])
+                    : null),
           if (_galleryPrediction != null)
             Card(
               key: const Key('gallery-size-prediction'),
@@ -741,65 +840,79 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('AI-predicted size',
+                        const Text('DBH and Height',
                             style: TextStyle(fontWeight: FontWeight.bold)),
-                        const Text(
-                            'Unvalidated prediction; may be inaccurate.'),
                         if (_galleryTrunkPreview != null)
-                          ExpandablePhoto(image: MemoryImage(_galleryTrunkPreview!), label: 'Trunk detection',
-                              height: 180, fit: BoxFit.contain),
-                        Text(
-                            'Predicted DBH (cm): ${_predictionValue('predicted_dbh_cm', 300)}'),
-                        Text(
-                            'Predicted height (m): ${_predictionValue('predicted_height_m', 80)}'),
-                        if (_galleryPrediction?['treetop_photo_used'] == true)
-                          const Text('Height predicted using your original photo and added treetop photo.'),
-                        if (_galleryPrediction?['needs_treetop_photo'] == true ||
-                            _galleryPrediction?['height_reason_code'] == 'top_hidden' ||
-                            _galleryPrediction?['treetop_photo_used'] == true) ...[
-                          const Text('Add a photo of the treetop of this same tree. Stay in the same position and include overlapping trunk or branches so the photos can be matched.'),
+                          ExpandablePhoto(
+                              image: MemoryImage(_galleryTrunkPreview!),
+                              label: 'Trunk detection',
+                              height: 180,
+                              fit: BoxFit.contain)
+                        else if (_galleryPrediction?['trunk_detected'] ==
+                                false &&
+                            _galleryPrediction?['status'] == 'predicted')
+                          const Text('Trunk outline unavailable.'),
+                        if (_galleryPrediction?['dbh_reason_code'] ==
+                                'base_hidden' ||
+                            _galleryPrediction?['height_reason_code'] ==
+                                'base_hidden')
+                          const Text(
+                              'The trunk base is out of view or unclear. Retake the photo with the spot where the trunk meets the ground visible.'),
+                        if (_galleryPrediction?['needs_treetop_photo'] ==
+                                true ||
+                            _galleryPrediction?['height_reason_code'] ==
+                                'top_hidden' ||
+                            _galleryPrediction?['treetop_photo_used'] ==
+                                true) ...[
+                          const Text(
+                              'If the treetop is out of view, add a photo from the same spot. Include the highest point and some of the same trunk or branches.'),
                           if (_treetopPhoto != null)
-                            ExpandablePhoto(image: FileImage(_treetopPhoto!), label: 'Added treetop photo', height: 140, fit: BoxFit.contain),
+                            ExpandablePhoto(
+                                image: FileImage(_treetopPhoto!),
+                                label: 'Added treetop photo',
+                                height: 140,
+                                fit: BoxFit.contain),
                           if (_treetopError != null) Text(_treetopError!),
-                          OutlinedButton.icon(key: const Key('add-treetop-photo'),
-                            onPressed: _busy || _addingTreetop ? null : _addTreetopPhoto,
-                            icon: const Icon(Icons.add_photo_alternate_outlined),
-                            label: Text(_addingTreetop ? 'Checking treetop photo…' :
-                              _treetopPhoto != null ? 'Replace treetop photo' : 'Add treetop photo')),
+                          OutlinedButton.icon(
+                              key: const Key('add-treetop-photo'),
+                              onPressed: _busy || _addingTreetop
+                                  ? null
+                                  : _addTreetopPhoto,
+                              icon: const Icon(
+                                  Icons.add_photo_alternate_outlined),
+                              label: Text(_addingTreetop
+                                  ? 'Checking treetop photo…'
+                                  : _treetopPhoto != null
+                                      ? 'Replace treetop photo'
+                                      : 'Add treetop photo')),
                         ],
-                        if (_galleryPrediction?['dbh_reason'] is String)
-                          Text('DBH: ${_galleryPrediction!['dbh_reason']}'),
-                        if (_galleryPrediction?['height_reason'] is String)
-                          Text(
-                              'Height: ${_galleryPrediction!['height_reason']}'),
-                        if (_galleryPrediction?['uncertainties'] is List)
-                          ...(_galleryPrediction!['uncertainties'] as List)
-                              .whereType<String>()
-                              .take(2)
-                              .map((uncertainty) => Text(uncertainty)),
-                        Text(_galleryPrediction?['reason']?.toString() ??
-                            'No size prediction.'),
-                        if (_galleryPrediction?['detection_note'] is String)
-                          Text(_galleryPrediction!['detection_note'] as String),
-                        const Text(
-                            'YOLO looks for the trunk; AI predicts size from tree appearance, including when no mask is found. No reference object is required. '
-                            'Experimental estimates: validate DBH against tape and height against a clinometer. '
-                            'Predictions are not saved as measurements or used for carbon calculations.'),
+                        if (_galleryPrediction?['status'] != 'predicted')
+                          Text(_galleryPrediction?['reason']?.toString() ??
+                              'Photo estimates unavailable.'),
+                        if (_photo != null &&
+                            _galleryPrediction?['status'] != 'predicted')
+                          OutlinedButton(
+                            onPressed: _busy || _addingTreetop
+                                ? null
+                                : () => _retryGalleryPrediction(_photo!),
+                            child: const Text('Retry photo estimates'),
+                          ),
                       ])),
             ),
           if (_species != null && !_busy)
             TreeAgeCard(
               scientificName: _species?['scientific_name']?.toString() ?? '',
-              dbhCm: ageDimension(_galleryPrediction != null
-                  ? _galleryPrediction!['predicted_dbh_cm'] : _diameter.text),
-              heightM: ageDimension(_galleryPrediction != null
-                  ? _galleryPrediction!['predicted_height_m'] : _height),
-              dimensionsSource: _galleryPrediction != null
-                  ? 'ai_prediction' : 'measurement',
+              dbhCm: ageDimension(_diameter.text),
+              heightM: ageDimension(_treeHeight.text),
+              dimensionsSource:
+                  _hasPhotoEstimates ? 'ai_prediction' : 'measurement',
             ),
           if (_preview != null) ...[
             const SizedBox(height: 12),
-            ExpandablePhoto(image: MemoryImage(_preview!), label: 'Trunk detection', fit: BoxFit.contain),
+            ExpandablePhoto(
+                image: MemoryImage(_preview!),
+                label: 'Trunk detection',
+                fit: BoxFit.contain),
           ],
           if (!widget.advancedAr &&
               _photoMeasurement?['needs_base_confirmation'] == true &&
@@ -850,7 +963,9 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
                       child: TextFormField(
                           key: const Key('scan-dbh'),
                           controller: _diameter,
-                          readOnly: _busy || !widget.advancedAr,
+                          readOnly: _busy ||
+                              _addingTreetop ||
+                              !(widget.advancedAr || _hasPhotoEstimates),
                           onChanged: (_) => setState(() {}),
                           validator: _measurement,
                           keyboardType: const TextInputType.numberWithOptions(
@@ -862,7 +977,9 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
                       child: TextFormField(
                           key: const Key('scan-height'),
                           controller: _treeHeight,
-                          readOnly: _busy || !widget.advancedAr,
+                          readOnly: _busy ||
+                              _addingTreetop ||
+                              !(widget.advancedAr || _hasPhotoEstimates),
                           onChanged: (_) => setState(() {}),
                           validator: _measurement,
                           keyboardType: const TextInputType.numberWithOptions(
@@ -872,12 +989,15 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
                               hintText: 'Unavailable'))),
                 ]),
               ])),
-          if (_dbhMessage != null)
+          if (_hasPhotoEstimates)
+            const Text(
+                'Photo estimates. Review before saving. Carbon based on these values is approximate.'),
+          if (_dbhMessage != null && _diameter.text.isEmpty)
             Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text('DBH: $_dbhMessage',
                     style: Theme.of(context).textTheme.bodySmall)),
-          if (_heightMessage != null)
+          if (_heightMessage != null && _treeHeight.text.isEmpty)
             Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text('Height: $_heightMessage',
@@ -919,7 +1039,13 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
                         MaterialPageRoute(
                           builder: (_) => AIIdentifyScreen(
                             initialPhoto: _photo,
-                            initialResult: _unknownSpecies,
+                            initialResult: {
+                              ...?_unknownSpecies,
+                              'estimated_dbh_cm':
+                                  double.tryParse(_diameter.text),
+                              'estimated_height_m':
+                                  double.tryParse(_treeHeight.text),
+                            },
                           ),
                         ),
                       ),
@@ -929,7 +1055,7 @@ class _TreeScanScreenState extends State<TreeScanScreen> {
           else ...[
             Text(widget.advancedAr
                 ? 'Use results fills the form and replaces available fields. Empty measurements keep existing form values. Save the tree on the next screen.'
-                : 'Check the species suggestion and experimental DBH estimate before using them. Skip measurement to save without DBH or height.'),
+                : 'Review the results before continuing.'),
             ElevatedButton.icon(
                 key: const Key('use-tree-scan'),
                 onPressed: _canUse

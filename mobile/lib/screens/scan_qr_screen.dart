@@ -5,7 +5,7 @@ import '../services/api_service.dart';
 import '../services/theme.dart';
 import '../models/models.dart';
 import '../widgets/widgets.dart';
-import 'tree_detail_screen.dart';
+import 'public_tree_profile_screen.dart';
 
 class ScanQRScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -175,7 +175,7 @@ class _ScanQRScreenState extends State<ScanQRScreen> with SingleTickerProviderSt
                       child: ElevatedButton(
                         onPressed: () {
                           Navigator.pop(context);
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => TreeDetailScreen(treeId: tree.id)));
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => PublicTreeProfileScreen(treeId: tree.id)));
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: kPrimary,

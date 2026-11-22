@@ -229,6 +229,10 @@ export default function AddTree() {
           // same key is still unresolved and must stay retryable.
           if (!hadPriorAttempt) delete next.original_payload;
           writeDraft(next);
+          // Keep the visible recovery banner in sync with the persisted draft.
+          // Otherwise it can continue claiming this rejected save may have
+          // reached the server until the page is refreshed.
+          setDraft(next);
         }
         const detail = error?.response?.data?.detail;
         toast.error(
@@ -332,6 +336,9 @@ export default function AddTree() {
       const candidates = await treesApi.nearby({
         lat: data.lat,
         lng: data.lng,
+        duplicate_check: true,
+        dbh_cm: data.dbh_cm > 0 ? data.dbh_cm : undefined,
+        height_m: data.height_m > 0 ? data.height_m : undefined,
         gps_accuracy_m: data.gps_accuracy_m ?? undefined,
         common_name: data.common_name || undefined,
         scientific_name: data.scientific_name || undefined,
@@ -390,14 +397,18 @@ export default function AddTree() {
           <p className="font-medium text-amber-900">
             {draft.status === "uncertain" || draft.status === "in_flight"
               ? "A previous save may have reached the server."
-              : "Unfinished submission recovered from durable storage."}
+              : draft.status === "draft"
+                ? "This tree was not saved. Your form is kept as a draft."
+                : "Unfinished submission recovered from this browser."}
           </p>
           <p className="mt-1 text-amber-800">
             {draft.snapshot?.common_name || "Unnamed tree"} · saved{" "}
             {draft.created_at ? new Date(draft.created_at).toLocaleString() : "earlier"}
             {draft.status === "uncertain" || draft.status === "in_flight"
               ? " - retrying uses the same submission key, so no duplicate can be created. The draft is saved in this browser and survives closing the tab."
-              : " - restored from this browser's durable draft storage."}
+              : draft.status === "draft"
+                ? " - the server rejected the save. Edit the form and try again; this copy is only stored in your browser."
+                : " - restored from this browser's saved drafts."}
           </p>
           <div className="mt-3 flex gap-2">
             {(draft.status === "uncertain" || draft.status === "in_flight") &&
@@ -586,7 +597,7 @@ export default function AddTree() {
                   {nearbyCandidates.map((candidate) => (
                     <li
                       key={candidate.tree_id}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 p-2.5"
+                      className={`flex items-center justify-between gap-3 rounded-lg border p-2.5 ${candidate.duplicate_warning === "red" ? "border-red-400 bg-red-50" : "border-amber-400 bg-amber-50"}`}
                     >
                       {candidate.photo_url && <img src={candidate.photo_url} alt={`${candidate.common_name} existing tree`} className="h-16 w-14 shrink-0 rounded-md object-cover" />}
                       <div className="min-w-0">
@@ -606,11 +617,11 @@ export default function AddTree() {
                               : "different species"}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {candidate.accuracy_overlap
+                          {candidate.duplicate_reason || (candidate.accuracy_overlap
                             ? "GPS accuracy areas overlap. Compare the tree photos."
                             : candidate.accuracy_incomplete
                               ? "GPS accuracy incomplete; possible match only."
-                              : "Nearby pin; neighboring trees may be separate."}
+                              : "Nearby pin; neighboring trees may be separate.")}
                         </p>
                       </div>
                       <Button

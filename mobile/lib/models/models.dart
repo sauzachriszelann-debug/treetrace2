@@ -6,6 +6,10 @@ class TreeModel {
   final double? dbhCm;
   final double? heightM;
   final double? carbonKg;
+  final double? estimatedAgeYears;
+  final Map<String, dynamic>? scanProfile;
+  final Map<String, dynamic>? speciesProfile;
+  final Map<String, dynamic>? ageEstimate;
   final String healthStatus;
   final String? barangay;
   final String? city;
@@ -28,6 +32,8 @@ class TreeModel {
     this.dbhCm,
     this.heightM,
     this.carbonKg,
+    this.estimatedAgeYears,
+    this.scanProfile, this.speciesProfile, this.ageEstimate,
     required this.healthStatus,
     this.barangay,
     this.city,
@@ -51,6 +57,10 @@ class TreeModel {
         dbhCm: (j['dbh_cm'] as num?)?.toDouble(),
         heightM: (j['height_m'] as num?)?.toDouble(),
         carbonKg: (j['carbon_kg'] as num?)?.toDouble(),
+        estimatedAgeYears: (j['estimated_age_years'] as num?)?.toDouble(),
+        scanProfile: j['scan_profile'] is Map ? Map<String, dynamic>.from(j['scan_profile']) : null,
+        speciesProfile: j['species_profile'] is Map ? Map<String, dynamic>.from(j['species_profile']) : null,
+        ageEstimate: j['age_estimate'] is Map ? Map<String, dynamic>.from(j['age_estimate']) : null,
         healthStatus: j['health_status'] ?? 'Not assessed',
         barangay: j['barangay'],
         city: j['city'],
@@ -188,6 +198,10 @@ class UserModel {
 
 class UnknownSpeciesModel {
   final int id;
+  final String? identifiedScientificName;
+  final double? dbhCm;
+  final double? heightM;
+  final double? carbonKg;
   final String? photoUrl;
   final String? barangay;
   final String? locationDescription;
@@ -205,6 +219,10 @@ class UnknownSpeciesModel {
 
   UnknownSpeciesModel({
     required this.id,
+    this.identifiedScientificName,
+    this.dbhCm,
+    this.heightM,
+    this.carbonKg,
     this.photoUrl,
     this.barangay,
     this.locationDescription,
@@ -224,6 +242,10 @@ class UnknownSpeciesModel {
   factory UnknownSpeciesModel.fromJson(Map<String, dynamic> j) =>
       UnknownSpeciesModel(
         id: j['id'],
+        identifiedScientificName: j['identified_scientific_name'],
+        dbhCm: (j['dbh_cm'] as num?)?.toDouble(),
+        heightM: (j['height_m'] as num?)?.toDouble(),
+        carbonKg: (j['carbon_kg'] as num?)?.toDouble(),
         photoUrl: j['photo_url'],
         barangay: j['barangay'],
         locationDescription: j['location_description'],

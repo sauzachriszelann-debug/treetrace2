@@ -22,6 +22,7 @@ class _TreeListScreenState extends State<TreeListScreen> {
   List<TreeModel> _all = [];
   List<TreeModel> _filtered = [];
   bool _loading = true;
+  String? _loadError;
   String _search = '';
   String _status = 'all';
   bool _attentionOnly = false;
@@ -35,15 +36,18 @@ class _TreeListScreenState extends State<TreeListScreen> {
   }
 
   Future<void> _load() async {
+    setState(() { _loading = true; _loadError = null; });
     try {
       final data = await api.getTrees(limit: 500);
+      if (!mounted) return;
       setState(() {
         _all = data.map((j) => TreeModel.fromJson(j)).toList();
         _loading = false;
       });
       _filter();
-    } catch (_) {
-      setState(() => _loading = false);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() { _loading = false; _loadError = treeLoadErrorMessage(error); });
     }
   }
 
@@ -112,7 +116,7 @@ class _TreeListScreenState extends State<TreeListScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        '${_all.length} trees recorded',
+                        _loadError != null && _all.isEmpty ? 'Inventory unavailable' : '${_all.length} trees recorded',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 24,
@@ -216,6 +220,17 @@ class _TreeListScreenState extends State<TreeListScreen> {
                   child: LoadingList(),
                 ),
               )
+            else if (_loadError != null)
+              SliverFillRemaining(hasScrollBody: false, child: Center(
+                child: Padding(padding: const EdgeInsets.all(24), child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_loadError!, textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    OutlinedButton(onPressed: _load, child: const Text('Retry')),
+                  ],
+                )),
+              ))
             else if (_filtered.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,

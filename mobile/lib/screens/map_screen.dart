@@ -31,6 +31,7 @@ class _MapScreenState extends State<MapScreen> {
   List<TreeModel> _trees = [];
   bool _loading = true;
   bool _loadError = false;
+  String? _loadErrorMessage;
   String _filter = 'all';
   String _search = '';
   bool _isSatellite = false;
@@ -65,6 +66,7 @@ class _MapScreenState extends State<MapScreen> {
     });
     try {
       final data = await (widget.treeLoader ?? api.getPublicTrees)();
+      if (!mounted) return;
       setState(() {
         _trees = data.map((j) => TreeModel.fromJson(j))
             .where((t) => t.lat != null && t.lng != null)
@@ -72,12 +74,14 @@ class _MapScreenState extends State<MapScreen> {
         _loading = false;
       });
       _frameMarkers();
-    } catch (_) {
+    } catch (error) {
+      if (!mounted) return;
       // Phase 12C.2: a failed fetch is surfaced with a clear message and a
       // Retry instead of silently rendering an empty map.
       setState(() {
         _loading = false;
         _loadError = true;
+        _loadErrorMessage = treeLoadErrorMessage(error);
       });
     }
   }
@@ -194,16 +198,6 @@ class _MapScreenState extends State<MapScreen> {
           // ── Top Controls (Search & Layer Toggle) ───────────────────────────
           _buildTopControls(),
 
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-              child: _buildCircularButton(
-                Icons.arrow_back_rounded,
-                _handleBack,
-              ),
-            ),
-          ),
-
           // ── Data Legend ────────────────────────────────────────────────────
           if (!_loading && !_loadError) _buildFloatingLegend(),
 
@@ -261,8 +255,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Tree markers could not be fetched from the server. '
-              'Check the connection and try again.',
+              _loadErrorMessage ?? 'Tree markers could not be fetched from the server. Check the connection and try again.',
               textAlign: TextAlign.center,
               style: TextStyle(
                   fontSize: 12.5, color: kMutedFg.withOpacity(0.9)),
@@ -312,10 +305,11 @@ class _MapScreenState extends State<MapScreen> {
           children: [
             Row(
               children: [
-                const SizedBox(width: 62),
+                _buildCircularButton(Icons.arrow_back_rounded, _handleBack),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.only(left: 12),
                     height: 50,
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -325,7 +319,7 @@ class _MapScreenState extends State<MapScreen> {
                     child: Row(
                       children: [
                         const Icon(Icons.search, color: kMutedFg, size: 20),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: TextField(
                             controller: _searchController,
@@ -336,7 +330,11 @@ class _MapScreenState extends State<MapScreen> {
                             decoration: InputDecoration(
                               isDense: true,
                               border: InputBorder.none,
-                              hintText: 'Search tree, species, barangay...',
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              filled: false,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                              hintText: 'Search trees',
                               hintStyle: TextStyle(
                                 color: kMutedFg.withOpacity(0.7),
                                 fontSize: 14,
@@ -346,6 +344,7 @@ class _MapScreenState extends State<MapScreen> {
                         ),
                         if (_search.isNotEmpty)
                           IconButton(
+                            tooltip: 'Clear search',
                             icon: const Icon(Icons.close_rounded, size: 18),
                             onPressed: () {
                               _searchController.clear();
@@ -354,6 +353,7 @@ class _MapScreenState extends State<MapScreen> {
                           )
                         else
                           IconButton(
+                            tooltip: 'Refresh trees',
                             icon: const Icon(Icons.refresh, size: 18),
                             onPressed: _load,
                           ),
@@ -361,7 +361,7 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 _buildCircularButton(
                   _isSatellite ? Icons.map_outlined : Icons.satellite_alt_rounded,
                   () => setState(() => _isSatellite = !_isSatellite),

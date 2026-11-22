@@ -25,7 +25,8 @@ class _Store implements SecureStore {
 class _ImageEndpoint implements HttpClientAdapter {
   final String scientificName;
   final Map<String, dynamic>? galleryResult;
-  _ImageEndpoint({this.scientificName = 'Mangifera indica', this.galleryResult});
+  final bool notIdentified;
+  _ImageEndpoint({this.scientificName = 'Mangifera indica', this.galleryResult, this.notIdentified = false});
 
   String? imageType;
   @override
@@ -42,7 +43,8 @@ class _ImageEndpoint implements HttpClientAdapter {
     }
     // The real backend rejects an application/octet-stream file with HTTP 400.
     return ResponseBody.fromString(
-      '{"common_name":"Test tree","scientific_name":"$scientificName"}',
+      jsonEncode({'common_name': 'Test tree', 'scientific_name': scientificName,
+        'not_identified': notIdentified, 'confidence_percent': notIdentified ? 51.81 : 90}),
       imageType!.startsWith('image/') ? 200 : 400,
       headers: {
         Headers.contentTypeHeader: ['application/json']
@@ -115,6 +117,26 @@ void main() {
 
     expect(result['scientific_name'], 'Mangifera indica');
     expect(result['estimated_height_m'], 12);
+  });
+
+  test('low-confidence species still gets independent DBH and height predictions', () async {
+    final directory = await Directory.systemTemp.createTemp('treetrace_unknown_size_');
+    addTearDown(() => directory.delete(recursive: true));
+    final photo = await File('${directory.path}/tree.jpg').writeAsBytes([1, 2, 3]);
+    final dio = Dio(BaseOptions(baseUrl: 'https://example.invalid/api'))
+      ..httpClientAdapter = _ImageEndpoint(notIdentified: true, galleryResult: {
+        'status': 'predicted', 'method': 'gallery_yolo_vision_prediction',
+        'quality': 'unvalidated', 'prediction_basis': 'visual_appearance',
+        'validated_accuracy': false, 'trunk_detected': true,
+        'predicted_dbh_cm': 15, 'predicted_height_m': 7,
+      });
+    final result = await ApiService.forTest(storage: _Store(), dio: dio)
+        .identifyTree(photo, checkGalleryHeight: true);
+    expect(result['not_identified'], isTrue);
+    expect(result['confidence_percent'], 51.81);
+    expect(result['estimated_dbh_cm'], 15);
+    expect(result['estimated_height_m'], 7);
+    expect(result['measurement_prediction'], isNotNull);
   });
 
   for (final failRead in [true, false]) {

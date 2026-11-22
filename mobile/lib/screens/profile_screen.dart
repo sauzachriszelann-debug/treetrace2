@@ -228,11 +228,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final isPro = user?.isPro == true;
     final isEnterprise = user?.isEnterprise == true || user?.isInstitutional == true;
     final requested = user?.upgradeRequested == true;
-    final aiLimit = isEnterprise
-        ? 'unlimited'
-        : isPro
-            ? '50'
-            : '10';
     final unknownLimit = isEnterprise
         ? 'unlimited'
         : isPro
@@ -283,7 +278,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _buildFeatureRow(Icons.check_circle_outline, 'Public tree map access'),
           _buildFeatureRow(Icons.check_circle_outline, 'Unlimited QR scanner'),
           _buildFeatureRow(Icons.auto_awesome_outlined,
-              'AI scans today: ${user?.aiIdentificationsToday ?? 0} / $aiLimit'),
+              'Unlimited AI scans'),
           _buildFeatureRow(Icons.science_outlined,
               'Expert review submissions: ${user?.unknownSubmissionsToday ?? 0} / $unknownLimit'),
           const SizedBox(height: 20),

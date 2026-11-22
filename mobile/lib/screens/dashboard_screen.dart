@@ -54,6 +54,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   bool _loading = true;
+  String? _loadError;
 
 
 
@@ -70,6 +71,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 
   Future<void> _load() async {
+    setState(() { _loading = true; _loadError = null; });
     // Read the role before any await: GET /api/ai/unknown-species is
     // admin-only on the backend (require_admin), and a field worker would
     // only provoke a 403 they cannot resolve, so the request is skipped
@@ -81,9 +83,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       final t = await api.getTrees(limit: 200);
 
-      final l = await api.getHealthLogs(limit: 50);
+      List<dynamic> l = [];
+      try { l = await api.getHealthLogs(limit: 50); } catch (_) {}
 
-      final c = await api.getCommunityStructure();
+      Map<String, dynamic>? c;
+      try { c = await api.getCommunityStructure(); } catch (_) {}
       Map<String, dynamic> planting = {};
       try {
         planting = await api.getPlantingSuggestions();
@@ -99,6 +103,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         plantingRecords = await api.getPlantingRecommendations();
       } catch (_) {}
 
+      if (!mounted) return;
       setState(() {
 
         _trees = t.map((j) => TreeModel.fromJson(j)).toList();
@@ -118,7 +123,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       });
 
-    } catch (_) { setState(() => _loading = false); }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() { _loading = false; _loadError = treeLoadErrorMessage(error); });
+    }
 
   }
 
@@ -174,6 +182,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final searching = query.isNotEmpty;
 
 
+
+    if (_loadError != null && _trees.isEmpty) {
+      return Scaffold(
+        backgroundColor: kBackground,
+        appBar: AppBar(title: const Text('TreeTrace')),
+        body: Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_loadError!, textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            OutlinedButton(onPressed: _load, child: const Text('Retry')),
+          ],
+        ))),
+      );
+    }
 
     return Scaffold(
 
@@ -925,11 +948,11 @@ class _DashboardPlantCard extends StatelessWidget {
     final reason = item['area_reason']?.toString() ??
         item['reason']?.toString() ??
         'Recommended planting suggestion.';
-    final photo = _dashboardPlantPhoto(item, name);
+    final photos = _dashboardPlantPhotos(item);
     return InkWell(
       onTap: () => _showDashboardPlantDetail(
         context,
-        imageUrls: _dashboardPlantPhotos(item, name),
+        imageUrls: photos,
         title: name,
         subtitle: area,
         description: reason,
@@ -946,17 +969,16 @@ class _DashboardPlantCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Image.network(
-              photo,
-              height: 62,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
+            if (photos.isEmpty)
+              _plantPhotoPlaceholder(62)
+            else
+              Image.network(
+                photos.first,
                 height: 62,
-                color: kPrimary.withOpacity(0.08),
-                child: const Icon(Icons.eco_outlined, color: kPrimary),
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _plantPhotoPlaceholder(62),
               ),
-            ),
             Padding(
               padding: const EdgeInsets.all(8),
               child: Column(
@@ -988,32 +1010,28 @@ class _DashboardPlantCard extends StatelessWidget {
   }
 }
 
-String _dashboardPlantPhoto(Map<String, dynamic> item, String name) {
-  final photos = _dashboardPlantPhotos(item, name);
-  return photos.first;
+List<String> _dashboardPlantPhotos(Map<String, dynamic> item) {
+  final images = item['image_urls'];
+  return [
+    if (images is List) ...images,
+    item['photo_url'] ?? item['photoUrl'],
+  ].whereType<String>().map((url) => url.trim()).where((url) {
+    final uri = Uri.tryParse(url);
+    return uri != null &&
+        (uri.scheme == 'https' || uri.scheme == 'http') &&
+        uri.host.isNotEmpty &&
+        !uri.host.endsWith('.mm.bing.net') &&
+        !uri.host.endsWith('.ytimg.com');
+  }).toSet().toList();
 }
 
-List<String> _dashboardPlantPhotos(Map<String, dynamic> item, String name) {
-  final photoUrl = (item['photo_url'] ?? item['photoUrl'] ?? '')
-      .toString()
-      .trim();
-  final images = item['image_urls'];
-  if (images is List) {
-    final urls = [
-      if (photoUrl.isNotEmpty && photoUrl != 'null') photoUrl,
-      ...images.map((e) => e.toString()),
-    ]
-        .where((e) => e.trim().isNotEmpty)
-        .where((e) => e != 'null')
-        .toList();
-    if (urls.isNotEmpty) return urls;
-  }
-  return [
-    if (photoUrl.isNotEmpty && photoUrl != 'null') photoUrl,
-    'https://tse1.mm.bing.net/th?q=${Uri.encodeComponent('$name tree seedling')}',
-    'https://tse1.mm.bing.net/th?q=${Uri.encodeComponent('$name tree leaves')}',
-    'https://tse1.mm.bing.net/th?q=${Uri.encodeComponent('$name tree seeds')}',
-  ];
+Widget _plantPhotoPlaceholder(double height, {double iconSize = 24}) {
+  return Container(
+    height: height,
+    width: double.infinity,
+    color: kPrimary.withOpacity(0.08),
+    child: Icon(Icons.eco_outlined, color: kPrimary, size: iconSize),
+  );
 }
 
 void _showDashboardPlantDetail(
@@ -1066,30 +1084,26 @@ void _showDashboardPlantDetail(
               ),
             ),
             const SizedBox(height: 12),
-            SizedBox(
-              height: 260,
-              child: PageView.builder(
-                controller: pageController,
-                itemCount: imageUrls.length,
-                itemBuilder: (_, index) => ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
-                  child: Image.network(
-                    imageUrls[index],
-                    height: 260,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+            if (imageUrls.isEmpty)
+              _plantPhotoPlaceholder(260, iconSize: 48)
+            else
+              SizedBox(
+                height: 260,
+                child: PageView.builder(
+                  controller: pageController,
+                  itemCount: imageUrls.length,
+                  itemBuilder: (_, index) => ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: Image.network(
+                      imageUrls[index],
                       height: 260,
-                      color: kPrimary.withOpacity(0.08),
-                      child: const Icon(
-                        Icons.eco_outlined,
-                        color: kPrimary,
-                        size: 48,
-                      ),
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) =>
+                          _plantPhotoPlaceholder(260, iconSize: 48),
                     ),
                   ),
                 ),
               ),
-            ),
             if (imageUrls.length > 1) ...[
               const SizedBox(height: 8),
               const Center(

@@ -29,6 +29,9 @@ timbervision/
 backend/models/*.pt
 !backend/models/tree_trunk_segmentation.pt
 !backend/models/tree_trunk_dbh_v1.pt
+!backend/models/treetrace_final.pt
+!backend/models/MobileNetV3-Large.pt
+!backend/models/ResNet50.pt
 yolov8n-seg.pt
 *.zip
 
@@ -42,7 +45,5 @@ yolov8n-seg.pt
 /backend/treetrace_sandbox.db
 /mobile/treetrace_installed_backup.apk
 
-# Trained species models required by the deployed inference endpoints.
-!backend/models/treetrace_final.pt
-!backend/models/MobileNetV3-Large.pt
-!backend/models/ResNet50.pt
+# Local hosting project links
+**/.vercel/

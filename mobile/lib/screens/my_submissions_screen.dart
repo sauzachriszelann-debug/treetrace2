@@ -5,8 +5,7 @@ import '../services/theme.dart';
 import 'tree_detail_screen.dart';
 
 /// G4 citizen surface: the caller's own pending tree submissions and their
-/// review decisions (approved / rejected / linked). Read-only - review
-/// actions live on the web admin queue.
+/// review decisions (approved / rejected / linked), with owner deletion while pending.
 class MySubmissionsScreen extends StatefulWidget {
   const MySubmissionsScreen({super.key});
 
@@ -17,6 +16,7 @@ class MySubmissionsScreen extends StatefulWidget {
 class _MySubmissionsScreenState extends State<MySubmissionsScreen> {
   final ApiService api = ApiService();
   late Future<List<_SubmissionItem>> _future;
+  int? _deletingId;
 
   @override
   void initState() {
@@ -25,10 +25,61 @@ class _MySubmissionsScreenState extends State<MySubmissionsScreen> {
   }
 
   Future<List<_SubmissionItem>> _load() async {
-    final data = await api.getMyTreeSubmissions();
+    final results = await Future.wait(
+        [api.getMyTreeSubmissions(), api.getMyUnknownSpecies()]);
+    final trees = results[0];
+    final converted =
+        trees.map((row) => row['source_unknown_species_id']).toSet();
+    final data = <dynamic>[
+      ...trees,
+      for (final row in results[1])
+        if (!converted.contains(row['id']))
+          {
+            ...Map<String, dynamic>.from(row as Map),
+            'species_submission': true,
+            'status': row['review_status'] == 'closed' ? 'closed' : 'pending',
+            'common_name': row['identified_as'] ??
+                row['possible_name'] ??
+                'Unknown species',
+          },
+    ];
+    data.sort((a, b) =>
+        '${b['created_at'] ?? ''}'.compareTo('${a['created_at'] ?? ''}'));
     return data
         .map((j) => _SubmissionItem.fromJson(Map<String, dynamic>.from(j)))
         .toList();
+  }
+
+  Future<void> _delete(_SubmissionItem item) async {
+    final confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+              title: const Text('Delete this submission?'),
+              content: const Text(
+                  'This removes the pending entry from My Submissions and the review queue.'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Cancel')),
+                FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('Delete')),
+              ],
+            ));
+    if (confirm != true || !mounted || _deletingId != null) return;
+    setState(() => _deletingId = item.id);
+    try {
+      await api.deleteMySubmission(item.id,
+          speciesSubmission: item.speciesSubmission);
+      if (mounted) await _refresh();
+    } catch (_) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Could not delete. Refresh to check the submission status.')));
+    } finally {
+      if (mounted) setState(() => _deletingId = null);
+    }
   }
 
   Future<void> _refresh() async {
@@ -69,8 +120,10 @@ class _MySubmissionsScreenState extends State<MySubmissionsScreen> {
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 110),
               itemCount: items.length,
               separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, index) =>
-                  _SubmissionCard(item: items[index]),
+              itemBuilder: (context, index) => _SubmissionCard(
+                  item: items[index],
+                  onDelete:
+                      _deletingId == null ? () => _delete(items[index]) : null),
             ),
           );
         },
@@ -81,6 +134,7 @@ class _MySubmissionsScreenState extends State<MySubmissionsScreen> {
 
 class _SubmissionItem {
   final int id;
+  final bool speciesSubmission;
   final String status;
   final String? commonName;
   final String? barangay;
@@ -95,6 +149,7 @@ class _SubmissionItem {
 
   const _SubmissionItem({
     required this.id,
+    this.speciesSubmission = false,
     required this.status,
     this.commonName,
     this.barangay,
@@ -110,6 +165,7 @@ class _SubmissionItem {
 
   factory _SubmissionItem.fromJson(Map<String, dynamic> j) => _SubmissionItem(
         id: j['id'] ?? 0,
+        speciesSubmission: j['species_submission'] == true,
         status: j['status'] ?? 'pending',
         commonName: j['common_name'],
         barangay: j['barangay'],
@@ -135,7 +191,8 @@ class _SubmissionItem {
 
 class _SubmissionCard extends StatelessWidget {
   final _SubmissionItem item;
-  const _SubmissionCard({required this.item});
+  final VoidCallback? onDelete;
+  const _SubmissionCard({required this.item, this.onDelete});
 
   Color get _statusColor {
     if (item.isApproved) return kHealthy;
@@ -145,6 +202,7 @@ class _SubmissionCard extends StatelessWidget {
   }
 
   String get _statusLabel {
+    if (item.status == 'closed') return 'Closed as Unresolved';
     if (item.isApproved) return 'Approved';
     if (item.isRejected) return 'Rejected';
     if (item.isLinked) return 'Linked to Existing Tree';
@@ -224,6 +282,14 @@ class _SubmissionCard extends StatelessWidget {
               style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
             ),
           ],
+          if (item.isPending)
+            Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Delete submission'),
+                )),
           if (item.isRejected) ...[
             const SizedBox(height: 10),
             Container(

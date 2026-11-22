@@ -1,4 +1,3 @@
-import 'photo_sources.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
@@ -12,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'offline_queue.dart';
 import 'identification_photo.dart';
 import 'photo_measurement_rules.dart';
+import 'photo_sources.dart';
 
 /// Narrow secure-storage surface. G6 safeguard: authentication cleanup must
 /// NEVER wipe unrelated keys (the legacy code called deleteAll() on error,
@@ -76,10 +76,10 @@ Map<String, dynamic> _restrictSpeciesScan(Map<String, dynamic> result) {
   if (result['not_identified'] == true) return result;
 
   final scientificName = result['scientific_name']?.toString().trim() ?? '';
-  final label = scientificName.isEmpty &&
-          result['source'] == 'local_resnet50_tflite'
-      ? result['common_name']?.toString() ?? ''
-      : scientificName;
+  final label =
+      scientificName.isEmpty && result['source'] == 'local_resnet50_tflite'
+          ? result['common_name']?.toString() ?? ''
+          : scientificName;
   final name = label.toLowerCase().replaceAll(RegExp(r'[_\s]+'), ' ').trim();
   if (_supportedScanNames.contains(name) || name.startsWith('eucalyptus ')) {
     return result;
@@ -91,7 +91,8 @@ Map<String, dynamic> _restrictSpeciesScan(Map<String, dynamic> result) {
     'scientific_name': '',
     'confidence': 'Low',
     'possible_candidates': <String>[],
-    'reason': 'This species is outside the trained classes. Submit for expert review.',
+    'reason':
+        'This species is outside the trained classes. Submit for expert review.',
     if (result['trunk_preview_png'] != null)
       'trunk_preview_png': result['trunk_preview_png'],
     if (result['trunk_preview_reason'] != null)
@@ -142,6 +143,21 @@ bool isConnectionFailure(Object error) {
     default:
       return false;
   }
+}
+
+String treeLoadErrorMessage(Object error) {
+  if (error is DioException) {
+    final status = error.response?.statusCode;
+    if (status == 401) return 'Your session has expired. Sign in again.';
+    if (status == 403) return 'This account cannot access the tree inventory.';
+    if (status != null && status >= 500) {
+      return 'The tree server could not complete the request. Please retry.';
+    }
+    if (isConnectionFailure(error)) {
+      return 'Cannot reach the tree server. Check your connection and retry.';
+    }
+  }
+  return 'Tree records could not be loaded. Please retry.';
 }
 
 /// True when the server answered 404: the record really is missing.
@@ -603,6 +619,13 @@ class ApiService {
   }
 
   /// G4: the caller's own submissions with their review decisions.
+  Future<void> deleteMySubmission(int id,
+      {bool speciesSubmission = false}) async {
+    await _dio.delete(speciesSubmission
+        ? '/ai/unknown-species/$id'
+        : '/tree-submissions/$id');
+  }
+
   Future<List<dynamic>> getMyTreeSubmissions() async {
     final res = await _dio.get('/tree-submissions/my');
     return res.data;
@@ -660,10 +683,24 @@ class ApiService {
   /// proposed GPS point. The short receive timeout keeps the check from
   /// hanging a registration indefinitely; callers must treat a failure as
   /// "unknown", never as "no matches".
+  Future<Map<String, dynamic>> getBarangayLocation(
+      double lat, double lng, double accuracyM) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/trees/barangay-location',
+      queryParameters: {'lat': lat, 'lng': lng, 'accuracy_m': accuracyM},
+      options: Options(receiveTimeout: const Duration(seconds: 15)),
+    );
+    return response.data ?? const {'status': 'unavailable'};
+  }
+
   Future<List<Map<String, dynamic>>> getNearbyTrees({
     required double lat,
     required double lng,
-    double radiusM = 15,
+    double? radiusM,
+    bool duplicateCheck = false,
+    double? dbhCm,
+    double? heightM,
+    double? gpsAccuracyM,
     int limit = 5,
     String? commonName,
     String? scientificName,
@@ -672,8 +709,12 @@ class ApiService {
       '/trees/nearby',
       queryParameters: {
         'lat': lat,
+        'duplicate_check': duplicateCheck,
+        if (dbhCm != null && dbhCm > 0) 'dbh_cm': dbhCm,
+        if (heightM != null && heightM > 0) 'height_m': heightM,
         'lng': lng,
-        'radius_m': radiusM,
+        if (radiusM != null) 'radius_m': radiusM,
+        if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
         'limit': limit,
         if (commonName != null && commonName.isNotEmpty)
           'common_name': commonName,
@@ -729,8 +770,8 @@ class ApiService {
   }
 
   /// Display-only age scenario calculated from reviewed growth literature.
-  Future<Map<String, dynamic>> estimateTreeAge(String species, double? dbh,
-      double? height, String source) async {
+  Future<Map<String, dynamic>> estimateTreeAge(
+      String species, double? dbh, double? height, String source) async {
     final response = await _dio.post('/ai/estimate-age', data: {
       'scientific_name': species,
       'dbh_cm': dbh,
@@ -742,21 +783,32 @@ class ApiService {
 
   /// Display-only AI prediction. A bounded derivative is permitted here:
   /// this route never supplies measured DBH/height or original EXIF geometry.
-  Future<Map<String, dynamic>> predictGallerySize(File imageFile, {File? treetopPhoto}) async {
+  Future<Map<String, dynamic>> predictGallerySize(File imageFile,
+      {File? treetopPhoto, File? treebasePhoto}) async {
     final photo = await prepareIdentificationPhoto(
         await imageFile.readAsBytes(), _imageContentType(imageFile).toString());
     final fields = <String, dynamic>{
-          'file': MultipartFile.fromBytes(photo.bytes,
-              filename:
-                  photo.mimeType == 'image/png' ? 'gallery.png' : 'gallery.jpg',
-              contentType: DioMediaType.parse(photo.mimeType))
-        };
+      'file': MultipartFile.fromBytes(photo.bytes,
+          filename:
+              photo.mimeType == 'image/png' ? 'gallery.png' : 'gallery.jpg',
+          contentType: DioMediaType.parse(photo.mimeType))
+    };
     if (treetopPhoto != null) {
-      final top = await prepareIdentificationPhoto(await treetopPhoto.readAsBytes(),
+      final top = await prepareIdentificationPhoto(
+          await treetopPhoto.readAsBytes(),
           _imageContentType(treetopPhoto).toString());
       fields['treetop_file'] = MultipartFile.fromBytes(top.bytes,
           filename: top.mimeType == 'image/png' ? 'treetop.png' : 'treetop.jpg',
           contentType: DioMediaType.parse(top.mimeType));
+    }
+    if (treebasePhoto != null) {
+      final base = await prepareIdentificationPhoto(
+          await treebasePhoto.readAsBytes(),
+          _imageContentType(treebasePhoto).toString());
+      fields['treebase_file'] = MultipartFile.fromBytes(base.bytes,
+          filename:
+              base.mimeType == 'image/png' ? 'treebase.png' : 'treebase.jpg',
+          contentType: DioMediaType.parse(base.mimeType));
     }
     final response = await _dio.post('/ai/gallery-size-prediction',
         data: FormData.fromMap(fields),
@@ -767,7 +819,8 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> identifyTree(File imageFile,
-      {bool checkGalleryHeight = false}) async {
+      {bool includeTrunkPreview = false,
+      bool checkGalleryHeight = false}) async {
     final photo = await prepareIdentificationPhoto(
         await imageFile.readAsBytes(), _imageContentType(imageFile).toString());
     final formData = FormData.fromMap({
@@ -783,6 +836,8 @@ class ApiService {
     final res = await _dio.post(
       '/ai/identify',
       data: formData,
+      queryParameters:
+          includeTrunkPreview ? {'include_trunk_preview': true} : null,
       options: Options(
         contentType: 'multipart/form-data',
         sendTimeout: const Duration(seconds: 60),
@@ -792,25 +847,34 @@ class ApiService {
     if (res.data is! Map) {
       throw const FormatException('Invalid identification response');
     }
-    final result = _restrictSpeciesScan(
-        Map<String, dynamic>.from(res.data as Map));
+    final result =
+        _restrictSpeciesScan(Map<String, dynamic>.from(res.data as Map));
     if (result['base_visible'] != true || result['top_visible'] != true) {
       result['estimated_height_m'] = null;
     }
-    if (checkGalleryHeight &&
-        result['not_identified'] != true &&
-        result['estimated_height_m'] == null) {
+    // Size prediction is independent of species confidence.
+    if (checkGalleryHeight && result['is_tree'] != false) {
       try {
         final estimate = await predictGallerySize(imageFile);
         result['estimated_height_m'] =
             acceptedGalleryValue(estimate, 'predicted_height_m', 80);
+        result['estimated_dbh_cm'] =
+            acceptedGalleryValue(estimate, 'predicted_dbh_cm', 300);
+        result['measurement_prediction'] = estimate;
+        final observations = estimate['photo_observations'];
+        if (observations is Map && observations['status'] == 'observed') {
+          result['photo_observations'] = Map<String, dynamic>.from(observations);
+        }
+        result['dbh_unavailable_reason'] = estimate['dbh_reason'] ?? estimate['reason'];
         if (result['estimated_height_m'] == null) {
           result['height_unavailable_reason'] =
               estimate['height_reason'] ?? estimate['reason'];
         }
       } catch (_) {
+        result['dbh_unavailable_reason'] =
+            'The photo size check could not complete. Try scanning again.';
         result['height_unavailable_reason'] =
-            'The gallery height check could not complete. Try scanning again.';
+            'The photo size check could not complete. Try scanning again.';
       }
     }
     // History is optional local metadata. A storage failure must not discard

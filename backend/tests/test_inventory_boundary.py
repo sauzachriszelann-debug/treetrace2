@@ -131,3 +131,18 @@ def test_exact_boundary_is_uncertain():
     with pytest.raises(HTTPException) as error:
         boundary.validate_inventory_location(lat,lng)
     assert error.value.status_code == 422
+
+
+def test_phone_fix_outside_bundled_city_is_reported_without_network(monkeypatch):
+    from app.services import barangay_location
+    def unexpected_network(*args, **kwargs):
+        raise AssertionError("Complete local polygons should answer outside fixes")
+    monkeypatch.setattr(barangay_location.httpx, "get", unexpected_network)
+    assert barangay_location.resolve_barangay(7.460584, 125.6677, 23) == {"status": "outside_panabo"}
+
+
+def test_retired_testing_flag_cannot_disable_geofence(monkeypatch):
+    monkeypatch.setenv('TREETRACE_ALLOW_OUTSIDE_PANABO_TESTING', '1')
+    with pytest.raises(HTTPException) as outside:
+        boundary.validate_inventory_location(**OUTSIDE)
+    assert outside.value.status_code == 422

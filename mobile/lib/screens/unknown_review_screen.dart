@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/theme.dart';
+import '../widgets/expandable_photo.dart';
 
 /// Admin review queue. In TreeReviewsScreen this is embedded as the second tab;
 /// it remains a standalone route for callers that still use it directly.
@@ -64,6 +65,7 @@ class _UnknownReviewScreenState extends State<UnknownReviewScreen> {
     UnknownSpeciesModel item, {
     required bool reviewed,
     required String identifiedAs,
+    required String scientificName,
     required String notes,
   }) async {
     if (_busyId != null) return false;
@@ -74,8 +76,34 @@ class _UnknownReviewScreenState extends State<UnknownReviewScreen> {
         'reviewed': reviewed,
         'identified_as':
             identifiedAs.trim().isEmpty ? null : identifiedAs.trim(),
+        'identified_scientific_name':
+            scientificName.trim().isEmpty ? null : scientificName.trim(),
         'review_notes': notes.trim().isEmpty ? null : notes.trim(),
       });
+      if (!mounted) return false;
+      if (reviewed && identifiedAs.trim().isNotEmpty) {
+        final submission =
+            await _api.convertUnknownSpeciesToTreeSubmission(item.id);
+        if (!mounted) return false;
+        final approve = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+                  title: const Text('Approve tree submission?'),
+                  content: Text(
+                      '${submission['common_name']} (${submission['scientific_name'] ?? ''}) will be added to the inventory.'),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancel')),
+                    FilledButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('Yes, approve')),
+                  ],
+                ));
+        if (approve == true) {
+          await _api.approveTreeSubmission((submission['id'] as num).toInt());
+        }
+      }
       if (!mounted) return false;
       messenger.showSnackBar(const SnackBar(content: Text('Review saved.')));
       await _load(showSpinner: false);
@@ -126,8 +154,11 @@ class _UnknownReviewScreenState extends State<UnknownReviewScreen> {
       builder: (sheetContext) => _UnknownReviewSheet(
         item: item,
         busy: _busyId == item.id,
-        onSave: (reviewed, name, notes) => _saveReview(item,
-            reviewed: reviewed, identifiedAs: name, notes: notes),
+        onSave: (reviewed, name, scientificName, notes) => _saveReview(item,
+            reviewed: reviewed,
+            identifiedAs: name,
+            scientificName: scientificName,
+            notes: notes),
         onConvert:
             item.reviewStatus == 'identified' ? () => _convert(item) : null,
       ),
@@ -389,7 +420,8 @@ class _UnknownReviewSheet extends StatefulWidget {
       this.onConvert});
   final UnknownSpeciesModel item;
   final bool busy;
-  final Future<bool> Function(bool reviewed, String name, String notes) onSave;
+  final Future<bool> Function(
+      bool reviewed, String name, String scientificName, String notes) onSave;
   final Future<void> Function()? onConvert;
 
   @override
@@ -398,13 +430,34 @@ class _UnknownReviewSheet extends StatefulWidget {
 
 class _UnknownReviewSheetState extends State<_UnknownReviewSheet> {
   late final _name = TextEditingController(
-      text: widget.item.identifiedAs ?? widget.item.possibleName ?? '');
+      text: widget.item.identifiedAs ??
+          _candidateField(widget.item, 'common_name') ??
+          widget.item.possibleName ??
+          '');
+  late final _scientific = TextEditingController(
+      text: widget.item.identifiedScientificName ??
+          _candidateField(widget.item, 'scientific_name') ??
+          '');
+  bool _saving = false;
+
+  Future<bool> _save(
+      bool reviewed, String name, String scientificName, String notes) async {
+    if (_saving) return false;
+    setState(() => _saving = true);
+    try {
+      return await widget.onSave(reviewed, name, scientificName, notes);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   late final _notes =
       TextEditingController(text: widget.item.reviewNotes ?? '');
 
   @override
   void dispose() {
     _name.dispose();
+    _scientific.dispose();
     _notes.dispose();
     super.dispose();
   }
@@ -469,9 +522,23 @@ class _UnknownReviewSheetState extends State<_UnknownReviewSheet> {
               const SizedBox(height: 14),
               TextField(
                   controller: _name,
-                  decoration: const InputDecoration(
-                      labelText: 'Identified species (optional when closing)')),
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(labelText: 'Common name')),
               const SizedBox(height: 10),
+              TextField(
+                  controller: _scientific,
+                  decoration:
+                      const InputDecoration(labelText: 'Scientific name')),
+              const SizedBox(height: 10),
+              _info('DBH',
+                  item.dbhCm == null ? 'Unavailable' : '${item.dbhCm} cm'),
+              _info('Height',
+                  item.heightM == null ? 'Unavailable' : '${item.heightM} m'),
+              _info(
+                  'Carbon stock',
+                  item.carbonKg == null
+                      ? 'Unavailable'
+                      : '${item.carbonKg} kg'),
               TextField(
                   controller: _notes,
                   minLines: 2,
@@ -486,11 +553,10 @@ class _UnknownReviewSheetState extends State<_UnknownReviewSheet> {
               if (widget.busy) const LinearProgressIndicator(minHeight: 2),
               Wrap(spacing: 8, runSpacing: 8, children: [
                 OutlinedButton(
-                  onPressed: widget.busy
+                  onPressed: (widget.busy || _saving)
                       ? null
                       : () async {
-                          final saved =
-                              await widget.onSave(true, '', _notes.text);
+                          final saved = await _save(true, '', '', _notes.text);
                           if (!context.mounted || !saved) return;
                           Navigator.pop(context);
                         },
@@ -498,31 +564,31 @@ class _UnknownReviewSheetState extends State<_UnknownReviewSheet> {
                       Text(item.reviewed ? 'Keep closed' : 'Close unresolved'),
                 ),
                 ElevatedButton.icon(
-                  onPressed: widget.busy || _name.text.trim().isEmpty
+                  onPressed: widget.busy || _saving || _name.text.trim().isEmpty
                       ? null
                       : () async {
-                          final saved = await widget.onSave(
-                              true, _name.text, _notes.text);
+                          final saved = await _save(
+                              true, _name.text, _scientific.text, _notes.text);
                           if (!context.mounted || !saved) return;
                           Navigator.pop(context);
                         },
                   icon: const Icon(Icons.check),
-                  label: const Text('Approve identification'),
+                  label: const Text('Save and Continue'),
                 ),
                 if (item.reviewed)
                   TextButton(
-                      onPressed: widget.busy
+                      onPressed: (widget.busy || _saving)
                           ? null
                           : () async {
-                              final saved = await widget.onSave(
-                                  false, _name.text, _notes.text);
+                              final saved = await _save(false, _name.text,
+                                  _scientific.text, _notes.text);
                               if (!context.mounted || !saved) return;
                               Navigator.pop(context);
                             },
                       child: const Text('Reopen')),
                 if (widget.onConvert != null)
                   OutlinedButton.icon(
-                    onPressed: widget.busy
+                    onPressed: (widget.busy || _saving)
                         ? null
                         : () async {
                             final confirm = await showDialog<bool>(
@@ -568,11 +634,14 @@ class _Photo extends StatelessWidget {
     return ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: usable
-            ? Image.network(url!,
-                width: size,
-                height: size,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _fallback())
+            ? ExpandablePhoto(
+                image: NetworkImage(url!),
+                label: 'Submitted tree photo',
+                thumbnail: Image.network(url!,
+                    width: size,
+                    height: size,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _fallback()))
             : _fallback());
   }
 
@@ -658,4 +727,9 @@ String _friendlyError(Object error) {
 
 extension on String {
   String ifEmpty(String fallback) => trim().isEmpty ? fallback : this;
+}
+
+String? _candidateField(UnknownSpeciesModel item, String key) {
+  if (item.aiCandidates.isEmpty || item.aiCandidates.first is! Map) return null;
+  return (item.aiCandidates.first as Map)[key]?.toString();
 }

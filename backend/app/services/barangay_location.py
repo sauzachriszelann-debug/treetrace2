@@ -92,6 +92,16 @@ def resolve_barangay(lat: float, lng: float, accuracy_m: float) -> dict:
         match = _match(features, lat, lng, accuracy_m, longitude_scale)
         if match["status"] != "unavailable":
             return match
+        # A complete bundled Panabo dataset also answers out-of-city fixes.
+        # Do not turn a verified outside point into a network lookup failure.
+        barangays = {f.get("properties", {}).get("brgy_name") for f in features}
+        complete_panabo = (
+            len(features) == 40 and len(barangays) == 40 and None not in barangays
+            and all(re.search(r"\bpanabo\b", f.get("properties", {}).get("city_name", ""), re.IGNORECASE)
+                    for f in features)
+        )
+        if complete_panabo:
+            return {"status": "outside_panabo"}
     except FileNotFoundError:
         pass
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:

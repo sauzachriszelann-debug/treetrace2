@@ -161,7 +161,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Possible AI matches'), findsOneWidget);
     expect(find.textContaining('Narra'), findsOneWidget);
-    expect(find.text('Approve identification'), findsOneWidget);
+    expect(find.text('Save and Continue'), findsOneWidget);
     expect(find.text('Close unresolved'), findsOneWidget);
   });
 

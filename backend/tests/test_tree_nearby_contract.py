@@ -525,3 +525,24 @@ def test_new_tree_accuracy_persists_and_coordinate_edit_clears_it(client, admin_
     assert updated.status_code == 200
     db_session.expire_all()
     assert db_session.get(Tree, tree_id).gps_accuracy_m is None
+
+
+@pytest.mark.parametrize("dbh,height,warning", [(30, 10, "red"), (40, 15, "yellow"), (None, None, "yellow")])
+def test_duplicate_check_measurements(client, admin_user, db_session, dbh, height, warning):
+    tree = insert_tree(db_session, **_coords(3))
+    tree.dbh_cm, tree.height_m = 30, 10
+    db_session.commit()
+    params = dict(duplicate_check=True, common_name="Narra")
+    if dbh is not None:
+        params.update(dbh_cm=dbh, height_m=height)
+    response = nearby(client, **params)
+    assert response.status_code == 200
+    assert response.json()[0]["duplicate_warning"] == warning
+
+
+def test_duplicate_check_excludes_other_species_and_beyond_five_meters(client, admin_user, db_session):
+    insert_tree(db_session, common_name="Mango", scientific_name="Mangifera indica", **_coords(0))
+    insert_tree(db_session, **_coords(6))
+    response = nearby(client, duplicate_check=True, common_name="Narra", gps_accuracy_m=30)
+    assert response.status_code == 200
+    assert response.json() == []

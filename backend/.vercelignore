@@ -1,0 +1,13 @@
+.env
+.env.*
+**/__pycache__/**
+**/*.pyc
+.pytest_cache/**
+tests/**
+sandbox_uploads/**
+venv/**
+.venv/**
+models/roboflow_efficientnet/**
+*.jpg
+*.png
+*.db

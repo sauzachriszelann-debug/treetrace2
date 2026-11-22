@@ -8,6 +8,8 @@ class TreeScanResult {
   final Map<String, dynamic>? heightResult;
   final File? photo;
   final bool measurementSkipped;
+  final bool photoDbhEstimate;
+  final bool photoHeightEstimate;
   final bool saveRequested;
   final String? reviewedCommonName;
   final String? reviewedScientificName;
@@ -20,6 +22,8 @@ class TreeScanResult {
       this.heightResult,
       this.photo,
       this.measurementSkipped = false,
+      this.photoDbhEstimate = false,
+      this.photoHeightEstimate = false,
       this.saveRequested = false,
       this.reviewedCommonName,
       this.reviewedScientificName,

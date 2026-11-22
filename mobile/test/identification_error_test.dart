@@ -18,7 +18,7 @@ void main() {
       () {
     expect(identificationError(failure(413)), contains('too large'));
     expect(identificationError(failure(401)), contains('Sign in again'));
-    expect(identificationError(failure(402)), contains('limit reached'));
+    expect(identificationError(failure(429)), contains('temporarily busy'));
     expect(identificationError(failure(404)), contains('configured backend'));
     expect(identificationError(failure(503)), contains('HTTP 503'));
     expect(

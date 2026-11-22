@@ -1,8 +1,11 @@
+import '../models/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:dio/dio.dart';
 
 import '../services/api_service.dart';
+import '../services/photo_sources.dart';
+import 'species_references.dart';
 
 typedef AgeLookup = Future<Map<String, dynamic>> Function(
     String species, double? dbh, double? height, String source);
@@ -14,13 +17,15 @@ class TreeAgeCard extends StatefulWidget {
   final double? heightM;
   final String dimensionsSource;
   final AgeLookup? lookup;
+  final ValueChanged<Map<String, dynamic>>? onEstimated;
+  final Map<String, dynamic>? initialEstimate;
   const TreeAgeCard(
       {super.key,
       required this.scientificName,
       this.dbhCm,
       this.heightM,
       this.dimensionsSource = 'ai_prediction',
-      this.lookup});
+      this.lookup, this.onEstimated, this.initialEstimate});
 
   @override
   State<TreeAgeCard> createState() => _TreeAgeCardState();
@@ -45,7 +50,8 @@ class _TreeAgeCardState extends State<TreeAgeCard> {
     if (oldWidget.scientificName != widget.scientificName ||
         oldWidget.dbhCm != widget.dbhCm ||
         oldWidget.heightM != widget.heightM ||
-        oldWidget.dimensionsSource != widget.dimensionsSource) {
+        oldWidget.dimensionsSource != widget.dimensionsSource ||
+        oldWidget.initialEstimate != widget.initialEstimate) {
       _load();
     }
   }
@@ -58,12 +64,15 @@ class _TreeAgeCardState extends State<TreeAgeCard> {
       _result = null;
     });
     try {
-      final result = await (widget.lookup ?? api.estimateTreeAge)(
+      final result = widget.initialEstimate ?? await (widget.lookup ?? api.estimateTreeAge)(
           widget.scientificName,
           widget.dbhCm,
           widget.heightM,
           widget.dimensionsSource);
-      if (mounted && request == _request) setState(() => _result = result);
+      if (mounted && request == _request) {
+        setState(() => _result = result);
+        widget.onEstimated?.call(result);
+      }
     } catch (error) {
       if (mounted && request == _request) {
         setState(() {
@@ -210,4 +219,62 @@ class _TreeAgeCardState extends State<TreeAgeCard> {
 double? ageDimension(dynamic value) {
   final number = value is num ? value.toDouble() : double.tryParse('$value');
   return number != null && number.isFinite && number > 0 ? number : null;
+}
+
+Map<String, dynamic>? savedAgeForTree(TreeModel tree) {
+  if (tree.ageEstimate != null) return tree.ageEstimate;
+  final scan = tree.scanProfile;
+  if (scan == null || scan['scientific_name']?.toString().toLowerCase() != tree.scientificName?.toLowerCase() ||
+      scan['estimated_dbh_cm'] != tree.dbhCm || scan['estimated_height_m'] != tree.heightM) return null;
+  final age = scan['age_estimate'];
+  return age is Map ? Map<String, dynamic>.from(age) : null;
+}
+
+class SavedScanDetails extends StatelessWidget {
+  const SavedScanDetails({super.key, required this.tree});
+  final TreeModel tree;
+  @override
+  Widget build(BuildContext context) {
+    final facts = {...?tree.speciesProfile, ...speciesReferenceFacts(tree.scientificName)};
+    final referenceResult = {...facts, 'scientific_name': tree.scientificName};
+    final photos = curatedReferencePhotos(referenceResult);
+    final score = tree.scanProfile?['confidence_percent'];
+    final fields = {
+      'Family': facts['family'], 'Overview': facts['description'],
+      'Plant type': facts['plant_type'], 'Life span': facts['lifespan'],
+      'Flowers': facts['flower'], 'Fruit': facts['fruit'],
+      'Diagnostic features': facts['distinguishing_features'],
+      'Similar species': facts['look_alikes'],
+      'Explore — ecological uses': facts['uses'],
+      'Explore — adaptation': facts['adaptation_strategies'],
+      'Name story': facts['name_story'],
+    };
+    return Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Species and scan details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 12),
+        const Text('Original AI confidence', style: TextStyle(fontWeight: FontWeight.w600)),
+        Text(score is num ? '${score.toStringAsFixed(2)}% — ${tree.scanProfile?['common_name'] ?? tree.scanProfile?['scientific_name'] ?? ''}'
+          : 'Unavailable: no scan confidence was saved for this record.'),
+        const Text('AI prediction score, separate from expert confirmation.', style: TextStyle(fontSize: 12)),
+        if (photos.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          const Text('Species reference photos', style: TextStyle(fontWeight: FontWeight.w600)),
+          SpeciesReferencePhotos(photos: photos.map((p) => Map<String, dynamic>.from(p)).toList()),
+        ],
+        if (speciesComparisons(referenceResult).isNotEmpty) ...[
+          const SizedBox(height: 16),
+          const Text('Similar species', style: TextStyle(fontWeight: FontWeight.w600)),
+          SpeciesComparisons(result: referenceResult),
+        ],
+        for (final entry in fields.entries)
+          if (entry.value is String && (entry.value as String).trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(entry.key, style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(entry.value as String, style: const TextStyle(height: 1.5)),
+          ],
+      ],
+    )));
+  }
 }

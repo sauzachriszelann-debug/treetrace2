@@ -1,11 +1,16 @@
-import 'dart:convert';
+import '../widgets/nearby_tree_warnings.dart';
+import 'ai_identify_screen.dart';
+import 'dart:async';
+import '../widgets/tree_age_card.dart';
+import '../services/tree_save_error.dart';
+import '../services/scan_profile_payload.dart';
+import '../services/photo_measurement_rules.dart';
 import 'dart:io';
 import '../widgets/expandable_photo.dart';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:dio/dio.dart';
-import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../services/api_service.dart';
@@ -17,7 +22,6 @@ import 'height_measure_screen.dart';
 import 'tree_scan_screen.dart';
 import '../services/tree_scan_result.dart';
 import '../services/dbh_ar_service.dart';
-import 'tree_detail_screen.dart';
 
 /// Seam for the platform reverse geocoder (Phase 12B.1A). Production uses
 /// the geocoding plugin; widget tests inject fakes so no external service is
@@ -37,6 +41,7 @@ class AddTreeScreen extends StatefulWidget {
   final GpsCaptureService? gpsService;
   final PlacemarkLookup? placemarkLookup;
   final bool skipOnlineLocationLookup;
+  final VoidCallback? onBackToScanner;
 
   const AddTreeScreen({
     super.key,
@@ -45,6 +50,7 @@ class AddTreeScreen extends StatefulWidget {
     this.gpsService,
     this.placemarkLookup,
     this.skipOnlineLocationLookup = false,
+    this.onBackToScanner,
   });
   @override
   State<AddTreeScreen> createState() => _AddTreeScreenState();
@@ -64,17 +70,20 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
   final _lngCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
 
+  Timer? _ageRefresh;
   File? _photo;
   String _health = 'Not assessed';
   bool _saving = false;
   bool _identifying = false;
   bool _gpsLoading = false;
+  ({double lat, double lng, String status})? _gpsLookup;
   double? _gpsAccuracyM;
   // Exact text the app itself last wrote into the fields (Phase 12A.1:
   // tells an app-owned value apart from one the user typed or edited).
   String? _lastAutoLatText;
   String? _lastAutoLngText;
   String? _lastAutoBarangay;
+  String? _lastAutoExactLocation;
   // Phase 12B.1A: injectable seams, resolved once against the widget config.
   late final GpsCaptureService _gps = widget.gpsService ?? GpsCaptureService();
   late final PlacemarkLookup _placemark =
@@ -102,7 +111,18 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
       _dbhCtrl.clear();
       _heightCtrl.clear();
       _predictedDbhCm = null;
-      _notesCtrl.text = _usefulAiNote(r['description']) ?? '';
+      final prediction = r['measurement_prediction'];
+      if (prediction is Map<String, dynamic>) {
+        final dbh = acceptedGalleryValue(prediction, 'predicted_dbh_cm', 300);
+        final height = acceptedGalleryValue(prediction, 'predicted_height_m', 80);
+        _dbhCtrl.text = dbh?.toString() ?? '';
+        _heightCtrl.text = height?.toString() ?? '';
+        _predictedDbhCm = dbh;
+      }
+
+    }
+    for (final controller in [_sciCtrl, _dbhCtrl, _heightCtrl]) {
+      controller.addListener(_scheduleAgeRefresh);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -112,8 +132,19 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     });
   }
 
+  void _scheduleAgeRefresh() {
+    _ageRefresh?.cancel();
+    _ageRefresh = Timer(const Duration(milliseconds: 700), () {
+      if (mounted) setState(() {});
+    });
+  }
+
   @override
   void dispose() {
+    _ageRefresh?.cancel();
+    for (final controller in [_sciCtrl, _dbhCtrl, _heightCtrl]) {
+      controller.removeListener(_scheduleAgeRefresh);
+    }
     _nameCtrl.dispose();
     _sciCtrl.dispose();
     _dbhCtrl.dispose();
@@ -161,6 +192,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
   }
 
   Map<String, dynamic> _currentSnapshot({String? exactLocation}) => {
+        if (_aiPrediction != null) 'scan_profile': scanProfilePayload(_aiPrediction!),
         'common_name': _nameCtrl.text.trim(),
         'scientific_name': _sciCtrl.text.trim(),
         'dbh_text': _dbhCtrl.text.trim(),
@@ -317,9 +349,6 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     if (result == null || !mounted) return;
     setState(() {
       final species = result.species;
-      if (galleryPhoto != null && species != null && _notesCtrl.text.isEmpty) {
-        _notesCtrl.text = _usefulAiNote(species['description']) ?? '';
-      }
       if (species != null || result.photo != null) {
         // Keep original AI output for evaluation; corrections are actual labels.
         _aiPrediction = species;
@@ -355,7 +384,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
       if (result.photo != null) _photo = result.photo;
     });
     // The user's explicit skip-and-save reuses ordinary validation/idempotency.
-    if (result.saveRequested && mounted) await _save();
+    if (result.saveRequested && mounted && _gpsLookup?.status != 'outside_panabo') await _save();
   }
 
   Future<void> _openDBHMeasure() async {
@@ -474,26 +503,39 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
         }
       }
 
-      // Phase 12B.1A: the address lookup runs AFTER the coordinates are in
-      // the form, so a slow or failing geocoder can never delay, block or
-      // lose the captured fix — it only decides how many address fields get
-      // filled. The lookup is bounded by kGeocodeTimeout; a failure leaves
-      // every address field as it was (nothing is invented).
+      if (_latCtrl.text != newLatText || _lngCtrl.text != newLngText) return;
       final location = await _locationFromCoordinates(
         position.latitude,
         position.longitude,
+        position.accuracy,
       );
-      if (!mounted) return;
+      if (!mounted ||
+          _latCtrl.text != newLatText ||
+          _lngCtrl.text != newLngText) {
+        return;
+      }
       await _applyResolvedLocation(location, confirmBarangay: !automatic);
 
       if (mounted) {
+        _gpsLookup = (
+          lat: double.parse(newLatText),
+          lng: double.parse(newLngText),
+          status: location.status,
+        );
+        final message = switch (location.status) {
+          'resolved' => 'Location filled: ${location.barangay}, ${location.city}',
+          'uncertain' => 'Barangay uncertain. Please capture GPS again.',
+          'outside_panabo' =>
+            'This location is outside the Panabo City inventory area.',
+          _ => 'GPS captured. Barangay lookup is unavailable.',
+        };
+        if (location.status == 'outside_panabo') {
+          await _showOutsidePanaboDialog();
+          return;
+        }
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-              '${gpsAccuracyLabel(position.accuracy)} — '
-              '${location.barangay == null
-                  ? 'add the exact place, city and province if needed'
-                  : 'location captured'}'),
-          backgroundColor: kHealthy,
+          content: Text('${gpsAccuracyLabel(position.accuracy)} - $message'),
+          backgroundColor: location.status == 'resolved' ? kHealthy : kFair,
         ));
       }
     } catch (e) {
@@ -542,15 +584,21 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
   /// coordinates is refreshed or cleared; a user-confirmed label survives
   /// unless the new resolution contradicts it, in which case the user
   /// decides. City/province defaults (“Panabo City” / “Davao del Norte”)
-  /// are only ever applied by [_locationFromCoordinates] for positions
-  /// inside the Panabo area; when a recapture resolves outside it, the old
-  /// default text is cleared rather than silently re-asserted.
+  /// come from the shared boundary lookup. Unresolved fixes clear these
+  /// defaults.
   Future<void> _applyResolvedLocation(
     _ResolvedLocation location, {
     required bool confirmBarangay,
   }) async {
-    if (location.exactLocation != null && _exactLocationCtrl.text.isEmpty) {
+    final currentAddress = _exactLocationCtrl.text.trim();
+    if (location.exactLocation != null &&
+        (currentAddress.isEmpty || currentAddress == _lastAutoExactLocation)) {
       _exactLocationCtrl.text = location.exactLocation!;
+      _lastAutoExactLocation = location.exactLocation!;
+    } else if (location.exactLocation == null &&
+        currentAddress == _lastAutoExactLocation) {
+      _exactLocationCtrl.clear();
+      _lastAutoExactLocation = null;
     }
 
     if (location.city != null) {
@@ -595,210 +643,121 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
   }
 
   Future<_ResolvedLocation> _locationFromCoordinates(
-      double lat, double lng) async {
-    _ResolvedLocation? phoneLocation;
+      double lat, double lng, double accuracyM) async {
+    final boundary = _lookupBarangay(lat, lng, accuracyM);
+    String? exactLocation;
     try {
-      // Phase 12B.1A: bounded. The coordinates are already in the form at
-      // this point; a lookup that hangs is dropped (as a timeout, handled by
-      // the catch below) rather than keeping the capture button disabled
-      // forever. Failure never invents an address — it only means fewer
-      // fields are auto-filled.
       final marks = await _placemark(lat, lng).timeout(kGeocodeTimeout);
       if (marks.isNotEmpty) {
         final place = marks.first;
-        final barangay = _firstCleanBarangay([
-          place.subLocality,
-          place.locality,
-          place.subAdministrativeArea,
+        exactLocation = _cleanFullAddress([
+          place.name,
+          place.street,
+          place.thoroughfare,
+          place.subThoroughfare,
         ]);
-        final city = _cleanCity(place.locality) ??
-            _cleanCity(place.subAdministrativeArea);
-        final province = _cleanProvince(place.administrativeArea);
-        phoneLocation = _ResolvedLocation(
-          exactLocation: _cleanFullAddress([
-            place.name,
-            place.street,
-            place.thoroughfare,
-            place.subThoroughfare,
-            barangay,
-            city,
-            province,
-            place.country,
-          ]),
-          barangay: barangay,
-          city: city,
-          province: province,
-        );
       }
     } catch (_) {}
 
-    final onlineLocation = phoneLocation?.barangay == null
-        ? await _lookupOnlineLocation(lat, lng)
-        : null;
-    // Phase 12A.1: Panabo defaults apply ONLY to positions inside the
-    // Panabo area. An out-of-area or unresolvable fix yields null
-    // city/province/barangay for the user to fill in — it is never
-    // silently labelled “Panabo City”.
-    final inArea = isWithinPanaboArea(lat, lng);
-    final barangay = phoneLocation?.barangay ??
-        onlineLocation?.barangay ??
-        (inArea ? _nearestPanaboBarangay(lat, lng) : null);
-    final city = phoneLocation?.city ??
-        onlineLocation?.city ??
-        (inArea ? 'Panabo City' : null);
-    final province = phoneLocation?.province ??
-        onlineLocation?.province ??
-        (inArea ? 'Davao del Norte' : null);
-
+    final result = await boundary;
+    if (result['status'] == 'resolved') {
+      // Verified administrative hierarchy; geocoder street text can include
+      // duplicate/out-of-order city labels, so keep it out of this field.
+      exactLocation = _cleanFullAddress([
+        result['barangay'] as String?,
+        result['city'] as String?,
+        result['province'] as String?,
+      ]);
+    }
     return _ResolvedLocation(
-      exactLocation: _cleanFullAddress([
-        phoneLocation?.exactLocation,
-        onlineLocation?.exactLocation,
-        barangay,
-        city,
-        province,
-      ]),
-      barangay: barangay,
-      city: city,
-      province: province,
+      status: result['status'] as String? ?? 'unavailable',
+      exactLocation: exactLocation,
+      barangay: result['barangay'] as String?,
+      city: result['city'] as String?,
+      province: result['province'] as String?,
     );
   }
 
-  Future<_ResolvedLocation?> _lookupOnlineLocation(
-      double lat, double lng) async {
-    if (widget.skipOnlineLocationLookup) return null; // Phase 12B.1A test seam
-    try {
-      final uri = Uri.https('nominatim.openstreetmap.org', '/reverse', {
-        'format': 'jsonv2',
-        'lat': lat.toString(),
-        'lon': lng.toString(),
-        'zoom': '18',
-        'addressdetails': '1',
-      });
-      final response = await http.get(uri, headers: {
-        'User-Agent': 'TreeTrace Mobile'
-      }).timeout(const Duration(seconds: 5));
-      if (response.statusCode != 200) return null;
-      final data = jsonDecode(response.body);
-      if (data is! Map<String, dynamic>) return null;
-      final address = data['address'];
-      if (address is! Map) return null;
-      final a = Map<String, dynamic>.from(address);
-      final barangay = _firstCleanBarangay([
-        a['neighbourhood']?.toString(),
-        a['suburb']?.toString(),
-        a['quarter']?.toString(),
-        a['village']?.toString(),
-        a['hamlet']?.toString(),
-        a['city_district']?.toString(),
-      ]);
-      final city = _cleanCity(a['city']?.toString()) ??
-          _cleanCity(a['town']?.toString()) ??
-          _cleanCity(a['municipality']?.toString()) ??
-          _cleanCity(a['county']?.toString());
-      final province = _cleanProvince(a['state']?.toString());
-      return _ResolvedLocation(
-        exactLocation: _cleanFullAddress([
-          a['house_number']?.toString(),
-          a['road']?.toString(),
-          a['neighbourhood']?.toString(),
-          a['suburb']?.toString(),
-          a['village']?.toString(),
-          city,
-          province,
-        ]),
-        barangay: barangay,
-        city: city,
-        province: province,
+  Future<void> _showOutsidePanaboDialog() async {
+    if (!mounted) return;
+    setState(() { _gpsLoading = false; _saving = false; });
+    final scanAgain = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => PopScope(
+        canPop: false,
+        child: Dialog(
+          backgroundColor: kCard,
+          surfaceTintColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: const BoxDecoration(color: Color(0xFFFFF3DE), shape: BoxShape.circle),
+                    child: const Icon(Icons.location_off_outlined, color: Color(0xFFAD6500), size: 30),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Outside Panabo City', textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: kForeground, height: 1.2)),
+                  const SizedBox(height: 12),
+                  const Text('This tree cannot be added because its location is outside Panabo City.',
+                    textAlign: TextAlign.justify,
+                    style: TextStyle(fontSize: 14, height: 1.5, color: kForeground)),
+                  const SizedBox(height: 8),
+                  const Text('TreeTrace accepts trees within Panabo City only.',
+                    textAlign: TextAlign.justify,
+                    style: TextStyle(fontSize: 13, height: 1.4, color: kMutedFg)),
+                  const SizedBox(height: 24),
+                  SizedBox(width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => Navigator.pop(dialogContext, true),
+                      icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                      label: const Text('Back to scanner'),
+                      style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                    )),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    if (scanAgain != true || !mounted) return;
+    if (widget.onBackToScanner != null) {
+      widget.onBackToScanner!();
+    } else {
+      Navigator.of(context).pushReplacement<bool, bool>(
+        MaterialPageRoute<bool>(builder: (_) => const AIIdentifyScreen()),
+        result: false,
       );
-    } catch (_) {
-      return null;
     }
   }
 
-  String? _nearestPanaboBarangay(double lat, double lng) {
-    const barangays = [
-      _BarangayPoint('Gredu', 7.3076, 125.6847),
-      _BarangayPoint('San Francisco', 7.3140, 125.6722),
-      _BarangayPoint('New Visayas', 7.3028, 125.6851),
-      _BarangayPoint('Quezon', 7.2962, 125.6817),
-      _BarangayPoint('San Pedro', 7.3017, 125.6734),
-      _BarangayPoint('San Vicente', 7.2922, 125.6779),
-      _BarangayPoint('Santo Nino', 7.2888, 125.6908),
-      _BarangayPoint('Cagangohan', 7.3354, 125.6666),
-      _BarangayPoint('J.P. Laurel', 7.3288, 125.6846),
-      _BarangayPoint('New Pandan', 7.3221, 125.6946),
-      _BarangayPoint('San Nicolas', 7.3168, 125.6993),
-      _BarangayPoint('San Roque', 7.2876, 125.7043),
-      _BarangayPoint('Santa Cruz', 7.2809, 125.6861),
-      _BarangayPoint('Kauswagan', 7.2719, 125.6902),
-      _BarangayPoint('Little Panay', 7.2730, 125.6718),
-      _BarangayPoint('Dapco', 7.2566, 125.6868),
-      _BarangayPoint('Lower Panaga', 7.2595, 125.6725),
-      _BarangayPoint('Mabunao', 7.2476, 125.6794),
-      _BarangayPoint('Maduao', 7.2361, 125.6604),
-      _BarangayPoint('Malativas', 7.2597, 125.7085),
-      _BarangayPoint('Katipunan', 7.2463, 125.7152),
-      _BarangayPoint('Katualan', 7.2345, 125.7068),
-      _BarangayPoint('Kasilak', 7.2205, 125.6969),
-      _BarangayPoint('Nanyo', 7.2188, 125.7163),
-      _BarangayPoint('A.O. Floirendo', 7.2097, 125.6845),
-      _BarangayPoint('Buenavista', 7.2022, 125.6687),
-      _BarangayPoint('Consolacion', 7.1902, 125.6823),
-      _BarangayPoint('Salvacion', 7.1982, 125.7048),
-      _BarangayPoint('New Malaga', 7.1808, 125.7018),
-      _BarangayPoint('New Malitbog', 7.1690, 125.7136),
-      _BarangayPoint('Sindaton', 7.1644, 125.6949),
-      _BarangayPoint('Manay', 7.1510, 125.7040),
-      _BarangayPoint('Kiotoy', 7.3416, 125.7097),
-      _BarangayPoint('Tibungol', 7.3492, 125.6953),
-      _BarangayPoint('Tagpore', 7.3675, 125.7025),
-      _BarangayPoint('Upper Licanan', 7.3781, 125.7177),
-      _BarangayPoint('Waterfall', 7.3930, 125.7275),
-      _BarangayPoint('Southern Davao', 7.1714, 125.6702),
-    ];
-
-    _BarangayPoint? nearest;
-    var nearestKm = double.infinity;
-    for (final barangay in barangays) {
-      final distance = Geolocator.distanceBetween(
-            lat,
-            lng,
-            barangay.lat,
-            barangay.lng,
-          ) /
-          1000;
-      if (distance < nearestKm) {
-        nearestKm = distance;
-        nearest = barangay;
+  Future<Map<String, dynamic>> _lookupBarangay(
+      double lat, double lng, double accuracyM) async {
+    if (!widget.skipOnlineLocationLookup) {
+      // Retry address resolution for the SAME fix, rather than requiring
+      // another GPS capture when a cold backend or transient lookup fails.
+      for (var attempt = 0; attempt < 2; attempt++) {
+        if (!mounted) break;
+        try {
+          final result = await api.getBarangayLocation(lat, lng, accuracyM)
+              .timeout(const Duration(seconds: 16));
+          if (result['status'] != 'unavailable') return result;
+        } on DioException catch (error) {
+          if (error.response?.statusCode == 401 || error.response?.statusCode == 403) break;
+        } catch (_) {
+          // Keep the original coordinates; never replace them with a guess.
+        }
       }
     }
-    if (nearest == null || nearestKm > 18) return null;
-    return 'Brgy. ${nearest.name}';
-  }
-
-  String? _firstCleanBarangay(List<String?> values) {
-    for (final value in values) {
-      final cleaned = _cleanBarangay(value);
-      if (cleaned != null) return cleaned;
-    }
-    return null;
-  }
-
-  String? _cleanBarangay(String? value) {
-    final text = value?.trim();
-    if (text == null || text.isEmpty) return null;
-    final lower = text.toLowerCase();
-    if (_looksLikePlusCode(text) ||
-        lower == 'panabo' ||
-        lower == 'panabo city' ||
-        lower == 'davao del norte' ||
-        lower == 'philippines') {
-      return null;
-    }
-    return text
-        .replaceFirst(RegExp(r'^barangay\s+', caseSensitive: false), 'Brgy. ')
-        .replaceFirst(RegExp(r'^brgy\.\s*', caseSensitive: false), 'Brgy. ');
+    return const {'status': 'unavailable'};
   }
 
   String? _cleanFullAddress(List<String?> values) {
@@ -817,19 +776,6 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     }
     if (cleaned.isEmpty) return null;
     return cleaned.take(5).join(', ');
-  }
-
-  String? _cleanCity(String? value) {
-    final text = value?.trim();
-    if (text == null || text.isEmpty) return null;
-    if (_looksLikePlusCode(text)) return null;
-    return text == 'Panabo' ? 'Panabo City' : text;
-  }
-
-  String? _cleanProvince(String? value) {
-    final text = value?.trim();
-    if (text == null || text.isEmpty || _looksLikePlusCode(text)) return null;
-    return text;
   }
 
   bool _looksLikePlusCode(String value) =>
@@ -852,6 +798,12 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
   }
 
   Future<void> _save() async {
+    if (_gpsLoading) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Wait for the GPS lookup to finish.')),
+      );
+      return;
+    }
     if (!_formKey.currentState!.validate()) return;
 
     final dbhCm = _parseOptionalMeasurement(_dbhCtrl.text);
@@ -876,6 +828,24 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
       return;
     }
     lng = tryParseCoordinate(_lngCtrl.text);
+
+    final lookup = _gpsLookup;
+    if (lookup != null && lat == lookup.lat && lng == lookup.lng) {
+      if (lookup.status == 'outside_panabo') {
+        await _showOutsidePanaboDialog();
+        return;
+      }
+      final message = switch (lookup.status) {
+        'uncertain' => 'Barangay uncertain. Please capture GPS again.',
+        _ => null,
+      };
+      if (message != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), backgroundColor: kFair),
+        );
+        return;
+      }
+    }
 
     final endangered = _checkEndangered(_nameCtrl.text.trim().toLowerCase());
     if (endangered != null) {
@@ -933,6 +903,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
         if (rawNotes.isNotEmpty) rawNotes,
       ].join('\n\n');
       final payload = {
+        if (_aiPrediction != null) 'scan_profile': scanProfilePayload(_aiPrediction!),
         'common_name': _nameCtrl.text.trim(),
         'scientific_name':
             _sciCtrl.text.trim().isEmpty ? null : _sciCtrl.text.trim(),
@@ -944,6 +915,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
         'height_m': heightM,
         'lat': lat,
         'lng': lng,
+        'gps_accuracy_m': _lastAutoLatText == _latCtrl.text.trim() && _lastAutoLngText == _lngCtrl.text.trim() ? _gpsAccuracyM : null,
         'city': _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
         'province': _provinceCtrl.text.trim().isEmpty
             ? null
@@ -1207,17 +1179,21 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
           }
           // Dismissed without a choice: keep the pending key and payload.
         }
+      } else if (mounted && e.response?.statusCode == 422 &&
+          e.response?.data is Map &&
+          e.response?.data['detail'] is String &&
+          (e.response?.data['detail'] as String).contains('outside the Panabo City inventory boundary')) {
+        await _showOutsidePanaboDialog();
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text(
-                'Connection problem - your submission is saved. Retrying will not create a duplicate.'),
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(treeSaveErrorMessage(e)),
             backgroundColor: kPoor));
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: kPoor));
     } finally {
-      setState(() => _saving = false);
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -1296,6 +1272,14 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     required String commonName,
     required String scientificName,
   }) async {
+    final accuracy = _lastAutoLatText == _latCtrl.text.trim() &&
+        _lastAutoLngText == _lngCtrl.text.trim() ? _gpsAccuracyM : null;
+    if (accuracy != null && accuracy > 50) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('GPS accuracy is too broad for duplicate checking. Capture GPS again outdoors.'),
+      ));
+      return false;
+    }
     List<Map<String, dynamic>> candidates;
     try {
       candidates = await api.getNearbyTrees(
@@ -1303,6 +1287,10 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
         lng: lng,
         commonName: commonName,
         scientificName: scientificName,
+        gpsAccuracyM: accuracy,
+        duplicateCheck: true,
+        dbhCm: double.tryParse(_dbhCtrl.text),
+        heightM: double.tryParse(_heightCtrl.text),
       );
     } catch (_) {
       if (!mounted) return false;
@@ -1330,62 +1318,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     if (!mounted) return false;
     if (candidates.isEmpty) return true;
 
-    final proceed = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Possible existing trees nearby'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.separated(
-            shrinkWrap: true,
-            itemCount: candidates.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (_, index) {
-              final candidate = candidates[index];
-              final distance =
-                  (candidate['distance_m'] as num?)?.toDouble() ?? 0;
-              final match = candidate['species_match']?.toString();
-              final matchLabel = match == 'exact'
-                  ? 'same species'
-                  : match == 'unknown'
-                      ? 'species not provided'
-                      : 'different species';
-              return ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  '${candidate['common_name'] ?? 'Unnamed tree'}'
-                  '${candidate['scientific_name'] != null ? ' (${candidate['scientific_name']})' : ''}',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                subtitle: Text('~${distance.round()} m away'
-                    '${candidate['barangay'] != null ? ' · ${candidate['barangay']}' : ''}'
-                    ' · $matchLabel'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  final treeId = candidate['tree_id'];
-                  if (treeId is int) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => TreeDetailScreen(treeId: treeId)),
-                    );
-                  }
-                },
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Register as a new tree')),
-        ],
-      ),
-    );
-    return proceed == true;
+    return showNearbyTreeWarnings(context, candidates);
   }
 
   /// Re-sends the immutable original payload with its original key.
@@ -1762,6 +1695,23 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
             ]),
             const SizedBox(height: 8),
 
+            if (_sciCtrl.text.trim().isNotEmpty &&
+                (ageDimension(_dbhCtrl.text) != null || ageDimension(_heightCtrl.text) != null))
+              TreeAgeCard(
+                scientificName: _sciCtrl.text.trim(),
+                dbhCm: ageDimension(_dbhCtrl.text),
+                heightM: ageDimension(_heightCtrl.text),
+                dimensionsSource: _predictedDbhCm != null ? 'ai_prediction' : 'measurement',
+              )
+            else
+              const Card(child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Estimated age', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text('Age unknown. Add a scientific name and valid DBH or height to estimate age.'),
+                ]),
+              )),
+            const SizedBox(height: 8),
             ExpansionTile(
               title: const Text('Individual measurement tools'),
               childrenPadding: const EdgeInsets.only(bottom: 12),
@@ -1850,6 +1800,15 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
+                  Text(gpsAccuracyLabel(_gpsAccuracyM), style: const TextStyle(fontSize: 12)),
+                  if (_gpsLookup != null)
+                    Text(switch (_gpsLookup!.status) {
+                      'resolved' => 'Verified location: ${_barangayCtrl.text}, ${_cityCtrl.text}',
+                      'uncertain' => 'Barangay is uncertain near a boundary. Capture GPS again outdoors.',
+                      'outside_panabo' => 'This GPS location is outside Panabo City.',
+                      _ => 'Coordinates captured; address lookup failed. Check the backend connection and capture again.',
+                    }, style: const TextStyle(fontSize: 12)),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       Expanded(
@@ -1879,9 +1838,6 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  if (_gpsAccuracyM != null)
-                    _buildAccuracyPill(_gpsAccuracyM!),
                 ],
               ),
             ),
@@ -1949,44 +1905,6 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
       child: Text(text,
           style: const TextStyle(
               fontSize: 13, fontWeight: FontWeight.w500, color: kForeground)));
-
-  /// Shows the accuracy reported by the last fix, colour-graded: green
-  /// (≤15 m), amber (15–50 m), red (>50 m or unknown). Display only — the
-  /// confirmation gate lives in [_captureGps].
-  Widget _buildAccuracyPill(double accuracyMeters) {
-    final grade = classifyGpsAccuracy(accuracyMeters);
-    final color = grade == GpsAccuracyGrade.good
-        ? kHealthy
-        : grade == GpsAccuracyGrade.moderate
-            ? kFair
-            : kPoor;
-    final note = grade == GpsAccuracyGrade.good
-        ? ''
-        : grade == GpsAccuracyGrade.moderate
-            ? ' — fair, verify on the ground'
-            : ' — poor, confirm before relying on it';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.gps_fixed, size: 14, color: color),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              '${gpsAccuracyLabel(accuracyMeters)}$note',
-              style: TextStyle(
-                  color: color, fontSize: 11, fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildAiProfilePreview() {
     final result = _aiPrediction ?? {};
@@ -2201,23 +2119,17 @@ class _AiPreviewPill extends StatelessWidget {
 }
 
 class _ResolvedLocation {
+  final String status;
   final String? exactLocation;
   final String? barangay;
   final String? city;
   final String? province;
 
   const _ResolvedLocation({
+    required this.status,
     this.exactLocation,
     this.barangay,
     this.city,
     this.province,
   });
-}
-
-class _BarangayPoint {
-  final String name;
-  final double lat;
-  final double lng;
-
-  const _BarangayPoint(this.name, this.lat, this.lng);
 }

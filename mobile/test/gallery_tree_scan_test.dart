@@ -74,7 +74,8 @@ void main() {
               {'status': 'cannot_estimate', 'reason': 'No visible scale.'};
         },
         measurePhoto: measure,
-        identifyPhoto: (_) async => identification ??
+        identifyPhoto: (_) async =>
+            identification ??
             {'common_name': 'Mango', 'scientific_name': 'Mangifera indica'},
       )));
       // Always draw at least one frame AFTER post-frame scan startup. Checking
@@ -113,12 +114,9 @@ void main() {
     };
     await open(tester,
         (_, __) async => throw StateError('Must not measure unknown photo'));
-    expect(find.text('Predicted DBH (cm): 45'), findsOneWidget);
-    expect(find.text('Predicted height (m): Unavailable'), findsOneWidget);
     expect(find.text('Add treetop photo'), findsOneWidget);
     await tester.tap(find.byKey(const Key('add-treetop-photo')));
     await tester.pump();
-    expect(find.text('Predicted DBH (cm): 45'), findsOneWidget);
     expect(find.text('Add treetop photo'), findsOneWidget);
     expect(
         tester
@@ -171,22 +169,18 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(calls, 1);
-    expect(find.text('Predicted height (m): 11'), findsOneWidget);
-    expect(find.text('Predicted DBH (cm): 45'), findsOneWidget);
-    expect(find.textContaining('Height predicted using your original photo'),
-        findsOneWidget);
     expect(
         tester
             .widget<TextFormField>(find.byKey(const Key('scan-height')))
             .controller!
             .text,
-        isEmpty);
+        '11.00');
     expect(
         tester
             .widget<TextFormField>(find.byKey(const Key('scan-dbh')))
             .controller!
             .text,
-        isEmpty);
+        '45.0');
   });
 
   testWidgets('out-of-class scan can only continue to expert review',
@@ -277,41 +271,24 @@ void main() {
       };
       store.fail = mode == 'history_error';
       await open(tester, (_, __) async => throw StateError('Must not measure'));
-      expect(find.text('AI-predicted size'), findsOneWidget);
-      expect(find.text('AI assessed the photo without a YOLO mask.'),
-          findsOneWidget);
-      expect(
-          find.text(
-              'DBH: ${valid ? 'Appearance-based visual prediction.' : 'Insufficient tree detail.'}'),
-          findsOneWidget);
-      expect(
-          find.text(
-              'Height: ${valid ? 'Appearance-based visual prediction.' : 'Treetop hidden.'}'),
-          findsOneWidget);
-      expect(
-          find.text('Physical scale is unknown; prediction may be inaccurate.'),
-          findsOneWidget);
-      expect(find.text('Predicted DBH (cm): ${valid ? '23' : 'Unavailable'}'),
-          findsOneWidget);
-      expect(find.text('Predicted height (m): ${valid ? '9' : 'Unavailable'}'),
-          findsOneWidget);
+      expect(find.text('DBH and Height'), findsOneWidget);
       expect(
           tester
               .widget<TextFormField>(find.byKey(const Key('scan-dbh')))
               .controller!
               .text,
-          isEmpty);
+          valid ? '23.0' : '');
       expect(
           tester
               .widget<TextFormField>(find.byKey(const Key('scan-height')))
               .controller!
               .text,
-          isEmpty);
+          valid ? '9.00' : '');
       expect(
           tester
               .widget<ElevatedButton>(find.byKey(const Key('use-tree-scan')))
               .onPressed,
-          isNull);
+          valid ? isNotNull : isNull);
     });
   }
 
@@ -330,8 +307,6 @@ void main() {
                   ? 'The AI request limit has been reached. Try again later.'
                   : 'The gallery prediction server could not complete the request. Try again.'),
           findsOneWidget);
-      expect(find.text('Predicted DBH (cm): Unavailable'), findsOneWidget);
-      expect(find.text('Predicted height (m): Unavailable'), findsOneWidget);
     });
   }
 
@@ -368,7 +343,11 @@ void main() {
               };
       });
       expect(called, isTrue);
-      expect(find.byKey(const Key('gallery-size-prediction')), findsNothing);
+      expect(find.byKey(const Key('gallery-size-prediction')),
+          retake ? findsOneWidget : findsNothing);
+      if (retake) {
+        expect(find.text('Retry photo estimates'), findsOneWidget);
+      }
       final field =
           tester.widget<TextFormField>(find.byKey(const Key('scan-dbh')));
       expect(field.controller!.text, isEmpty);
