@@ -1,4 +1,3 @@
-import TreeAgeEstimate from '@/components/trees/TreeAgeEstimate';
 import { useState } from "react";
 import TreePhotoPreview from "@/components/trees/TreePhotoPreview";
 import { useParams, Link, useNavigate } from "react-router-dom";
@@ -284,7 +283,7 @@ export default function TreeDetail({ previewId } = {}) {
                 />
               )}
 
-              <div className={`grid min-w-0 items-start gap-4 ${previewId ? "sm:grid-cols-2" : tree.photo_url ? "xl:grid-cols-2" : "lg:grid-cols-3"}`}>
+              <div className={`grid min-w-0 items-start gap-4 ${previewId ? "sm:grid-cols-2" : tree.photo_url ? "xl:grid-cols-2" : "lg:grid-cols-2"}`}>
                 <Card>
                   <CardHeader className="px-4 pb-3 pt-4 sm:px-5">
                     <CardTitle className="font-fraunces text-base">Measurements</CardTitle>
@@ -297,8 +296,6 @@ export default function TreeDetail({ previewId } = {}) {
                   </CardContent>
                 </Card>
 
-                <TreeAgeEstimate scientificName={tree.scientific_name} dbhCm={tree.dbh_cm} heightM={tree.height_m}
-                  initialEstimate={tree.scan_profile?.scientific_name === tree.scientific_name && tree.scan_profile?.estimated_dbh_cm === tree.dbh_cm && tree.scan_profile?.estimated_height_m === tree.height_m ? tree.scan_profile?.age_estimate : null} />
                 <Card>
                   <CardHeader className="px-4 pb-3 pt-4 sm:px-5">
                     <CardTitle className="font-fraunces text-base">Location</CardTitle>
@@ -316,7 +313,7 @@ export default function TreeDetail({ previewId } = {}) {
                     )}
                   </CardContent>
                 </Card>
-                <Card className={previewId ? "sm:col-span-2" : tree.photo_url ? "xl:col-span-2" : ""}>
+                <Card className={previewId ? "sm:col-span-2" : tree.photo_url ? "xl:col-span-2" : "lg:col-span-2"}>
                   <CardContent className="flex flex-wrap items-start gap-x-10 gap-y-3 px-4 py-3 text-sm sm:px-5">
                     <Info label="Recorded By" value={recorderLabels[recorderRole] ?? "Unknown"} icon={Activity} />
                     <Info
