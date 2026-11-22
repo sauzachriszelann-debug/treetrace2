@@ -1,3 +1,4 @@
+import MySubmissions from "@/pages/MySubmissions";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { treeSubmissionsApi } from "@/api/treeSubmissions";
@@ -24,6 +25,7 @@ function isStaff(roleValue) {
 
 export default function TreeReviews() {
   const { user, isLoadingAuth } = useAuth();
+  const [mySubmissionsOpen, setMySubmissionsOpen] = useState(false);
 
   // Task 10: protect against unauthorized citizen access. The backend also
   // enforces this (require_staff / require_admin); this is the UI guard.
@@ -56,13 +58,28 @@ export default function TreeReviews() {
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
-      <div className="mb-6">
-        <h1 className="font-fraunces text-3xl font-semibold">Tree Reviews</h1>
-        <p className="text-muted-foreground mt-1">
-          Identify submitted photos and approve tree records for the inventory.
-        </p>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="font-fraunces text-3xl font-semibold">Tree Reviews</h1>
+          <p className="text-muted-foreground mt-1">
+            Identify submitted photos and approve tree records for the inventory.
+          </p>
+        </div>
+        <Button type="button" variant="outline" className="shrink-0 self-start" onClick={() => setMySubmissionsOpen(true)}>
+          <ClipboardList className="mr-2 h-4 w-4" />
+          My Submissions
+        </Button>
       </div>
       <ReviewQueue canIdentify={isAdmin(user.role)} reviewerId={user.id} />
+      <Dialog open={mySubmissionsOpen} onOpenChange={setMySubmissionsOpen}>
+        <DialogContent className="max-h-[90dvh] w-[calc(100%_-_2rem)] max-w-6xl overflow-y-auto rounded-xl">
+          <div className="pr-6">
+            <DialogTitle className="font-fraunces text-2xl">My Submissions</DialogTitle>
+            <DialogDescription className="mt-2">Your submitted trees and their review status.</DialogDescription>
+          </div>
+          {mySubmissionsOpen && <MySubmissions embedded />}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

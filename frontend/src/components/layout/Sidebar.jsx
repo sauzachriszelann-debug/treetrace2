@@ -47,6 +47,7 @@ export default function Sidebar({ user, mobileOpen = false, onMobileClose }) {
     : (user?.subscription_plan || "free").toUpperCase();
   const visibleNavItems = navItems
     .filter((item) => !(isCitizen && ["Add Tree", "Public Portal"].includes(item.label)))
+    .filter((item) => !(isStaff && item.path === "/my-submissions"))
     .map((item) => {
       if (isCitizen && item.label === "Tree Map") {
         return { ...item, path: "/public" };

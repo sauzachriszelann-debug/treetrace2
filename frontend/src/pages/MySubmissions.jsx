@@ -31,7 +31,7 @@ const STATUS_META = {
   linked: { label: "Linked to Existing Tree", className: "bg-blue-600", icon: Link2 },
 };
 
-export default function MySubmissions() {
+export default function MySubmissions({ embedded = false } = {}) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -99,14 +99,14 @@ export default function MySubmissions() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
-      <div className="mb-6">
+    <div className={embedded ? "min-w-0" : "mx-auto max-w-6xl p-4 sm:p-6 lg:p-8"}>
+      {!embedded && <div className="mb-6">
         <h1 className="font-fraunces text-3xl font-semibold">My Submissions</h1>
         <p className="text-muted-foreground mt-1">
           Trees you submitted for expert review. Approved submissions become
           official inventory records.
         </p>
-      </div>
+      </div>}
 
       {loadingTrees || loadingSpecies ? (
         <div className="h-40 bg-muted rounded-xl animate-pulse" />
