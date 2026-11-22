@@ -61,3 +61,17 @@ test("rejected submissions retain correction prefill from their detail popup", a
   expect(await screen.findByText("Scanner opened")).toBeTruthy();
   expect(JSON.parse(sessionStorage.getItem("treetrace_submission_prefill")).common_name).toBe("Narra");
 });
+
+test("portrait photo expands and closes without losing submission details", async () => {
+  treeSubmissionsApi.my.mockResolvedValue([{ id: 7, common_name: "Mango", status: "pending",
+    photo_url: "/portrait.jpg", dbh_cm: 30 }]);
+  openPage();
+  fireEvent.click(await screen.findByRole("button", { name: "View submission: Mango" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Expand Submitted tree photo" }));
+  const photo = await screen.findByRole("dialog", { name: "Submitted tree photo" });
+  expect(within(photo).getByRole("img", { name: "Submitted tree" }).getAttribute("src")).toBe("/portrait.jpg");
+  fireEvent.click(within(photo).getByRole("button", { name: "Close" }));
+  expect(await screen.findByRole("dialog", { name: "Mango" })).toBeTruthy();
+  expect(screen.getByText("30 cm")).toBeTruthy();
+  expect(treeSubmissionsApi.deleteMine).not.toHaveBeenCalled();
+});

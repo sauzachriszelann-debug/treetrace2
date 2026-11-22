@@ -1,3 +1,4 @@
+import TreePhotoPreview from '@/components/trees/TreePhotoPreview';
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -147,14 +148,14 @@ export default function MySubmissions() {
                     <p className="mt-1 text-xs text-muted-foreground">{entry.created_at ? new Date(entry.created_at).toLocaleDateString() : "Date unavailable"}</p>
                   </div>
                 </div>
-                <div className="border-t px-4 py-2 text-xs font-medium text-primary group-hover:underline">View details</div>
+                <div className="border-t px-4 py-2 text-right text-xs font-medium text-primary group-hover:underline">View details</div>
               </button>
             );
           })}
         </div>
       )}
       <Dialog open={Boolean(selectedSubmission)} onOpenChange={(open) => { if (!open) setSelectedSubmission(null); }}>
-        <DialogContent className="max-h-[85dvh] w-[calc(100%_-_2rem)] max-w-2xl overflow-y-auto rounded-xl">
+        <DialogContent className="max-h-[85dvh] w-[calc(100%_-_2rem)] max-w-4xl overflow-y-auto rounded-xl">
           <div className="pr-6">
             <DialogTitle className="font-fraunces text-xl">{selectedSubmission?.common_name || "Submission details"}</DialogTitle>
             <DialogDescription className="mt-2">Full details and review status of your submission.</DialogDescription>
@@ -162,14 +163,20 @@ export default function MySubmissions() {
           {selectedSubmission && (() => {
             const submission = selectedSubmission;
             const meta = STATUS_META[submission.status] || STATUS_META.pending;
-            return <div className="space-y-4">
-              <Badge className={meta.className}>{meta.label}</Badge>
-              {submission.photo_url && <img src={submission.photo_url} alt="Submitted tree" className="max-h-64 w-full rounded-xl border bg-muted object-contain" />}
+            return <div className={`grid items-start gap-5 ${submission.photo_url ? "md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]" : ""}`}>
+              {submission.photo_url && <div className="min-w-0">
+                <TreePhotoPreview src={submission.photo_url} label="Submitted tree photo" alt="Submitted tree"
+                  className="w-full overflow-hidden rounded-xl border bg-muted/40 p-2"
+                  thumbnailClassName="max-h-[55dvh] w-full rounded-lg object-contain" />
+                <p className="mt-2 text-center text-xs text-muted-foreground">Click photo to enlarge</p>
+              </div>}
+              <div className="min-w-0 space-y-4">
+                <Badge className={meta.className}>{meta.label}</Badge>
               <dl className="grid gap-4 rounded-xl border p-4 text-sm sm:grid-cols-2">
                 <div><dt className="text-xs text-muted-foreground">Scientific name</dt><dd className="mt-1 italic">{submission.scientific_name || "Not identified"}</dd></div>
                 <div><dt className="text-xs text-muted-foreground">Submitted</dt><dd className="mt-1">{submission.created_at ? new Date(submission.created_at).toLocaleString() : "Date unavailable"}</dd></div>
                 <div className="sm:col-span-2"><dt className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin className="h-3 w-3" />Location</dt><dd className="mt-1">{[submission.barangay, submission.city, submission.province].filter(Boolean).join(", ") || submission.location_description || "Location unavailable"}</dd></div>
-                {submission.lat != null && submission.lng != null && <div className="sm:col-span-2"><dt className="text-xs text-muted-foreground">GPS coordinates</dt><dd className="mt-1 break-words">{submission.lat}, {submission.lng}</dd></div>}
+                {submission.lat != null && submission.lng != null && <div className="sm:col-span-2"><dt className="text-xs text-muted-foreground">GPS coordinates</dt><dd className="mt-1 break-words">{Number(submission.lat).toFixed(6)}, {Number(submission.lng).toFixed(6)}</dd></div>}
                 <div><dt className="text-xs text-muted-foreground">DBH</dt><dd className="mt-1">{submission.dbh_cm != null ? `${submission.dbh_cm} cm` : "Not provided"}</dd></div>
                 <div><dt className="text-xs text-muted-foreground">Height</dt><dd className="mt-1">{submission.height_m != null ? `${submission.height_m} m` : "Not provided"}</dd></div>
                 {submission.health_status && <div><dt className="text-xs text-muted-foreground">Health status</dt><dd className="mt-1">{submission.health_status}</dd></div>}
@@ -247,6 +254,7 @@ export default function MySubmissions() {
                       </Button>
                     </div>
                   )}
+              </div>
             </div>;
           })()}
         </DialogContent>
