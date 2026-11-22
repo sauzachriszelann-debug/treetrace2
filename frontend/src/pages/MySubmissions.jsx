@@ -33,6 +33,7 @@ export default function MySubmissions() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [selectedSubmission, setSelectedSubmission] = useState(null);
   const { data: treeSubmissions = [], isLoading: loadingTrees, isError: treesError } = useQuery({
     queryKey: ["my-submissions"],
     queryFn: treeSubmissionsApi.my,
@@ -57,6 +58,7 @@ export default function MySubmissions() {
     mutationFn: (entry) => treeSubmissionsApi.deleteMine(entry.id, entry.isSpeciesSubmission),
     onSuccess: () => {
       setDeleteTarget(null);
+      setSelectedSubmission(null);
       toast.success("Submission deleted.");
     },
     onError: (error) => {
@@ -95,7 +97,7 @@ export default function MySubmissions() {
   };
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
+    <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
         <h1 className="font-fraunces text-3xl font-semibold">My Submissions</h1>
         <p className="text-muted-foreground mt-1">
@@ -119,45 +121,61 @@ export default function MySubmissions() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
-          {submissions.map((submission) => {
-            const meta = STATUS_META[submission.status] || STATUS_META.pending;
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {submissions.map((entry) => {
+            const meta = STATUS_META[entry.status] || STATUS_META.pending;
             return (
-              <Card key={`${submission.isSpeciesSubmission ? "species" : "tree"}-${submission.id}`}>
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h2 className="font-semibold">
-                          {submission.common_name || "Unnamed tree"}
-                        </h2>
-                        <Badge className={meta.className}>{meta.label}</Badge>
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-1 space-y-1">
-                        <p className="flex items-center gap-1">
-                          <MapPin className="w-3 h-3" />
-                          {submission.barangay || "Unknown barangay"}
-                          {submission.lat != null && submission.lng != null
-                            ? ` · ${submission.lat}, ${submission.lng}`
-                            : ""}
-                        </p>
-                        <p>
-                          Submitted{" "}
-                          {submission.created_at
-                            ? new Date(submission.created_at).toLocaleString()
-                            : "earlier"}
-                        </p>
-                      </div>
+              <button
+                type="button"
+                key={`${entry.isSpeciesSubmission ? "species" : "tree"}-${entry.id}`}
+                onClick={() => setSelectedSubmission(entry)}
+                aria-label={`View submission: ${entry.common_name || "Unnamed tree"}`}
+                className="group overflow-hidden rounded-xl border bg-card text-left shadow-sm transition hover:border-primary/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <div className="flex items-start gap-3 p-4">
+                  {entry.photo_url ? (
+                    <img src={entry.photo_url} alt="" className="h-20 w-20 shrink-0 rounded-lg border object-cover" />
+                  ) : (
+                    <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg bg-muted">
+                      <Leaf className="h-7 w-7 text-muted-foreground" />
                     </div>
-                    {submission.photo_url ? (
-                      <img
-                        src={submission.photo_url}
-                        alt="Submitted tree"
-                        className="w-24 h-24 object-cover rounded-xl border shrink-0"
-                      />
-                    ) : null}
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <h2 className="truncate font-semibold" title={entry.common_name || "Unnamed tree"}>{entry.common_name || "Unnamed tree"}</h2>
+                    <Badge className={`${meta.className} mt-1 max-w-full whitespace-normal text-left`}>{meta.label}</Badge>
+                    <p className="mt-2 truncate text-xs text-muted-foreground">{entry.barangay || "Unknown barangay"}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{entry.created_at ? new Date(entry.created_at).toLocaleDateString() : "Date unavailable"}</p>
                   </div>
-
+                </div>
+                <div className="border-t px-4 py-2 text-xs font-medium text-primary group-hover:underline">View details</div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <Dialog open={Boolean(selectedSubmission)} onOpenChange={(open) => { if (!open) setSelectedSubmission(null); }}>
+        <DialogContent className="max-h-[85dvh] w-[calc(100%_-_2rem)] max-w-2xl overflow-y-auto rounded-xl">
+          <div className="pr-6">
+            <DialogTitle className="font-fraunces text-xl">{selectedSubmission?.common_name || "Submission details"}</DialogTitle>
+            <DialogDescription className="mt-2">Full details and review status of your submission.</DialogDescription>
+          </div>
+          {selectedSubmission && (() => {
+            const submission = selectedSubmission;
+            const meta = STATUS_META[submission.status] || STATUS_META.pending;
+            return <div className="space-y-4">
+              <Badge className={meta.className}>{meta.label}</Badge>
+              {submission.photo_url && <img src={submission.photo_url} alt="Submitted tree" className="max-h-64 w-full rounded-xl border bg-muted object-contain" />}
+              <dl className="grid gap-4 rounded-xl border p-4 text-sm sm:grid-cols-2">
+                <div><dt className="text-xs text-muted-foreground">Scientific name</dt><dd className="mt-1 italic">{submission.scientific_name || "Not identified"}</dd></div>
+                <div><dt className="text-xs text-muted-foreground">Submitted</dt><dd className="mt-1">{submission.created_at ? new Date(submission.created_at).toLocaleString() : "Date unavailable"}</dd></div>
+                <div className="sm:col-span-2"><dt className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin className="h-3 w-3" />Location</dt><dd className="mt-1">{[submission.barangay, submission.city, submission.province].filter(Boolean).join(", ") || submission.location_description || "Location unavailable"}</dd></div>
+                {submission.lat != null && submission.lng != null && <div className="sm:col-span-2"><dt className="text-xs text-muted-foreground">GPS coordinates</dt><dd className="mt-1 break-words">{submission.lat}, {submission.lng}</dd></div>}
+                <div><dt className="text-xs text-muted-foreground">DBH</dt><dd className="mt-1">{submission.dbh_cm != null ? `${submission.dbh_cm} cm` : "Not provided"}</dd></div>
+                <div><dt className="text-xs text-muted-foreground">Height</dt><dd className="mt-1">{submission.height_m != null ? `${submission.height_m} m` : "Not provided"}</dd></div>
+                {submission.health_status && <div><dt className="text-xs text-muted-foreground">Health status</dt><dd className="mt-1">{submission.health_status}</dd></div>}
+              </dl>
+              {(submission.notes || submission.submitter_notes) && <div className="rounded-xl border p-4 text-sm"><p className="mb-1 text-xs font-semibold text-muted-foreground">Notes</p><p className="whitespace-pre-wrap break-words">{submission.notes || submission.submitter_notes}</p></div>}
+              {submission.status === "closed" && <p className="rounded-lg border bg-muted/30 p-3 text-sm">{submission.review_reason || "This submission was closed as unresolved."}</p>}
                   {submission.status === "rejected" && (
                     <div className="rounded-lg border bg-muted/30 p-3 text-sm">
                       <p className="text-xs font-semibold text-muted-foreground">
@@ -180,7 +198,7 @@ export default function MySubmissions() {
                   {(submission.status === "approved" ||
                     submission.status === "linked") &&
                     submission.approved_tree_id && (
-                      <div className="rounded-lg border bg-muted/30 p-3 text-sm flex items-center justify-between gap-3">
+                      <div className="rounded-lg border bg-muted/30 p-3 text-sm flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
                         <p>
                           {submission.status === "approved"
                             ? "This submission is now an official inventory record."
@@ -224,17 +242,15 @@ export default function MySubmissions() {
                           ? "Awaiting species review."
                           : "Awaiting inventory approval."}
                       </p>
-                      <Button size="sm" variant="outline" onClick={() => setDeleteTarget(submission)}>
+                      <Button size="sm" variant="outline" onClick={() => { setSelectedSubmission(null); setDeleteTarget(submission); }}>
                         Delete submission
                       </Button>
                     </div>
                   )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+            </div>;
+          })()}
+        </DialogContent>
+      </Dialog>
       <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => {
         if (!open && !remove.isPending) setDeleteTarget(null);
       }}>
