@@ -41,7 +41,6 @@ class _UnknownSubmissionSheetState extends State<UnknownSubmissionSheet> {
   String? _gpsMessage;
   bool _gpsFailed = false;
   bool _addressResolved = false;
-  double? _gpsAccuracy;
   Map<String, dynamic>? _ageEstimate;
 
   Map<String, dynamic> get _candidate {
@@ -192,7 +191,6 @@ class _UnknownSubmissionSheetState extends State<UnknownSubmissionSheet> {
       setState(() {
         _latitude.text = position.latitude.toString();
         _longitude.text = position.longitude.toString();
-        _gpsAccuracy = position.accuracy;
         _barangay.clear();
         _addressResolved = false;
         _gpsMessage = 'GPS captured. Looking up barangay...';
@@ -494,8 +492,6 @@ class _UnknownSubmissionSheetState extends State<UnknownSubmissionSheet> {
                                       '${_latitude.text}, ${_longitude.text}',
                                       style: const TextStyle(fontSize: 14)))
                             ]),
-                            Text(gpsAccuracyLabel(_gpsAccuracy),
-                                style: const TextStyle(fontSize: 12)),
                             if (_barangay.text.isNotEmpty)
                               Text(_barangay.text,
                                   style: const TextStyle(

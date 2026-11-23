@@ -88,7 +88,6 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
   late final GpsCaptureService _gps = widget.gpsService ?? GpsCaptureService();
   late final PlacemarkLookup _placemark =
       widget.placemarkLookup ?? _defaultPlacemarkLookup;
-  bool _addToEvaluation = true;
   String? _dbhConfidence; // Low / Medium / High
   String? _dbhMethod;
   Map<String, dynamic>? _aiPrediction;
@@ -797,7 +796,14 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     return text.isEmpty ? null : double.tryParse(text);
   }
 
+  void _onCoordinatesEdited(String _) {
+    setState(() => _gpsLookup = null);
+    if (_barangayCtrl.text.trim() == _lastAutoBarangay) _barangayCtrl.clear();
+    if (_exactLocationCtrl.text.trim() == _lastAutoExactLocation) _exactLocationCtrl.clear();
+  }
+
   Future<void> _save() async {
+    if (_saving) return;
     if (_gpsLoading) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Wait for the GPS lookup to finish.')),
@@ -829,6 +835,34 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
     }
     lng = tryParseCoordinate(_lngCtrl.text);
 
+    if (lat == null || lng == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Both latitude and longitude are required. Capture GPS before saving.')));
+      return;
+    }
+    if (_gpsLookup == null || lat != _gpsLookup!.lat || lng != _gpsLookup!.lng) {
+      setState(() => _gpsLoading = true);
+      try {
+        if (await api.hasNetworkConnection()) {
+          // Edited coordinates have no measured accuracy: validate the point itself.
+          final location = await _locationFromCoordinates(lat, lng, 0);
+          if (!mounted) return;
+          if (tryParseCoordinate(_latCtrl.text) != lat || tryParseCoordinate(_lngCtrl.text) != lng) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Coordinates changed during verification. Save again to verify them.')));
+            return;
+          }
+          await _applyResolvedLocation(location, confirmBarangay: true);
+          if (!mounted) return;
+          _gpsLookup = (lat: lat, lng: lng, status: location.status);
+        }
+      } catch (_) {
+        // The API write still enforces the polygon; offline entries are checked on sync.
+      } finally {
+        if (mounted) setState(() => _gpsLoading = false);
+      }
+    }
+    if (!mounted) return;
     final lookup = _gpsLookup;
     if (lookup != null && lat == lookup.lat && lng == lookup.lng) {
       if (lookup.status == 'outside_panabo') {
@@ -890,6 +924,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
       if (proceed != true) return;
     }
 
+    if (!mounted) return;
     setState(() => _saving = true);
     // G4: citizens submit PENDING tree submissions for expert review; only
     // staff records become official inventory trees.
@@ -968,8 +1003,6 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
       // confirmation below states that limitation explicitly.
       if (!isCitizen &&
           key == null &&
-          lat != null &&
-          lng != null &&
           await api.isOnline()) {
         final proceed = await _runNearbyCheck(
           lat,
@@ -1061,11 +1094,6 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
             Navigator.pop(context, true);
           }
           return;
-        }
-        if (_addToEvaluation && !isCitizen) {
-          try {
-            await _saveEvaluationRow();
-          } catch (_) {}
         }
       } else if (isCitizen) {
         // G6 (D2): citizens may save offline. The queue posts to the G4
@@ -1406,40 +1434,6 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
       if (mounted) setState(() => _saving = false);
     }
   }
-
-  Future<void> _saveEvaluationRow() async {
-    final actualSpecies = _nameCtrl.text.trim();
-    if (actualSpecies.isEmpty) return;
-
-    final actualConservation = _conservationStatusFor(actualSpecies);
-    // G5: predicted values are preserved EXACTLY as the model produced them.
-    // A missing prediction is stored as null — the entered/derived actual
-    // label is never substituted, so field rows can never fake agreement.
-    final predictedSpecies = _aiPrediction?['common_name']?.toString();
-    final predictedConservation = (_aiPrediction?['endangered_status'] ??
-            _aiPrediction?['status'])
-        ?.toString();
-    final actualDbh = double.tryParse(_dbhCtrl.text.trim());
-
-    await (api as dynamic).createEvaluationRow({
-      'image_id': 'TREE_${DateTime.now().millisecondsSinceEpoch}',
-      'actual_species': actualSpecies,
-      'predicted_species': predictedSpecies,
-      'actual_conservation': actualConservation,
-      'predicted_conservation': predictedConservation,
-      'actual_dbh_cm': actualDbh,
-      'predicted_dbh_cm': _predictedDbhCm,
-      'scan_success': _aiPrediction != null || _dbhConfidence != null,
-      'app_success': true,
-      'latency_ms': null,
-    });
-  }
-
-  String _conservationStatusFor(String name) {
-    final found = _checkEndangered(name.trim().toLowerCase());
-    return found?['status']?.toString() ?? 'Not Listed';
-  }
-
 
   Map<String, dynamic>? _extractRoboflowCandidate(
       Map<String, dynamic> result) {
@@ -1814,6 +1808,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
                       Expanded(
                         child: TextFormField(
                           controller: _latCtrl,
+                          onChanged: _onCoordinatesEdited,
                           keyboardType: const TextInputType.numberWithOptions(
                               decimal: true, signed: true),
                           decoration: const InputDecoration(
@@ -1827,6 +1822,7 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
                       Expanded(
                         child: TextFormField(
                           controller: _lngCtrl,
+                          onChanged: _onCoordinatesEdited,
                           keyboardType: const TextInputType.numberWithOptions(
                               decimal: true, signed: true),
                           decoration: const InputDecoration(
@@ -1854,31 +1850,6 @@ class _AddTreeScreenState extends State<AddTreeScreen> {
             ),
             const SizedBox(height: 12),
 
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: kPrimary.withOpacity(0.06),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: kPrimary.withOpacity(0.16)),
-              ),
-              child: CheckboxListTile(
-                value: _addToEvaluation,
-                onChanged: (value) =>
-                    setState(() => _addToEvaluation = value ?? true),
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                activeColor: kPrimary,
-                title: const Text(
-                  'Add to evaluation test results',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w800, color: kForeground),
-                ),
-                subtitle: const Text(
-                  'Saves this record to the evaluation database so Project Evaluation can calculate accuracy, DBH error, and app success from real saved trees.',
-                  style: TextStyle(color: kMutedFg, fontSize: 12, height: 1.3),
-                ),
-              ),
-            ),
             const SizedBox(height: 24),
 
             SizedBox(

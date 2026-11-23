@@ -31,12 +31,10 @@ they are not silently discarded or automatically resubmitted. Existing apps
 receive the server enforcement after backend deployment; the new coordinate
 editor also requires deployment of the web frontend.
 
-## Temporary field testing
+## Retired field-testing switch
 
-`INVENTORY_BOUNDARY_TEST_BYPASS=true` temporarily skips the polygon check for
-all inventory writes on that backend. It defaults to false. Numeric coordinate
-validation remains active; GPS coordinates are never replaced. The authenticated
-barangay lookup returns unavailable during this mode so existing Android apps
-do not block on outside_panabo or receive a fabricated Panabo address.
-Set the variable back to false and redeploy immediately after testing.
-Test records remain saved until explicitly deleted.
+The temporary `INVENTORY_BOUNDARY_TEST_BYPASS` setting is retained only for
+configuration compatibility and has no effect. Polygon validation and barangay
+lookup always run, even if an old deployment environment still sets it to true.
+Manually edited coordinates are subject to the same checks as automatic GPS.
+Existing outside test records are not automatically deleted.

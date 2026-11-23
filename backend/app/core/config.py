@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     # Runtime secrets must come from the environment. TESTING is only for the
     # isolated in-memory test suite and must never be enabled in deployment.
     TESTING: bool = False
-    # Temporary field testing only; restore False after checking outside Panabo.
+    # Retired compatibility setting; ignored. Inventory boundaries are always enforced.
     INVENTORY_BOUNDARY_TEST_BYPASS: bool = False
     SECRET_KEY: Optional[str] = None
     ALGORITHM: str = "HS256"

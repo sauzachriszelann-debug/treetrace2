@@ -162,7 +162,10 @@ void main() {
     await tester.tap(find.text('Unidentified tree'));
     await tester.pumpAndSettle();
     expect(find.text('Possible AI matches'), findsOneWidget);
-    expect(find.textContaining('Narra'), findsOneWidget);
+    expect(find.text('Narra \u00b7 82.0%'), findsOneWidget);
+    final nameField = tester.widget<TextField>(find.byWidgetPredicate(
+        (widget) => widget is TextField && widget.decoration?.labelText == 'Common name'));
+    expect(nameField.controller!.text, 'Narra');
     expect(find.text('Save and Continue'), findsOneWidget);
     expect(find.text('Close unresolved'), findsOneWidget);
   });
@@ -287,10 +290,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Narra'));
     await tester.pumpAndSettle();
-    await tester.drag(find.byType(Scrollable).last, const Offset(0, -400));
+    await tester.ensureVisible(find.text('Send for inventory approval'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Send for inventory approval'));
     await tester.pumpAndSettle();
+    expect(find.text('Continue'), findsOneWidget);
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
     expect(
