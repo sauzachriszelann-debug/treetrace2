@@ -292,6 +292,18 @@ describe("species identification in the unified queue", () => {
     photo_url: "https://example.test/photo.jpg",
   };
 
+  test("species cards keep submitted notes without user guesses or a question-mark icon", async () => {
+    aiApi.listUnknown.mockResolvedValue([{
+      ...unknown, possible_name: "Unknown species", submitter_notes: "Tree beside the gate",
+    }]);
+    renderPage();
+    expect(await screen.findByText("Species submission #17")).toBeInTheDocument();
+    expect(screen.getByText("Submitted Notes")).toBeInTheDocument();
+    expect(screen.getByText("Tree beside the gate")).toBeInTheDocument();
+    expect(screen.queryByText("User Guess")).toBeNull();
+    expect(document.querySelector(".lucide-circle-help")).toBeNull();
+  });
+
   test("confirmation moves the source record to inventory approval without a duplicate card", async () => {
     aiApi.listUnknown.mockResolvedValue([{
       ...unknown,

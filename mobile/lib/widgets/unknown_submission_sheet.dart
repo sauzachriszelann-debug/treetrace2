@@ -12,7 +12,14 @@ import 'tree_age_card.dart';
 /// Returns reviewed submission evidence to the scanner's online/offline save path.
 class UnknownSubmissionSheet extends StatefulWidget {
   const UnknownSubmissionSheet(
-      {super.key, required this.photo, required this.result});
+      {super.key,
+      required this.photo,
+      required this.result,
+      this.captureLocation,
+      this.lookupLocation});
+  final Future<GpsCaptureOutcome> Function()? captureLocation;
+  final Future<Map<String, dynamic>> Function(double, double, double)?
+      lookupLocation;
   final File photo;
   final Map<String, dynamic> result;
 
@@ -31,6 +38,10 @@ class _UnknownSubmissionSheetState extends State<UnknownSubmissionSheet> {
   bool _analyzing = false;
   bool _gpsLoading = false;
   String? _error;
+  String? _gpsMessage;
+  bool _gpsFailed = false;
+  bool _addressResolved = false;
+  double? _gpsAccuracy;
   Map<String, dynamic>? _ageEstimate;
 
   Map<String, dynamic> get _candidate {
@@ -61,6 +72,9 @@ class _UnknownSubmissionSheetState extends State<UnknownSubmissionSheet> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _captureGps();
+    });
     final existing = widget.result['measurement_prediction'];
     if (existing is Map) {
       _prediction = Map<String, dynamic>.from(existing);
@@ -115,11 +129,16 @@ class _UnknownSubmissionSheetState extends State<UnknownSubmissionSheet> {
   Future<void> _addPhoto(bool base) async {
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
-      builder: (sheetContext) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        ListTile(leading: const Icon(Icons.camera_alt_outlined), title: const Text('Take a photo'),
-          onTap: () => Navigator.pop(sheetContext, ImageSource.camera)),
-        ListTile(leading: const Icon(Icons.photo_library_outlined), title: const Text('Choose from gallery'),
-          onTap: () => Navigator.pop(sheetContext, ImageSource.gallery)),
+      builder: (sheetContext) => SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+        ListTile(
+            leading: const Icon(Icons.camera_alt_outlined),
+            title: const Text('Take a photo'),
+            onTap: () => Navigator.pop(sheetContext, ImageSource.camera)),
+        ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: const Text('Choose from gallery'),
+            onTap: () => Navigator.pop(sheetContext, ImageSource.gallery)),
       ])),
     );
     if (source == null || !mounted) return;
@@ -150,37 +169,62 @@ class _UnknownSubmissionSheetState extends State<UnknownSubmissionSheet> {
   }
 
   Future<void> _captureGps() async {
-    setState(() => _gpsLoading = true);
+    if (_gpsLoading) return;
+    setState(() {
+      _gpsLoading = true;
+      _gpsFailed = false;
+      _gpsMessage = null;
+    });
     try {
-      final outcome = await GpsCaptureService().capture();
+      final outcome = await (widget.captureLocation?.call() ??
+          GpsCaptureService().capture());
       if (!mounted) return;
       final position = outcome.position;
       if (position == null) {
-        setState(() => _error =
-            'Could not capture GPS. Enable location access or enter coordinates.');
+        setState(() {
+          _gpsFailed = true;
+          _gpsMessage = outcome.failure == null
+              ? 'GPS unavailable. Enable location access and try again.'
+              : gpsFailureMessage(outcome.failure!);
+        });
         return;
       }
-      _latitude.text = position.latitude.toString();
-      _longitude.text = position.longitude.toString();
-      _barangay.clear();
+      setState(() {
+        _latitude.text = position.latitude.toString();
+        _longitude.text = position.longitude.toString();
+        _gpsAccuracy = position.accuracy;
+        _barangay.clear();
+        _addressResolved = false;
+        _gpsMessage = 'GPS captured. Looking up barangay...';
+      });
       try {
-        final location = await api.getBarangayLocation(
-            position.latitude, position.longitude, position.accuracy);
+        final location = await (widget.lookupLocation?.call(
+                position.latitude, position.longitude, position.accuracy) ??
+            api.getBarangayLocation(
+                position.latitude, position.longitude, position.accuracy));
         if (!mounted) return;
-        if (location['status'] == 'resolved') {
-          _barangay.text = location['barangay']?.toString() ?? '';
-        } else {
-          setState(() =>
-              _error = 'GPS captured. Check the barangay before submitting.');
-        }
+        setState(() {
+          _addressResolved = location['status'] == 'resolved';
+          if (_addressResolved) {
+            _barangay.text = location['barangay']?.toString() ?? '';
+            _gpsMessage = 'Location tagged automatically.';
+          } else {
+            _gpsMessage = 'GPS captured. Barangay could not be verified.';
+          }
+        });
       } catch (_) {
         if (mounted) {
-          setState(() => _error = 'GPS captured. Enter the barangay manually.');
+          setState(() =>
+              _gpsMessage = 'GPS captured. Barangay lookup is unavailable.');
         }
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _error = 'GPS unavailable. Enter coordinates manually.');
+        setState(() {
+          _gpsFailed = true;
+          _gpsMessage =
+              'GPS unavailable. Enable location access and try again.';
+        });
       }
     } finally {
       if (mounted) setState(() => _gpsLoading = false);
@@ -188,6 +232,10 @@ class _UnknownSubmissionSheetState extends State<UnknownSubmissionSheet> {
   }
 
   void _submit() {
+    if (_gpsLoading || _latitude.text.isEmpty || _longitude.text.isEmpty) {
+      setState(() => _error = 'Wait for GPS before submitting.');
+      return;
+    }
     final latError = coordinateErrorText(_latitude.text, isLatitude: true);
     final lngError = coordinateErrorText(_longitude.text, isLatitude: false);
     if (latError != null ||
@@ -199,7 +247,13 @@ class _UnknownSubmissionSheetState extends State<UnknownSubmissionSheet> {
       return;
     }
     Navigator.pop(context, <String, dynamic>{
-      'scan_profile': scanProfilePayload({...widget.result, ..._candidate, 'estimated_dbh_cm': _dbh, 'estimated_height_m': _height, if (_ageEstimate != null) 'age_estimate': _ageEstimate}),
+      'scan_profile': scanProfilePayload({
+        ...widget.result,
+        ..._candidate,
+        'estimated_dbh_cm': _dbh,
+        'estimated_height_m': _height,
+        if (_ageEstimate != null) 'age_estimate': _ageEstimate
+      }),
       'dbh_cm': _dbh,
       'height_m': _height,
       'barangay': _barangay.text.trim().isEmpty ? null : _barangay.text.trim(),
@@ -211,6 +265,29 @@ class _UnknownSubmissionSheetState extends State<UnknownSubmissionSheet> {
     });
   }
 
+  Widget _section(String title, List<Widget> children) => Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+              color: Theme.of(context).dividerColor.withValues(alpha: .2))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text(title,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+        const SizedBox(height: 10),
+        ...children,
+      ]));
+
+  Widget _measurement(String label, String value) => Expanded(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: 4),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+      ]));
+
   @override
   Widget build(BuildContext context) {
     final dbh = _dbh;
@@ -219,117 +296,252 @@ class _UnknownSubmissionSheetState extends State<UnknownSubmissionSheet> {
         ? 0.0673 * math.pow(0.6 * dbh * dbh * height, 0.976) * 0.47
         : null;
     final confidence = _candidate['confidence_percent'];
-    final needsBase = _prediction?['needs_treebase_photo'] == true || dbh == null;
-    final needsTop = _prediction?['needs_treetop_photo'] == true || height == null;
+    final serviceUnavailable = _prediction?['status'] == 'unavailable';
+    final needsBase = _prediction?['needs_treebase_photo'] == true ||
+        (!serviceUnavailable && _prediction != null && dbh == null);
+    final needsTop = _prediction?['needs_treetop_photo'] == true ||
+        (!serviceUnavailable && _prediction != null && height == null);
+    final reasons = <String>{
+      for (final key in [
+        'dbh_reason',
+        'height_reason',
+        if (dbh == null && height == null) 'reason'
+      ])
+        if (_prediction?[key]?.toString().trim().isNotEmpty == true)
+          _prediction![key].toString().trim(),
+    };
+    final gpsColor = _gpsFailed
+        ? Theme.of(context).colorScheme.error
+        : _addressResolved
+            ? const Color(0xFF2E683B)
+            : const Color(0xFF946200);
     return SafeArea(
         child: Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * .9,
-        child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(children: [
-                  const Expanded(
-                      child: Text('Species needs expert review',
+        child: Column(children: [
+          Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 8, 8),
+              child: Row(children: [
+                const Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      Text('Expert review',
                           style: TextStyle(
-                              fontSize: 20, fontWeight: FontWeight.bold))),
-                  IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close))
-                ]),
-                const Text(
-                    'Review the suggested species, measurements, and location before submitting.'),
-                const SizedBox(height: 12),
-                ExpandablePhoto(
-                    image: FileImage(widget.photo),
-                    height: 180,
-                    fit: BoxFit.contain),
-                const SizedBox(height: 12),
-                Text(
-                    'Suggested common name: ${_candidate['common_name'] ?? 'Unavailable'}'),
-                Text(
-                    'Suggested scientific name: ${_candidate['scientific_name'] ?? 'Unavailable'}'),
-                Text(
-                    'Confidence: ${confidence is num ? '$confidence%' : 'Unavailable'}'),
-                const SizedBox(height: 12),
-                Text('DBH: ${dbh == null ? 'Unavailable' : '$dbh cm'}'),
-                Text('Height: ${height == null ? 'Unavailable' : '$height m'}'),
-                Text(
-                    'Carbon stock: ${carbon == null ? 'Unavailable' : '${carbon.toStringAsFixed(2)} kg'}'),
-                const Text('Photo measurements are unvalidated estimates. Carbon is preliminary and is computed only when both DBH and height are available.', style: TextStyle(fontSize: 12, height: 1.4)),
-                if (_analyzing)
-                  const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: LinearProgressIndicator()),
-                if (_prediction?['dbh_reason'] != null)
-                  Text('${_prediction!['dbh_reason']}'),
-                if (_prediction?['height_reason'] != null)
-                  Text('${_prediction!['height_reason']}'),
-                if (needsBase)
-                  OutlinedButton(
-                      onPressed: _analyzing ? null : () => _addPhoto(true),
-                      child: const Text('Add tree base photo')),
-                if (needsTop)
-                  OutlinedButton(
-                      onPressed: _analyzing ? null : () => _addPhoto(false),
-                      child: const Text('Add tree top photo')),
-                if (needsBase || needsTop)
-                  const Padding(padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Text('Include overlapping trunk or branches so the added photo can be matched to the same tree. Measurements remain unavailable if the evidence is insufficient.')),
-                if (_base != null || _top != null)
-                  Wrap(spacing: 10, runSpacing: 10, children: [
-                    if (_base != null) ExpandablePhoto(image: FileImage(_base!), label: 'Accepted tree base photo', width: 96, height: 120, fit: BoxFit.contain),
-                    if (_top != null) ExpandablePhoto(image: FileImage(_top!), label: 'Accepted tree top photo', width: 96, height: 120, fit: BoxFit.contain),
-                  ]),
-                OutlinedButton(
-                    onPressed: _analyzing ? null : () => _analyze(),
-                    child: const Text('Re-analyze')),
-                if (_candidate['scientific_name'] is String) ...[
-                  const Text('Preliminary age based on the suggested species.'),
-                  TreeAgeCard(
-                      scientificName: _candidate['scientific_name'],
-                      onEstimated: (age) { _ageEstimate = age; },
-                      dbhCm: dbh,
-                      heightM: height),
-                ],
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                    onPressed: _gpsLoading ? null : _captureGps,
-                    icon: const Icon(Icons.my_location),
-                    label: Text(
-                        _gpsLoading ? 'Getting location…' : 'Capture GPS')),
-                TextField(
-                    controller: _latitude,
-                    decoration: const InputDecoration(labelText: 'Latitude'),
-                    keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true, signed: true)),
-                TextField(
-                    controller: _longitude,
-                    decoration: const InputDecoration(labelText: 'Longitude'),
-                    keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true, signed: true)),
-                TextField(
-                    controller: _barangay,
-                    decoration: const InputDecoration(labelText: 'Barangay')),
-                TextField(
-                    controller: _notes,
-                    decoration: const InputDecoration(labelText: 'Notes'),
-                    maxLines: 3),
-                if (_error != null)
-                  Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Text(_error!,
-                          style: TextStyle(
-                              color: Theme.of(context).colorScheme.error))),
-                const SizedBox(height: 12),
-                FilledButton(
-                    onPressed: _analyzing || _gpsLoading ? null : _submit,
-                    child: const Text('Submit for Expert Review')),
-              ],
-            )),
+                              fontSize: 21, fontWeight: FontWeight.bold)),
+                      Text('Confirm the details before submitting.',
+                          style: TextStyle(fontSize: 13)),
+                    ])),
+                IconButton(
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close)),
+              ])),
+          Expanded(
+              child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: ExpandablePhoto(
+                                image: FileImage(widget.photo),
+                                height: 210,
+                                fit: BoxFit.contain)),
+                        const SizedBox(height: 14),
+                        _section('AI suggestion', [
+                          Text(
+                              '${_candidate['common_name'] ?? 'Not identified'}',
+                              style: const TextStyle(
+                                  fontSize: 19, fontWeight: FontWeight.w600)),
+                          Text(
+                              '${_candidate['scientific_name'] ?? 'Scientific name unavailable'}',
+                              style:
+                                  const TextStyle(fontStyle: FontStyle.italic)),
+                          const SizedBox(height: 8),
+                          Text(
+                              'Confidence: ${confidence is num ? '${confidence.toStringAsFixed(2)}%' : 'Unavailable'}'),
+                          const Text(
+                              'The species will be confirmed by a reviewer.',
+                              style: TextStyle(fontSize: 12)),
+                        ]),
+                        _section('Measurements', [
+                          Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _measurement('DBH',
+                                    dbh == null ? 'Unavailable' : '$dbh cm'),
+                                _measurement(
+                                    'Height',
+                                    height == null
+                                        ? 'Unavailable'
+                                        : '$height m'),
+                                _measurement(
+                                    'Carbon stock',
+                                    carbon == null
+                                        ? 'Unavailable'
+                                        : '${carbon.toStringAsFixed(2)} kg'),
+                              ]),
+                          const SizedBox(height: 10),
+                          const Text(
+                              'Photo estimates need field verification. Carbon requires both DBH and height.',
+                              style: TextStyle(fontSize: 12, height: 1.4)),
+                          if (_analyzing)
+                            const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: LinearProgressIndicator()),
+                          if (serviceUnavailable)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                _prediction?['reason']?.toString() ??
+                                    'The measurement service is unavailable. Try re-analyzing later.',
+                                style: const TextStyle(
+                                    color: Color(0xFF946200), fontSize: 13),
+                              ),
+                            ),
+                          if (reasons.isNotEmpty && !serviceUnavailable)
+                            ExpansionTile(
+                              tilePadding: EdgeInsets.zero,
+                              title: const Text('Measurement details',
+                                  style: TextStyle(fontSize: 14)),
+                              children: [
+                                for (final reason in reasons)
+                                  Padding(
+                                      padding: const EdgeInsets.only(bottom: 8),
+                                      child: Text(reason,
+                                          style: const TextStyle(fontSize: 12)))
+                              ],
+                            ),
+                          if (needsBase)
+                            OutlinedButton(
+                                onPressed:
+                                    _analyzing ? null : () => _addPhoto(true),
+                                child: const Text('Add tree base photo')),
+                          if (needsTop)
+                            OutlinedButton(
+                                onPressed:
+                                    _analyzing ? null : () => _addPhoto(false),
+                                child: const Text('Add tree top photo')),
+                          if (needsBase || needsTop)
+                            const Text(
+                                'Include overlapping trunk or branches to match the same tree.',
+                                style: TextStyle(fontSize: 12)),
+                          if (_base != null || _top != null)
+                            Wrap(spacing: 10, runSpacing: 10, children: [
+                              if (_base != null)
+                                ExpandablePhoto(
+                                    image: FileImage(_base!),
+                                    label: 'Accepted tree base photo',
+                                    width: 96,
+                                    height: 120,
+                                    fit: BoxFit.contain),
+                              if (_top != null)
+                                ExpandablePhoto(
+                                    image: FileImage(_top!),
+                                    label: 'Accepted tree top photo',
+                                    width: 96,
+                                    height: 120,
+                                    fit: BoxFit.contain),
+                            ]),
+                          TextButton.icon(
+                              onPressed: _analyzing ? null : () => _analyze(),
+                              icon: const Icon(Icons.refresh, size: 18),
+                              label: const Text('Re-analyze measurements')),
+                          if (_candidate['scientific_name'] is String)
+                            ExpansionTile(
+                              tilePadding: EdgeInsets.zero,
+                              title: const Text('Estimated age',
+                                  style: TextStyle(fontSize: 14)),
+                              children: [
+                                const Text(
+                                    'Preliminary estimate based on the suggested species.',
+                                    style: TextStyle(fontSize: 12)),
+                                TreeAgeCard(
+                                    scientificName:
+                                        _candidate['scientific_name'],
+                                    onEstimated: (age) {
+                                      _ageEstimate = age;
+                                    },
+                                    dbhCm: dbh,
+                                    heightM: height)
+                              ],
+                            ),
+                        ]),
+                        _section('Geotagged location', [
+                          if (_gpsLoading)
+                            const Row(children: [
+                              SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2)),
+                              SizedBox(width: 10),
+                              Expanded(
+                                  child: Text(
+                                      'Getting your location automatically...')),
+                            ]),
+                          if (_latitude.text.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Row(children: [
+                              const Icon(Icons.location_on_outlined, size: 18),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                  child: Text(
+                                      '${_latitude.text}, ${_longitude.text}',
+                                      style: const TextStyle(fontSize: 14)))
+                            ]),
+                            Text(gpsAccuracyLabel(_gpsAccuracy),
+                                style: const TextStyle(fontSize: 12)),
+                            if (_barangay.text.isNotEmpty)
+                              Text(_barangay.text,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600)),
+                          ],
+                          if (_gpsMessage != null)
+                            Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Text(_gpsMessage!,
+                                    style: TextStyle(
+                                        color: gpsColor, fontSize: 13))),
+                          if (_gpsFailed && !_gpsLoading)
+                            OutlinedButton.icon(
+                                onPressed: _captureGps,
+                                icon: const Icon(Icons.my_location),
+                                label: const Text('Retry location')),
+                        ]),
+                        _section('Notes', [
+                          TextField(
+                              controller: _notes,
+                              maxLines: 3,
+                              decoration: const InputDecoration(
+                                  hintText:
+                                      'Additional observations (optional)',
+                                  border: OutlineInputBorder()))
+                        ]),
+                        if (_error != null)
+                          Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Text(_error!,
+                                  style: TextStyle(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .error))),
+                      ]))),
+          Padding(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
+              child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                      onPressed:
+                          _analyzing || _gpsLoading || _latitude.text.isEmpty
+                              ? null
+                              : _submit,
+                      child: const Text('Submit for Expert Review')))),
+        ]),
       ),
     ));
   }

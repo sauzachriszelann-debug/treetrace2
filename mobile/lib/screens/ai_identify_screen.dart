@@ -223,12 +223,7 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
         'possible_name': _result?['common_name'],
       };
 
-      if (await api.isOnline()) {
-        payload['photo_url'] = await api.uploadPhotoRequired(
-          _photo!,
-          purpose: 'unknown_species',
-        );
-        await api.submitUnknownSpecies(payload);
+      if (await api.submitUnknownForReview(_photo!, payload)) {
         _incrementUsage('unknown');
         submitted = true;
         if (mounted) {
@@ -237,8 +232,6 @@ class _AIIdentifyScreenState extends State<AIIdentifyScreen> {
               backgroundColor: kHealthy));
         }
       } else {
-        await api.queueOfflineAction('SUBMIT_UNKNOWN', payload,
-            photoPath: _photo!.path);
         submitted = true;
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(

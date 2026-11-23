@@ -152,59 +152,80 @@ class TreeListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: kCard,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: kBorder),
-        ),
-        child: Row(children: [
-          TreePhoto(url: tree.photoUrl, size: 52),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(tree.commonName,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 14,
-                        color: kForeground),
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
-                if (tree.scientificName != null && tree.scientificName!.isNotEmpty)
-                  Text(tree.scientificName!,
-                      style: const TextStyle(
-                          fontSize: 12, color: kMutedFg,
-                          fontStyle: FontStyle.italic),
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 3),
-                Row(children: [
-                  if (tree.barangay != null) ...[
-                    const Icon(Icons.location_on_outlined,
-                        size: 11, color: kMutedFg),
-                    const SizedBox(width: 2),
-                    Flexible(child: Text(tree.barangay!,
-                        style: const TextStyle(
-                            fontSize: 11, color: kMutedFg),
-                        maxLines: 1, overflow: TextOverflow.ellipsis)),
-                    const SizedBox(width: 8),
-                  ],
-                  if (tree.dbhCm != null)
-                    Text('DBH ${tree.dbhCm!.toStringAsFixed(0)} cm',
-                        style: const TextStyle(fontSize: 11, color: kMutedFg)),
-                ]),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            HealthBadge(tree.healthStatus, small: true),
-            const SizedBox(height: 4),
-            const Icon(Icons.chevron_right, size: 16, color: kMutedFg),
-          ]),
-        ]),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: kCard,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: kBorder)),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child:
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                TreePhoto(url: tree.photoUrl, size: 64),
+                const SizedBox(width: 12),
+                Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      Text(tree.commonName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                              color: kForeground)),
+                      if (tree.scientificName?.isNotEmpty == true)
+                        Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(tree.scientificName!,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    fontStyle: FontStyle.italic,
+                                    color: kMutedFg))),
+                      const SizedBox(height: 8),
+                      HealthBadge(tree.healthStatus, small: true),
+                      if (tree.barangay?.isNotEmpty == true)
+                        Padding(
+                            padding: const EdgeInsets.only(top: 7),
+                            child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(Icons.location_on_outlined,
+                                      size: 14, color: kMutedFg),
+                                  const SizedBox(width: 3),
+                                  Expanded(
+                                      child: Text(tree.barangay!,
+                                          style: const TextStyle(
+                                              fontSize: 12, color: kMutedFg))),
+                                ])),
+                      if (tree.dbhCm != null || tree.heightM != null)
+                        Padding(
+                            padding: const EdgeInsets.only(top: 5),
+                            child: Wrap(spacing: 12, runSpacing: 4, children: [
+                              if (tree.dbhCm != null)
+                                Text('DBH ${tree.dbhCm!.toStringAsFixed(0)} cm',
+                                    style: const TextStyle(
+                                        fontSize: 12, color: kMutedFg)),
+                              if (tree.heightM != null)
+                                Text(
+                                    'Height ${tree.heightM!.toStringAsFixed(1)} m',
+                                    style: const TextStyle(
+                                        fontSize: 12, color: kMutedFg)),
+                            ])),
+                    ])),
+                const Padding(
+                    padding: EdgeInsets.only(top: 2, left: 4),
+                    child: Icon(Icons.chevron_right_rounded,
+                        size: 20, color: kMutedFg)),
+              ]),
+            )),
       ),
     );
   }

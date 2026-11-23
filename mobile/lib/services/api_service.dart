@@ -270,6 +270,29 @@ class ApiService {
     }
   }
 
+  /// Network availability only. A slow health endpoint must not route an
+  /// interactive submission into the offline queue.
+  Future<bool> hasNetworkConnection() async {
+    final connections = await _connectivity.checkConnectivity();
+    return connections.any((connection) => connection != ConnectivityResult.none);
+  }
+
+  /// True after the server accepts the review; false when saved for Field Sync.
+  /// HTTP/upload errors propagate, leaving the scanner evidence available.
+  /// Do not queue a timed-out POST: the server may already have saved it.
+  Future<bool> submitUnknownForReview(
+      File photo, Map<String, dynamic> evidence) async {
+    final payload = Map<String, dynamic>.from(evidence);
+    if (!await hasNetworkConnection()) {
+      await queueOfflineAction('SUBMIT_UNKNOWN', payload, photoPath: photo.path);
+      return false;
+    }
+    payload['photo_url'] =
+        await uploadPhotoRequired(photo, purpose: 'unknown_species');
+    await submitUnknownSpecies(payload);
+    return true;
+  }
+
   Future<bool> isOnline() async {
     if (_testOnline != null) return _testOnline!();
 

@@ -36,7 +36,10 @@ class _TreeListScreenState extends State<TreeListScreen> {
   }
 
   Future<void> _load() async {
-    setState(() { _loading = true; _loadError = null; });
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
     try {
       final data = await api.getTrees(limit: 500);
       if (!mounted) return;
@@ -47,7 +50,10 @@ class _TreeListScreenState extends State<TreeListScreen> {
       _filter();
     } catch (error) {
       if (!mounted) return;
-      setState(() { _loading = false; _loadError = treeLoadErrorMessage(error); });
+      setState(() {
+        _loading = false;
+        _loadError = treeLoadErrorMessage(error);
+      });
     }
   }
 
@@ -67,9 +73,11 @@ class _TreeListScreenState extends State<TreeListScreen> {
     });
   }
 
-  int get _mappedCount => _all.where((t) => t.lat != null && t.lng != null).length;
-  int get _attentionCount =>
-      _all.where((t) => t.healthStatus == 'Fair' || t.healthStatus == 'Poor').length;
+  int get _mappedCount =>
+      _all.where((t) => t.lat != null && t.lng != null).length;
+  int get _attentionCount => _all
+      .where((t) => t.healthStatus == 'Fair' || t.healthStatus == 'Poor')
+      .length;
 
   @override
   Widget build(BuildContext context) {
@@ -85,18 +93,6 @@ class _TreeListScreenState extends State<TreeListScreen> {
               expandedHeight: 170,
               backgroundColor: kSidebarBg,
               title: const Text('Tree Inventory'),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.add_circle_outline_rounded),
-                  onPressed: () async {
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const AddTreeScreen()),
-                    );
-                    _load();
-                  },
-                ),
-              ],
               flexibleSpace: FlexibleSpaceBar(
                 background: Container(
                   padding: const EdgeInsets.fromLTRB(20, 76, 20, 18),
@@ -116,7 +112,9 @@ class _TreeListScreenState extends State<TreeListScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        _loadError != null && _all.isEmpty ? 'Inventory unavailable' : '${_all.length} trees recorded',
+                        _loadError != null && _all.isEmpty
+                            ? 'Inventory unavailable'
+                            : '${_all.length} trees recorded',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 24,
@@ -124,10 +122,11 @@ class _TreeListScreenState extends State<TreeListScreen> {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      Row(
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
                         children: [
                           _HeaderPill('$_mappedCount mapped'),
-                          const SizedBox(width: 8),
                           _HeaderPill('$_attentionCount need attention'),
                         ],
                       ),
@@ -221,23 +220,29 @@ class _TreeListScreenState extends State<TreeListScreen> {
                 ),
               )
             else if (_loadError != null)
-              SliverFillRemaining(hasScrollBody: false, child: Center(
-                child: Padding(padding: const EdgeInsets.all(24), child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(_loadError!, textAlign: TextAlign.center),
-                    const SizedBox(height: 12),
-                    OutlinedButton(onPressed: _load, child: const Text('Retry')),
-                  ],
-                )),
-              ))
+              SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(_loadError!, textAlign: TextAlign.center),
+                            const SizedBox(height: 12),
+                            OutlinedButton(
+                                onPressed: _load, child: const Text('Retry')),
+                          ],
+                        )),
+                  ))
             else if (_filtered.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: EmptyState(
                   message: 'No trees found',
-                  subtitle:
-                      _search.isNotEmpty ? 'Try a different search.' : 'Add your first tree record.',
+                  subtitle: _search.isNotEmpty
+                      ? 'Try a different search.'
+                      : 'Add your first tree record.',
                   icon: Icons.forest_outlined,
                 ),
               )
@@ -252,7 +257,8 @@ class _TreeListScreenState extends State<TreeListScreen> {
                         await Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => TreeDetailScreen(treeId: _filtered[i].id),
+                            builder: (_) =>
+                                TreeDetailScreen(treeId: _filtered[i].id),
                           ),
                         );
                         _load();

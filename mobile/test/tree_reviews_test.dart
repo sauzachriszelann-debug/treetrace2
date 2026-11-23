@@ -117,19 +117,21 @@ void main() {
     expect(adapter.requests[6].path, '/ai/unknown-species/7/convert');
   });
 
-  testWidgets('admin review screen exposes both tabs and loads review queues',
+  testWidgets('admin opens species reviews directly without submission tabs',
       (tester) async {
     final adapter = _Adapter();
     await tester.pumpWidget(MaterialApp(
       home: TreeReviewsScreen(role: 'admin', apiOverride: _service(adapter)),
     ));
     await tester.pumpAndSettle();
-    expect(find.text('Tree Submissions'), findsOneWidget);
-    expect(find.text('Unknown Species'), findsOneWidget);
-    expect(find.text('Mango'), findsOneWidget);
-    await tester.tap(find.text('Unknown Species'));
-    await tester.pumpAndSettle();
+    expect(find.byType(TabBar), findsNothing);
+    expect(find.text('Tree Submissions'), findsNothing);
     expect(find.text('Unidentified tree'), findsOneWidget);
+    await tester.tap(find.byTooltip('Inventory approvals'));
+    await tester.pumpAndSettle();
+    expect(find.text('Mango'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     expect(find.text('Possible AI matches'), findsNothing); // in detail sheet
     expect(adapter.requests.any((r) => r.path.endsWith('/ai/unknown-species')),
         isTrue);
@@ -143,9 +145,9 @@ void main() {
           role: 'field_worker', apiOverride: _service(adapter)),
     ));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Unknown Species'));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('administrators only'), findsOneWidget);
+    expect(find.byType(TabBar), findsNothing);
+    expect(find.text('Inventory approvals'), findsOneWidget);
+    expect(find.text('Mango'), findsOneWidget);
     expect(adapter.requests.any((r) => r.path.endsWith('/ai/unknown-species')),
         isFalse);
   });
@@ -169,7 +171,8 @@ void main() {
       (tester) async {
     final adapter = _Adapter();
     await tester.pumpWidget(MaterialApp(
-      home: TreeReviewsScreen(role: 'admin', apiOverride: _service(adapter)),
+      home: TreeReviewsScreen(
+          role: 'admin', apiOverride: _service(adapter), initialTabIndex: 0),
     ));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Approve').last);
@@ -187,7 +190,8 @@ void main() {
       (tester) async {
     final adapter = _Adapter(failPath: '/tree-submissions/3/approve');
     await tester.pumpWidget(MaterialApp(
-      home: TreeReviewsScreen(role: 'admin', apiOverride: _service(adapter)),
+      home: TreeReviewsScreen(
+          role: 'admin', apiOverride: _service(adapter), initialTabIndex: 0),
     ));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Approve').last);
@@ -237,7 +241,8 @@ void main() {
       (tester) async {
     final adapter = _Adapter();
     await tester.pumpWidget(MaterialApp(
-      home: TreeReviewsScreen(role: 'admin', apiOverride: _service(adapter)),
+      home: TreeReviewsScreen(
+          role: 'admin', apiOverride: _service(adapter), initialTabIndex: 0),
     ));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Link existing tree').last);
@@ -284,7 +289,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.drag(find.byType(Scrollable).last, const Offset(0, -400));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Send to Tree Submissions'));
+    await tester.tap(find.text('Send for inventory approval'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();

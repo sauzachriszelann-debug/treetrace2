@@ -16,7 +16,7 @@ class TreeReviewsScreen extends StatelessWidget {
     super.key,
     required this.role,
     this.apiOverride,
-    this.initialTabIndex = 0,
+    this.initialTabIndex = 1,
   });
 
   @override
@@ -37,65 +37,30 @@ class TreeReviewsScreen extends StatelessWidget {
     }
 
     final service = apiOverride ?? api;
-    return DefaultTabController(
-      length: 2,
-      initialIndex: initialTabIndex.clamp(0, 1).toInt(),
-      child: Scaffold(
-        backgroundColor: kBackground,
-        appBar: AppBar(
-          toolbarHeight: 52,
-          title: const Text('Tree Reviews'),
-          bottom: const TabBar(
-            isScrollable: false,
-            labelColor: Colors.white,
-            unselectedLabelColor: Color(0x99FFFFFF),
-            indicatorColor: kSidebarPrimary,
-            indicatorWeight: 3,
-            dividerColor: Colors.transparent,
-            labelStyle: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-            unselectedLabelStyle:
-                TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-            tabs: [
-              Tab(height: 44, text: 'Tree Submissions'),
-              Tab(height: 44, text: 'Unknown Species'),
-            ],
-          ),
-        ),
-        body: TabBarView(
-          children: [
-            _TreeSubmissionsTab(api: service),
-            if (isAdmin)
-              UnknownReviewScreen(apiOverride: service, embedded: true)
-            else
-              const _RestrictedUnknownReviews(),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _RestrictedUnknownReviews extends StatelessWidget {
-  const _RestrictedUnknownReviews();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Padding(
-        padding: EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.admin_panel_settings_outlined,
-                size: 42, color: kMutedFg),
-            SizedBox(height: 12),
-            Text(
-              'Unknown Species review is available to administrators only.',
-              textAlign: TextAlign.center,
+    final showSpeciesReviews = isAdmin && initialTabIndex != 0;
+    return Scaffold(
+      backgroundColor: kBackground,
+      appBar: AppBar(
+        title:
+            Text(showSpeciesReviews ? 'Tree Reviews' : 'Inventory approvals'),
+        actions: [
+          if (showSpeciesReviews)
+            IconButton(
+              tooltip: 'Inventory approvals',
+              icon: const Icon(Icons.fact_check_outlined),
+              onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                      builder: (_) => TreeReviewsScreen(
+                          role: role,
+                          apiOverride: service,
+                          initialTabIndex: 0))),
             ),
-          ],
-        ),
+        ],
       ),
+      body: showSpeciesReviews
+          ? UnknownReviewScreen(apiOverride: service, embedded: true)
+          : _TreeSubmissionsTab(api: service),
     );
   }
 }

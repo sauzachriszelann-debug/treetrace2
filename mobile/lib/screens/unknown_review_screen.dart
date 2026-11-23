@@ -7,7 +7,7 @@ import '../services/api_service.dart';
 import '../services/theme.dart';
 import '../widgets/expandable_photo.dart';
 
-/// Admin review queue. In TreeReviewsScreen this is embedded as the second tab;
+/// Admin species review queue, embedded directly in TreeReviewsScreen;
 /// it remains a standalone route for callers that still use it directly.
 class UnknownReviewScreen extends StatefulWidget {
   const UnknownReviewScreen(
@@ -131,7 +131,7 @@ class _UnknownReviewScreenState extends State<UnknownReviewScreen> {
       final status = result['status']?.toString();
       messenger.showSnackBar(SnackBar(
         content: Text(status == 'pending'
-            ? 'Unknown species is available in Tree Submissions. Existing conversions reuse that submission.'
+            ? 'This record is available in Inventory approvals.'
             : 'Unknown species sent to the tree submission review queue.'),
       ));
     } catch (error) {
@@ -180,25 +180,37 @@ class _UnknownReviewScreenState extends State<UnknownReviewScreen> {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
             sliver: SliverToBoxAdapter(
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final filter in const [
-                    'all',
-                    'pending',
-                    'identified',
-                    'closed'
-                  ])
-                    _UnknownFilterChip(
-                      label: _title(filter),
-                      selected: _filter == filter,
-                      onSelected: _loading
-                          ? null
-                          : () => setState(() => _filter = filter),
-                    ),
-                ],
-              ),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Species review queue',
+                        style: TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 4),
+                    const Text(
+                        'Open a record to review its species and details.',
+                        style: TextStyle(color: kMutedFg, fontSize: 13)),
+                    const SizedBox(height: 14),
+                    SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(children: [
+                          for (final filter in const [
+                            'all',
+                            'pending',
+                            'identified',
+                            'closed'
+                          ])
+                            Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: _UnknownFilterChip(
+                                    label: _title(filter),
+                                    selected: _filter == filter,
+                                    onSelected: _loading
+                                        ? null
+                                        : () =>
+                                            setState(() => _filter = filter))),
+                        ])),
+                  ]),
             ),
           ),
           if (_loading)
@@ -231,7 +243,7 @@ class _UnknownReviewScreenState extends State<UnknownReviewScreen> {
               padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
               sliver: SliverToBoxAdapter(
                 child: Text(
-                  '${visible.length} record${visible.length == 1 ? '' : 's'}',
+                  '${visible.length} record${visible.length == 1 ? '' : 's'} · ${_items.where((item) => item.reviewStatus == 'pending').length} pending',
                   style: const TextStyle(
                     color: kMutedFg,
                     fontSize: 13,
@@ -282,11 +294,13 @@ class _UnknownTile extends StatelessWidget {
             ? item.possibleName!
             : 'Unknown species #${item.id}';
     return Card(
-      elevation: 2,
+      elevation: 0,
       shadowColor: Colors.black.withValues(alpha: .04),
       surfaceTintColor: Colors.transparent,
       margin: const EdgeInsets.only(bottom: 10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: kBorder)),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: busy ? null : onTap,
@@ -301,7 +315,7 @@ class _UnknownTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(title,
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             fontWeight: FontWeight.w800, fontSize: 16)),
@@ -313,7 +327,7 @@ class _UnknownTile extends StatelessWidget {
                       children: [
                         _UnknownStatusBadge(status: item.reviewStatus),
                         if (item.createdAt != null)
-                          Text(_date(item.createdAt),
+                          Text('#${item.id} · ${_date(item.createdAt)}',
                               style: const TextStyle(
                                   color: kMutedFg, fontSize: 12)),
                       ],
@@ -362,14 +376,14 @@ class _UnknownFilterChip extends StatelessWidget {
   Widget build(BuildContext context) => ChoiceChip(
         label: Text(label),
         selected: selected,
-        showCheckmark: true,
+        showCheckmark: false,
         checkmarkColor: Colors.white,
         onSelected: onSelected == null ? null : (_) => onSelected!(),
         backgroundColor: const Color(0xFFF0F4F1),
         selectedColor: const Color(0xFF1E3A2B),
         side: BorderSide.none,
         shape: const StadiumBorder(),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         labelStyle: TextStyle(
           color: selected ? Colors.white : const Color(0xFF1E3A2B),
           fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
@@ -613,7 +627,7 @@ class _UnknownReviewSheetState extends State<_UnknownReviewSheet> {
                             await widget.onConvert!();
                           },
                     icon: const Icon(Icons.playlist_add),
-                    label: const Text('Send to Tree Submissions'),
+                    label: const Text('Send for inventory approval'),
                   ),
               ]),
             ]),
@@ -706,7 +720,7 @@ String _title(String value) =>
     value.isEmpty ? value : '${value[0].toUpperCase()}${value.substring(1)}';
 String _date(DateTime? value) => value == null
     ? 'Date unavailable'
-    : DateFormat.yMMMMd().format(value.toLocal());
+    : DateFormat('MMM d, yyyy').format(value.toLocal());
 String _friendlyError(Object error) {
   if (error is DioException) {
     if (error.response?.statusCode == 403) {

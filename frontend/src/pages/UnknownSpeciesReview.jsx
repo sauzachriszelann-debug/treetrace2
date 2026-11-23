@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { CheckCircle2, CircleHelp, Leaf, Loader2, Mail, MapPin, RotateCcw, TreePine, XCircle } from "lucide-react";
+import { CheckCircle2, Leaf, Loader2, Mail, MapPin, RotateCcw, TreePine, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/AuthContext";
 
@@ -213,9 +213,7 @@ export default function UnknownSpeciesReview({ inQueue = false, pendingOnly = fa
                       <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                     ) : entry.review_status === "closed" ? (
                       <XCircle className="w-5 h-5 text-slate-500" />
-                    ) : (
-                      <CircleHelp className="w-5 h-5 text-amber-600" />
-                    )}
+                    ) : null}
                   </div>
 
                   <div className={inQueue ? "grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]" : "grid gap-4"}>
@@ -317,11 +315,8 @@ export default function UnknownSpeciesReview({ inQueue = false, pendingOnly = fa
                     <InfoBox label="Carbon stock" value={entry.carbon_kg != null ? `${entry.carbon_kg} kg` : "Unavailable"} />
                   </div>
 
-                  {(entry.possible_name?.trim() || entry.submitter_notes?.trim()) && (
-                    <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-                      {entry.possible_name?.trim() && <InfoBox label="User Guess" value={entry.possible_name} />}
-                      {entry.submitter_notes?.trim() && <InfoBox label="Submitted Notes" value={entry.submitter_notes} />}
-                    </div>
+                  {entry.submitter_notes?.trim() && (
+                    <InfoBox label="Submitted Notes" value={entry.submitter_notes} />
                   )}
 
                   {ownSubmission ? (
