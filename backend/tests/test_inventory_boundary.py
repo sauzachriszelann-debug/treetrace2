@@ -146,3 +146,19 @@ def test_retired_testing_flag_cannot_disable_geofence(monkeypatch):
     with pytest.raises(HTTPException) as outside:
         boundary.validate_inventory_location(**OUTSIDE)
     assert outside.value.status_code == 422
+
+
+def test_temporary_boundary_switch_allows_real_outside_gps(client, admin_user, monkeypatch):
+    monkeypatch.setattr(boundary.settings, 'INVENTORY_BOUNDARY_TEST_BYPASS', True)
+    lookup = client.get('/api/trees/barangay-location', params={**OUTSIDE, 'accuracy_m': 10})
+    assert lookup.status_code == 200
+    assert lookup.json() == {'status': 'unavailable'}
+    created = client.post('/api/trees/', json={'common_name': 'Test tree', **OUTSIDE})
+    assert created.status_code == 201, created.text
+    assert created.json()['lat'] == OUTSIDE['lat']
+    assert created.json()['lng'] == OUTSIDE['lng']
+    with pytest.raises(HTTPException):
+        boundary.validate_inventory_location(float('nan'), 125)
+    monkeypatch.setattr(boundary.settings, 'INVENTORY_BOUNDARY_TEST_BYPASS', False)
+    blocked = client.post('/api/trees/', json={'common_name': 'Blocked tree', **OUTSIDE})
+    assert blocked.status_code == 422

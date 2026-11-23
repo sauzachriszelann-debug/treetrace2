@@ -10,6 +10,7 @@ from app.db.database import get_db
 from app.models.tree import Tree
 from app.models.user import User, UserRole
 from app.schemas.tree import TreeCreate, TreeCreateOut, TreeDetailOut, TreeUpdate, TreeOut
+from app.core.config import settings
 from app.core.security import get_current_user, require_admin
 from app.services.barangay_location import resolve_barangay
 from app.services.inventory_boundary import validate_inventory_location
@@ -25,6 +26,9 @@ def get_barangay_location(
     accuracy_m: float = Query(..., gt=0, allow_inf_nan=False),
     user: User = Depends(get_current_user),
 ):
+    if settings.INVENTORY_BOUNDARY_TEST_BYPASS:
+        # Keep actual GPS without assigning an outside tree to a Panabo barangay.
+        return {"status": "unavailable"}
     return resolve_barangay(lat, lng, accuracy_m)
 
 

@@ -6,6 +6,7 @@ official inventory always requires a complete, verified coordinate pair.
 """
 import math
 from fastapi import HTTPException
+from app.core.config import settings
 from app.services.barangay_location import (
     LOCAL_BOUNDARIES, METERS_PER_DEGREE, _match, _read_local_boundaries,
 )
@@ -21,6 +22,8 @@ def validate_inventory_location(lat, lng, accuracy_m=None, *, required=True):
         raise HTTPException(422, 'Location coordinates and GPS accuracy must be finite numbers.')
     if not (-90 <= lat <= 90 and -180 <= lng <= 180) or (accuracy_m is not None and not 0 <= accuracy_m <= 10000):
         raise HTTPException(422, 'Location coordinates or GPS accuracy are outside their valid ranges.')
+    if settings.INVENTORY_BOUNDARY_TEST_BYPASS:
+        return None
     try:
         features = _read_local_boundaries(LOCAL_BOUNDARIES, LOCAL_BOUNDARIES.stat().st_mtime_ns)
         if any('panabo' not in (f.get('properties', {}).get('city_name') or '').lower() for f in features):

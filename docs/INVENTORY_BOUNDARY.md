@@ -30,3 +30,13 @@ Web and Android offline queues already retain HTTP 422 failures for review;
 they are not silently discarded or automatically resubmitted. Existing apps
 receive the server enforcement after backend deployment; the new coordinate
 editor also requires deployment of the web frontend.
+
+## Temporary field testing
+
+`INVENTORY_BOUNDARY_TEST_BYPASS=true` temporarily skips the polygon check for
+all inventory writes on that backend. It defaults to false. Numeric coordinate
+validation remains active; GPS coordinates are never replaced. The authenticated
+barangay lookup returns unavailable during this mode so existing Android apps
+do not block on outside_panabo or receive a fabricated Panabo address.
+Set the variable back to false and redeploy immediately after testing.
+Test records remain saved until explicitly deleted.
