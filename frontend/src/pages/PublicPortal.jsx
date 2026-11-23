@@ -95,48 +95,59 @@ export default function PublicPortal() {
 
   return (
     <div className="min-h-screen max-w-full overflow-x-hidden bg-background">
-      {/* Hero header */}
-      <header className="bg-[#2d5a27] text-white px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-8 sm:pb-10">
-        <div className="max-w-5xl mx-auto">
-          <div className="inline-flex items-center gap-2 bg-white/15 rounded-lg px-3 py-1.5 mb-5">
-            <div className="w-6 h-6 bg-white/20 rounded-md flex items-center justify-center">
-              <Leaf className="w-3.5 h-3.5 text-white" />
+      <header className="border-b border-white/10 bg-[#1e3a2b] text-white">
+        <div className="mx-auto grid max-w-7xl gap-6 px-4 py-7 sm:px-6 lg:grid-cols-[1.1fr_1fr] lg:items-center lg:gap-12 lg:px-8 lg:py-9">
+          <div>
+            <div className="mb-3 flex items-center gap-2 text-sm font-medium text-[#d5e5ac]">
+              <Leaf className="h-4 w-4" aria-hidden="true" />
+              TreeTrace <span className="text-white/30">/</span> Public Portal
             </div>
-            <span className="text-white/90 text-sm font-medium">TreeTrace · Public Portal</span>
+            <h1 className="font-fraunces text-3xl font-semibold leading-tight sm:text-4xl">
+              Panabo City Tree Inventory
+            </h1>
+            <p className="mt-3 max-w-xl text-sm leading-relaxed text-white/75 sm:text-base">
+              Explore tree locations, health, and carbon stock. Select a tree or scan its QR code to view its profile.
+            </p>
           </div>
-          <h1 className="font-fraunces text-3xl sm:text-4xl md:text-5xl font-bold leading-tight mb-3">
-            Panabo City<br />Tree Inventory
-          </h1>
-          <p className="text-white/75 text-base max-w-lg mb-6">
-            Explore the geo-spatial tree inventory of Panabo City. View health status,
-            GPS locations, carbon stock data, and scan QR codes to access individual tree profiles.
-          </p>
-          <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-white/80">
-            <span>Total Trees: <strong className="text-white">{allTrees.length}</strong></span>
-            <span>Healthy: <strong className="text-emerald-300">{healthy}</strong></span>
-            <span>Fair: <strong className="text-amber-300">{fair}</strong></span>
-            <span>Poor: <strong className="text-red-300">{poor}</strong></span>
-            <span>Carbon Stock: <strong className="text-white">{(totalCarbon / 1000).toFixed(2)} t</strong></span>
+          <div>
+            <dl className="grid grid-cols-3 gap-2 sm:gap-3">
+              {[
+                { label: "Total trees", value: allTrees.length },
+                { label: "Geotagged", value: allTrees.filter(t => t.lat && t.lng).length },
+                { label: "Carbon stock", value: `${(totalCarbon / 1000).toFixed(2)} t` },
+              ].map(({ label, value }) => (
+                <div key={label} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-4 sm:px-4">
+                  <dt className="text-xs text-white/65">{label}</dt>
+                  <dd className="mt-2 text-xl font-semibold tabular-nums sm:text-2xl">{isLoading ? "—" : value}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/75">
+              <span>Healthy <strong className="ml-1 text-emerald-300">{healthy}</strong></span>
+              <span>Fair <strong className="ml-1 text-amber-300">{fair}</strong></span>
+              <span>Poor <strong className="ml-1 text-red-300">{poor}</strong></span>
+              <span>Not assessed <strong className="ml-1 text-slate-200">{allTrees.filter(t => t.health_status === "Not assessed").length}</strong></span>
+            </p>
           </div>
         </div>
       </header>
 
       {/* Controls bar */}
-      <div className="bg-[#f5f5f0] border-b border-border px-4 sm:px-6 lg:px-8 py-4">
-        <div className="max-w-5xl mx-auto space-y-3">
-          <div className="grid grid-cols-2 lg:grid-cols-[minmax(180px,1fr)_12rem_10rem_auto] gap-3">
+      <div className="mx-auto max-w-7xl px-4 pt-5 sm:px-6 lg:px-8">
+        <div className="space-y-4 rounded-2xl border border-border bg-white p-4 shadow-sm sm:p-5">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-[minmax(180px,1fr)_13rem_11rem_auto]">
             <div className="relative col-span-2 lg:col-span-1 min-w-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                className="pl-9 bg-white"
+                className="h-11 pl-9 bg-background/50"
                 aria-label="Search trees"
-                placeholder="Search name or species..."
+                placeholder="Search name, species, or barangay..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
             <Select value={barangayFilter} onValueChange={setBarangay}>
-              <SelectTrigger aria-label="Filter by barangay" className="w-full bg-white">
+              <SelectTrigger aria-label="Filter by barangay" className="h-11 min-w-0 w-full bg-background/50">
                 <SelectValue placeholder="All Barangays" />
               </SelectTrigger>
               <SelectContent>
@@ -145,7 +156,7 @@ export default function PublicPortal() {
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatus}>
-              <SelectTrigger aria-label="Filter by health status" className="w-full sm:w-40 bg-white">
+              <SelectTrigger aria-label="Filter by health status" className="h-11 min-w-0 w-full bg-background/50">
                 <SelectValue placeholder="All Status" />
               </SelectTrigger>
               <SelectContent>
@@ -157,7 +168,7 @@ export default function PublicPortal() {
               </SelectContent>
             </Select>
             <Button
-              className="col-span-2 lg:col-span-1 w-full sm:w-auto bg-[#2d5a27] hover:bg-[#234820] text-white flex items-center justify-center gap-2 whitespace-nowrap"
+              className="col-span-2 flex h-11 w-full items-center justify-center gap-2 whitespace-nowrap bg-[#2d5a27] text-white hover:bg-[#234820] lg:col-span-1"
               onClick={() => navigate("/scan")}
             >
               <ScanLine className="w-4 h-4" />
@@ -165,9 +176,10 @@ export default function PublicPortal() {
             </Button>
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="flex w-fit items-center gap-1 bg-white rounded-lg border border-border p-1">
+          <div className="flex flex-col gap-3 border-t border-border pt-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex w-fit items-center gap-1 rounded-lg bg-muted/60 p-1">
               <button
+                aria-pressed={view === "map"}
                 onClick={() => setView("map")}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
                   view === "map" ? "bg-white shadow-sm text-foreground border border-border" : "text-muted-foreground hover:text-foreground"
@@ -176,6 +188,7 @@ export default function PublicPortal() {
                 <MapIcon className="w-4 h-4" /> Map View
               </button>
               <button
+                aria-pressed={view === "list"}
                 onClick={() => setView("list")}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
                   view === "list" ? "bg-white shadow-sm text-foreground border border-border" : "text-muted-foreground hover:text-foreground"
@@ -206,7 +219,7 @@ export default function PublicPortal() {
       </div>
 
       {/* Content */}
-      <div className="max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+      <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
         {isLoading ? (
           <div className="flex items-center justify-center h-64 text-muted-foreground">
             <div className="text-center">
@@ -215,7 +228,7 @@ export default function PublicPortal() {
             </div>
           </div>
         ) : view === "map" ? (
-          <div className="rounded-xl overflow-hidden border border-border shadow-sm" style={{ height: "60vh" }}>
+          <div className="relative z-0 overflow-hidden rounded-2xl border border-border shadow-sm" style={{ height: "clamp(380px, 62vh, 760px)" }}>
             {geoTrees.length === 0 ? (
               <div className="w-full h-full flex items-center justify-center bg-muted text-muted-foreground">
                 <div className="text-center">
@@ -286,9 +299,9 @@ export default function PublicPortal() {
             )}
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="grid gap-3 md:grid-cols-2">
             {filtered.length === 0 ? (
-              <div className="text-center py-16 text-muted-foreground">
+              <div className="col-span-full rounded-2xl border border-dashed border-border py-16 text-center text-muted-foreground">
                 <TreePine className="w-12 h-12 mx-auto mb-3 opacity-20" />
                 <p>No trees match your search.</p>
               </div>
@@ -297,7 +310,7 @@ export default function PublicPortal() {
                 <Link
                   key={tree.id}
                   to={`/public/tree/${tree.id}`}
-                  className="flex items-center gap-4 bg-white border border-border rounded-xl p-4 hover:shadow-sm hover:border-[#2d5a27]/30 transition-all group"
+                  className="group flex items-start gap-4 rounded-xl border border-border bg-white p-4 transition-all hover:border-[#2d5a27]/30 hover:shadow-sm"
                 >
                   <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-muted">
                     {tree.photo_url ? (
@@ -309,23 +322,21 @@ export default function PublicPortal() {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-foreground truncate">{tree.common_name}</p>
+                    <p className="break-words font-semibold text-foreground">{tree.common_name}</p>
                     {tree.scientific_name && (
-                      <p className="text-xs text-muted-foreground italic truncate">{tree.scientific_name}</p>
+                      <p className="break-words text-xs italic text-muted-foreground">{tree.scientific_name}</p>
                     )}
-                    <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       {tree.barangay && (
-                        <span className="flex items-center gap-0.5">
+                        <span className="flex min-w-0 items-start gap-0.5">
                           <MapPin className="w-3 h-3" />{tree.barangay}
                         </span>
                       )}
                       {tree.dbh_cm && <span>DBH: {tree.dbh_cm} cm</span>}
                     </div>
+                    <div className="mt-3"><HealthBadge status={tree.health_status} /></div>
                   </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <HealthBadge status={tree.health_status} />
-                    <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-[#2d5a27] transition-colors" />
-                  </div>
+                  <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-[#2d5a27]" />
                 </Link>
               ))
             )}
